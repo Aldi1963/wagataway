@@ -58,4 +58,4 @@ Proyek ini sudah dilengkapi dengan perlindungan data. File sesi WhatsApp (`wa-se
 Platform ini merupakan perangkat lunak komersial. Dilarang mendistribusikan ulang tanpa izin tertulis dari pemilik repo.
 
 ---
-*Developed by Aldi1963 & Powered by Antigravity AI.*
+*Developed by Aldi1963*
