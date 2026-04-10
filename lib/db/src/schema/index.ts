@@ -21,6 +21,7 @@ export * from "./message_templates";
 export * from "./contact_groups";
 export * from "./email_otps";
 export * from "./wallet_transactions";
+export * from "./cs_bot_knowledge";
 export * from "./chat_conversations";
 export * from "./canned_responses";
 export * from "./drip_campaigns";

@@ -4,7 +4,8 @@ import {
   Bot, Plus, Trash2, Edit2, Loader2, Power, Send,
   MessageSquare, Clock, HelpCircle, Tag, Zap, ChevronDown, ChevronRight,
   ToggleLeft, ToggleRight, Star, Search, PlayCircle, Sparkles, Brain, Info,
-  Key, Eye, EyeOff, CheckCircle, XCircle, Globe, RefreshCw,
+  Key, Eye, EyeOff, CheckCircle, XCircle, Globe, RefreshCw, BookText, FileText,
+  ClipboardList
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
@@ -87,6 +88,11 @@ export default function CsBot() {
   const testChatEndRef = useRef<HTMLDivElement | null>(null);
   const [faqSearch, setFaqSearch] = useState("");
 
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const [editKnowledge, setEditKnowledge] = useState<any>(null);
+  const [knowledgeForm, setKnowledgeForm] = useState({ title: "", content: "", sourceType: "manual" });
+  const [knowledgeSearch, setKnowledgeSearch] = useState("");
+
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const { data: entries, isLoading: listLoading } = useQuery<DeviceBotEntry[]>({
@@ -100,6 +106,12 @@ export default function CsBot() {
   const { data: faqs, isLoading: faqsLoading } = useQuery<Faq[]>({
     queryKey: ["cs-bot-faqs", selectedDeviceId],
     queryFn: () => apiFetch(`/cs-bot/${selectedDeviceId}/faqs`).then((r) => r.json()),
+    enabled: !!selectedDeviceId,
+  });
+
+  const { data: knowledgeBase, isLoading: kbLoading } = useQuery<any[]>({
+    queryKey: ["cs-bot-knowledge", selectedDeviceId],
+    queryFn: () => apiFetch(`/cs-bot/${selectedDeviceId}/knowledge`).then((r) => r.json()),
     enabled: !!selectedDeviceId,
   });
 
@@ -200,6 +212,46 @@ export default function CsBot() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cs-bot-faqs", selectedDeviceId] }),
   });
 
+  // ── Knowledge Mutations ────────────────────────────────────────────────────
+
+  const saveKnowledge = useMutation({
+    mutationFn: async (body: any) => {
+      if (editKnowledge) {
+        return apiFetch(`/cs-bot/${selectedDeviceId}/knowledge/${editKnowledge.id}`, {
+          method: "PUT", body: JSON.stringify(body),
+        }).then((r) => r.json());
+      }
+      return apiFetch(`/cs-bot/${selectedDeviceId}/knowledge`, {
+        method: "POST", body: JSON.stringify(body),
+      }).then((r) => r.json());
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cs-bot-knowledge", selectedDeviceId] });
+      setKnowledgeOpen(false);
+      setEditKnowledge(null);
+      setKnowledgeForm({ title: "", content: "", sourceType: "manual" });
+      toast({ title: editKnowledge ? "Knowledge diperbarui" : "Knowledge ditambahkan" });
+    },
+    onError: () => toast({ title: "Gagal menyimpan knowledge", variant: "destructive" }),
+  });
+
+  const deleteKnowledge = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/cs-bot/${selectedDeviceId}/knowledge/${id}`, { method: "DELETE" }).then((r) => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cs-bot-knowledge", selectedDeviceId] });
+      toast({ title: "Knowledge dihapus" });
+    },
+  });
+
+  const toggleKnowledgeActive = useMutation({
+    mutationFn: (item: any) =>
+      apiFetch(`/cs-bot/${selectedDeviceId}/knowledge/${item.id}`, {
+        method: "PUT", body: JSON.stringify({ isActive: !item.isActive }),
+      }).then((r) => r.json()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cs-bot-knowledge", selectedDeviceId] }),
+  });
+
   function resetFaqForm() {
     setFaqForm({ category: "Umum", question: "", keywords: "", answer: "", matchType: "contains", sortOrder: 0, isActive: true, mediaUrl: "", mediaCaption: "" });
   }
@@ -212,6 +264,12 @@ export default function CsBot() {
       mediaUrl: f.mediaUrl ?? "", mediaCaption: f.mediaCaption ?? "",
     });
     setFaqOpen(true);
+  }
+
+  function openEditKnowledge(k: any) {
+    setEditKnowledge(k);
+    setKnowledgeForm({ title: k.title, content: k.content, sourceType: k.sourceType });
+    setKnowledgeOpen(true);
   }
 
   // ── Test bot ───────────────────────────────────────────────────────────────
@@ -252,6 +310,11 @@ export default function CsBot() {
     !faqSearch || f.question.toLowerCase().includes(faqSearch.toLowerCase()) ||
     f.keywords.toLowerCase().includes(faqSearch.toLowerCase()) ||
     f.category.toLowerCase().includes(faqSearch.toLowerCase())
+  );
+
+  const filteredKnowledge = (knowledgeBase ?? []).filter((k) =>
+    !knowledgeSearch || k.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) ||
+    k.content.toLowerCase().includes(knowledgeSearch.toLowerCase())
   );
 
   const categories = [...new Set((faqs ?? []).map((f) => f.category))];
@@ -336,6 +399,12 @@ export default function CsBot() {
                 <span className="ml-0.5 bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium">{faqs!.length}</span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="knowledge" className="gap-1.5">
+              <BookText className="h-3.5 w-3.5" /> Knowledge Base
+              {(knowledgeBase?.length ?? 0) > 0 && (
+                <span className="ml-0.5 bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium">{knowledgeBase!.length}</span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="ai" className="gap-1.5">
               <Sparkles className="h-3.5 w-3.5" /> AI
               {bot?.aiEnabled && (
@@ -345,7 +414,6 @@ export default function CsBot() {
             <TabsTrigger value="test" className="gap-1.5"><PlayCircle className="h-3.5 w-3.5" /> Uji Bot</TabsTrigger>
           </TabsList>
 
-          {/* ── Messages tab ──────────────────────────────────────────────── */}
           <TabsContent value="config" className="space-y-4">
             <BotMessagesForm bot={bot} deviceId={selectedDeviceId} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} />
 
@@ -487,6 +555,91 @@ export default function CsBot() {
               </Card>
             </div>
           </TabsContent>
+
+          {/* ── Knowledge tab ──────────────────────────────────────────────────── */}
+          <TabsContent value="knowledge">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Cari knowledge base..."
+                    value={knowledgeSearch}
+                    onChange={(e) => setKnowledgeSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                <Button size="sm" onClick={() => { setEditKnowledge(null); setKnowledgeForm({ title: "", content: "", sourceType: "manual" }); setKnowledgeOpen(true); }} className="gap-1.5">
+                  <Plus className="h-4 w-4" /> Tambah Knowledge
+                </Button>
+              </div>
+
+              {kbLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+              ) : filteredKnowledge.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground text-sm space-y-3">
+                    <BookText className="h-8 w-8 mx-auto opacity-30" />
+                    <p>{knowledgeSearch ? "Tidak ada data yang cocok." : "Belum ada Knowledge Base. Tambahkan data pelatihan untuk bot Anda agar lebih cerdas dalam menjawab."}</p>
+                    {!knowledgeSearch && (
+                      <Button size="sm" variant="outline" onClick={() => { setEditKnowledge(null); setKnowledgeForm({ title: "", content: "", sourceType: "manual" }); setKnowledgeOpen(true); }}>
+                        <Plus className="h-4 w-4 mr-1" /> Tambah Data Pertama
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {filteredKnowledge.map((kb) => (
+                    <Card key={kb.id} className={!kb.isActive ? "opacity-60" : ""}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            {kb.sourceType === "manual" ? <ClipboardList className="w-5 h-5 text-primary" /> : <Globe className="w-5 h-5 text-primary" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-semibold">{kb.title}</h3>
+                              <Badge variant="outline" className="text-[10px] uppercase">{kb.sourceType}</Badge>
+                              {kb.charCount > 0 && <span className="text-[10px] text-muted-foreground">{kb.charCount} karakter</span>}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">{kb.content}</p>
+                            <p className="text-[10px] text-muted-foreground mt-2">Dibuat: {new Date(kb.createdAt).toLocaleDateString("id-ID")}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-8 w-8"
+                              onClick={() => toggleKnowledgeActive.mutate(kb)}>
+                              {kb.isActive
+                                ? <ToggleRight className="h-5 w-5 text-primary" />
+                                : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditKnowledge(kb)}>
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => deleteKnowledge.mutate(kb.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              <Alert variant="default" className="bg-primary/5 border-primary/20">
+                <Brain className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-xs text-primary/80">
+                  Semua data Knowledge Base yang aktif akan dikirim ke AI sebagai referensi utama untuk menjawab pertanyaan. Gunakan data ini untuk memberi tahu bot tentang detail produk, kebijakan garansi, atau informasi spesifik lainnya.
+                </AlertDescription>
+              </Alert>
+            </div>
+          </TabsContent>
+
+          {/* ── AI tab ────────────────────────────────────────────────────── */}
 
           {/* ── AI tab ────────────────────────────────────────────────────── */}
           <TabsContent value="ai" className="space-y-4">
@@ -794,33 +947,64 @@ export default function CsBot() {
               <p className="text-xs text-muted-foreground">Bot akan mengirim gambar atau dokumen ini bersama jawaban teks</p>
             </div>
 
-            {faqForm.mediaUrl && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Caption Media <span className="text-muted-foreground">(opsional)</span></Label>
-                <Input
-                  placeholder="Caption untuk gambar/dokumen..."
-                  value={faqForm.mediaCaption}
-                  onChange={(e) => setFaqForm((f) => ({ ...f, mediaCaption: e.target.value }))}
-                />
-              </div>
-            )}
-
+            <div className="space-y-1.5">
+              <Label className="text-xs">Caption Media <span className="text-muted-foreground">(opsional)</span></Label>
+              <Input
+                placeholder="Caption untuk gambar/dokumen..."
+                value={faqForm.mediaCaption}
+                onChange={(e) => setFaqForm((f) => ({ ...f, mediaCaption: e.target.value }))}
+              />
+            </div>
             <div className="flex items-center justify-between">
               <Label className="text-xs">FAQ Aktif</Label>
-              <Switch
-                checked={faqForm.isActive}
-                onCheckedChange={(v) => setFaqForm((f) => ({ ...f, isActive: v }))}
-              />
+              <Switch checked={faqForm.isActive} onCheckedChange={(v) => setFaqForm((f) => ({ ...f, isActive: v }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setFaqOpen(false); setEditFaq(null); resetFaqForm(); }}>Batal</Button>
-            <Button
-              onClick={() => saveFaq.mutate(faqForm)}
-              disabled={!faqForm.question.trim() || !faqForm.keywords.trim() || !faqForm.answer.trim() || saveFaq.isPending}
-            >
+            <Button onClick={() => saveFaq.mutate(faqForm)} disabled={!faqForm.question.trim() || !faqForm.keywords.trim() || !faqForm.answer.trim() || saveFaq.isPending}>
               {saveFaq.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editFaq ? "Simpan Perubahan" : "Tambah FAQ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Knowledge Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={knowledgeOpen} onOpenChange={(o) => { if (!o) { setKnowledgeOpen(false); setEditKnowledge(null); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editKnowledge ? "Edit Knowledge Base" : "Tambah Knowledge Base"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Judul / Label Knowledge</Label>
+              <Input
+                placeholder="Contoh: Daftar Harga Produk 2024, Kebijakan Garansi..."
+                value={knowledgeForm.title}
+                onChange={(e) => setKnowledgeForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Isi Konten / Pengetahuan</Label>
+              <Textarea
+                placeholder="Masukkan informasi detail yang ingin dipelajari bot AI..."
+                value={knowledgeForm.content}
+                onChange={(e) => setKnowledgeForm((f) => ({ ...f, content: e.target.value }))}
+                rows={12}
+                className="font-mono text-sm leading-relaxed"
+              />
+              <div className="flex justify-between items-center px-1">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Maksimum disarankan 8000 karakter per dokumen</p>
+                <Badge variant="secondary" className="text-[10px]">{knowledgeForm.content.length} karakter</Badge>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setKnowledgeOpen(false); setEditKnowledge(null); }}>Batal</Button>
+            <Button onClick={() => saveKnowledge.mutate(knowledgeForm)} disabled={!knowledgeForm.title.trim() || !knowledgeForm.content.trim() || saveKnowledge.isPending}>
+              {saveKnowledge.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editKnowledge ? "Simpan Perubahan" : "Tambah ke Knowledge Base"}
             </Button>
           </DialogFooter>
         </DialogContent>

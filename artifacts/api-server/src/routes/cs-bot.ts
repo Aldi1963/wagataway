@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, csBotsTable, csBotFaqsTable, devicesTable, usersTable } from "@workspace/db";
+import { db, csBotsTable, csBotFaqsTable, devicesTable, usersTable, csBotKnowledgeTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { getUserFromToken } from "./auth";
 import { generateAiReply, checkAiAccess } from "../lib/cs-bot-ai";
@@ -160,6 +160,12 @@ export async function processBotMessage(
     and(eq(csBotFaqsTable.deviceId, deviceId), eq(csBotFaqsTable.isActive, true))
   ).orderBy(csBotFaqsTable.sortOrder, csBotFaqsTable.id);
 
+  // Load Knowledge base
+  const kbRows = await db.select().from(csBotKnowledgeTable).where(
+    and(eq(csBotKnowledgeTable.botId, bot.id), eq(csBotKnowledgeTable.isActive, true))
+  );
+  const kbContent = kbRows.map((k) => `### ${k.title}\n${k.content}`).join("\n\n");
+
   const aiMode = bot.aiMode ?? "faq_only";
   const botProvider = (bot.aiProvider as any) ?? "platform";
   const botApiKey = bot.aiApiKey ?? "";
@@ -173,7 +179,7 @@ export async function processBotMessage(
   const aiCtx = {
     botName: bot.botName,
     systemPrompt: systemPromptWithLang,
-    businessContext: bot.aiBusinessContext ?? "",
+    businessContext: (bot.aiBusinessContext ?? "") + (kbContent ? "\n\nKnowledge Base:\n" + kbContent : ""),
     websiteContent: bot.websiteContent ?? "",
     model: bot.aiModel,
     maxTokens: bot.aiMaxTokens,
@@ -310,6 +316,50 @@ router.put("/cs-bot/:deviceId", async (req, res): Promise<void> => {
     [bot] = await db.insert(csBotsTable).values({ userId: uid, deviceId, ...data }).returning();
   }
   res.json(bot);
+});
+
+// ── Knowledge Base Endpoints ──────────────────────────────────────────────────
+
+router.get("/cs-bot/:deviceId/knowledge", async (req, res): Promise<void> => {
+  const uid = getUser(req);
+  const deviceId = Number(req.params.deviceId);
+  const [bot] = await db.select().from(csBotsTable).where(and(eq(csBotsTable.deviceId, deviceId), eq(csBotsTable.userId, uid)));
+  if (!bot) { res.status(404).json({ message: "Bot tidak ditemukan" }); return; }
+  const knowledge = await db.select().from(csBotKnowledgeTable).where(eq(csBotKnowledgeTable.botId, bot.id)).orderBy(sql`${csBotKnowledgeTable.createdAt} DESC`);
+  res.json(knowledge);
+});
+
+router.post("/cs-bot/:deviceId/knowledge", async (req, res): Promise<void> => {
+  const uid = getUser(req);
+  const deviceId = Number(req.params.deviceId);
+  const { title, content, sourceType } = req.body;
+  if (!title || !content) { res.status(400).json({ message: "Judul dan konten wajib diisi" }); return; }
+  const [bot] = await db.select().from(csBotsTable).where(and(eq(csBotsTable.deviceId, deviceId), eq(csBotsTable.userId, uid)));
+  if (!bot) { res.status(404).json({ message: "Bot tidak ditemukan" }); return; }
+  const [item] = await db.insert(csBotKnowledgeTable).values({
+    userId: uid, botId: bot.id, title, content, sourceType: sourceType ?? "manual", charCount: content.length,
+  }).returning();
+  res.status(201).json(item);
+});
+
+router.put("/cs-bot/:deviceId/knowledge/:id", async (req, res): Promise<void> => {
+  const uid = getUser(req);
+  const id = Number(req.params.id);
+  const { title, content, isActive } = req.body;
+  const data: any = {};
+  if (title !== undefined) data.title = title;
+  if (content !== undefined) { data.content = content; data.charCount = content.length; }
+  if (isActive !== undefined) data.isActive = isActive;
+  const [item] = await db.update(csBotKnowledgeTable).set(data).where(and(eq(csBotKnowledgeTable.id, id), eq(csBotKnowledgeTable.userId, uid))).returning();
+  if (!item) { res.status(404).json({ message: "Tidak ditemukan" }); return; }
+  res.json(item);
+});
+
+router.delete("/cs-bot/:deviceId/knowledge/:id", async (req, res): Promise<void> => {
+  const uid = getUser(req);
+  const id = Number(req.params.id);
+  await db.delete(csBotKnowledgeTable).where(and(eq(csBotKnowledgeTable.id, id), eq(csBotKnowledgeTable.userId, uid)));
+  res.json({ ok: true });
 });
 
 // ── GET /cs-bot/:deviceId/faqs ────────────────────────────────────────────────
