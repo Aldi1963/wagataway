@@ -23,6 +23,10 @@ function formatRule(r: any, deviceName?: string) {
     scheduleFrom: r.scheduleFrom ?? null,
     scheduleTo: r.scheduleTo ?? null,
     timezone: r.timezone ?? "Asia/Jakarta",
+    mediaUrl: r.mediaUrl,
+    mediaCaption: r.mediaCaption,
+    messageType: r.messageType,
+    extra: r.extra,
     createdAt: r.createdAt?.toISOString(),
   };
 }
@@ -35,7 +39,7 @@ router.get("/autoreply", async (req, res): Promise<void> => {
 
 router.post("/autoreply", async (req, res): Promise<void> => {
   const uid = getUser(req);
-  const { keyword, matchType, reply, deviceId, isActive, scheduleFrom, scheduleTo, timezone } = req.body;
+  const { keyword, matchType, reply, deviceId, isActive, scheduleFrom, scheduleTo, timezone, mediaUrl, mediaCaption, messageType, extra } = req.body;
 
   if (!keyword || !matchType || !reply) {
     res.status(400).json({ message: "Missing required fields", code: "INVALID_REQUEST" });
@@ -54,6 +58,10 @@ router.post("/autoreply", async (req, res): Promise<void> => {
       scheduleFrom: scheduleFrom || null,
       scheduleTo: scheduleTo || null,
       timezone: timezone || "Asia/Jakarta",
+      mediaUrl,
+      mediaCaption,
+      messageType: messageType || "text",
+      extra: extra || {},
     })
     .returning();
 
@@ -64,7 +72,7 @@ router.put("/autoreply/:id", async (req, res): Promise<void> => {
   const uid = getUser(req);
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
-  const { keyword, matchType, reply, deviceId, isActive, scheduleFrom, scheduleTo, timezone } = req.body;
+  const { keyword, matchType, reply, deviceId, isActive, scheduleFrom, scheduleTo, timezone, mediaUrl, mediaCaption, messageType, extra } = req.body;
 
   const [rule] = await db.update(autoRepliesTable)
     .set({
@@ -76,6 +84,10 @@ router.put("/autoreply/:id", async (req, res): Promise<void> => {
       scheduleFrom: scheduleFrom ?? null,
       scheduleTo: scheduleTo ?? null,
       timezone: timezone || "Asia/Jakarta",
+      mediaUrl,
+      mediaCaption,
+      messageType,
+      extra,
     })
     .where(and(eq(autoRepliesTable.id, id), eq(autoRepliesTable.userId, uid)))
     .returning();

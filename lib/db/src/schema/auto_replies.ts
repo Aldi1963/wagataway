@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,8 @@ export const autoRepliesTable = pgTable("auto_replies", {
   keyword: text("keyword").notNull(),
   matchType: text("match_type").notNull().default("contains"),
   reply: text("reply").notNull(),
+  messageType: text("message_type").notNull().default("text"),
+  extra: jsonb("extra").$type<any>(),
   isActive: boolean("is_active").notNull().default(true),
   triggerCount: integer("trigger_count").notNull().default(0),
   mediaUrl: text("media_url"),

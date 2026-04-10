@@ -97,16 +97,37 @@ router.post("/messages/send", async (req, res): Promise<void> => {
     } else if (messageType === "button") {
       // interactiveMessage must be sent via relayMessage (sendMessage doesn't support it)
       const btns = (extra?.buttons ?? [])
-        .filter((b: any) => b?.displayText)
-        .map((b: any, i: number) =>
-          proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+        .filter((b: any) => b?.displayText || b?.title)
+        .map((b: any, i: number) => {
+          const type = b.type ?? "quick_reply";
+          if (type === "url") {
+            return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+              name: "cta_url",
+              buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, url: b.url, merchant_url: b.url }),
+            });
+          }
+          if (type === "call") {
+            return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+              name: "cta_call",
+              buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, phone_number: b.phoneNumber || b.phone }),
+            });
+          }
+          return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
             name: "quick_reply",
-            buttonParamsJson: JSON.stringify({ display_text: b.displayText, id: `btn_${i + 1}` }),
-          })
-        );
+            buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, id: b.id || `btn_${i + 1}` }),
+          });
+        });
+
+      const headerContent: any = { hasMediaAttachment: !!extra?.headerUrl };
+      if (extra?.headerUrl) {
+        headerContent.imageMessage = { url: extra.headerUrl };
+      } else if (extra?.headerText) {
+        headerContent.title = extra.headerText;
+      }
+
       const relayMsg = proto.Message.create({
         interactiveMessage: proto.Message.InteractiveMessage.create({
-          header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),
+          header: proto.Message.InteractiveMessage.Header.create(headerContent),
           body: proto.Message.InteractiveMessage.Body.create({ text: message }),
           footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
           nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
@@ -135,9 +156,17 @@ router.post("/messages/send", async (req, res): Promise<void> => {
           })),
         }),
       });
+
+      const headerContent: any = { hasMediaAttachment: !!extra?.headerUrl };
+      if (extra?.headerUrl) {
+        headerContent.imageMessage = { url: extra.headerUrl };
+      } else if (extra?.headerText) {
+        headerContent.title = extra.headerText;
+      }
+
       const relayMsg = proto.Message.create({
         interactiveMessage: proto.Message.InteractiveMessage.create({
-          header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),
+          header: proto.Message.InteractiveMessage.Header.create(headerContent),
           body: proto.Message.InteractiveMessage.Body.create({ text: message }),
           footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
           nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({

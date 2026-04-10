@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +28,8 @@ interface AutoReplyRule {
   triggerCount?: number;
   mediaUrl?: string | null;
   mediaCaption?: string | null;
+  messageType?: string;
+  extra?: any;
 }
 
 const matchTypeLabels: Record<string, string> = {
@@ -47,10 +50,10 @@ export default function AutoReply() {
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<AutoReplyRule | null>(null);
   const [useSchedule, setUseSchedule] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<any>({
     keyword: "", matchType: "contains", reply: "", deviceId: "all",
     scheduleFrom: "08:00", scheduleTo: "17:00", timezone: "Asia/Jakarta",
-    mediaUrl: "", mediaCaption: "",
+    mediaUrl: "", mediaCaption: "", messageType: "text", extra: { buttons: [] },
   });
 
   const { data: rules, isLoading } = useQuery<AutoReplyRule[]>({
@@ -85,7 +88,11 @@ export default function AutoReply() {
   });
 
   function resetForm() {
-    setForm({ keyword: "", matchType: "contains", reply: "", deviceId: "all", scheduleFrom: "08:00", scheduleTo: "17:00", timezone: "Asia/Jakarta", mediaUrl: "", mediaCaption: "" });
+    setForm({
+      keyword: "", matchType: "contains", reply: "", deviceId: "all",
+      scheduleFrom: "08:00", scheduleTo: "17:00", timezone: "Asia/Jakarta",
+      mediaUrl: "", mediaCaption: "", messageType: "text", extra: { buttons: [] },
+    });
     setUseSchedule(false);
   }
 
@@ -97,7 +104,10 @@ export default function AutoReply() {
       scheduleFrom: rule.scheduleFrom ?? "08:00",
       scheduleTo: rule.scheduleTo ?? "17:00",
       timezone: rule.timezone ?? "Asia/Jakarta",
-      mediaUrl: rule.mediaUrl ?? "", mediaCaption: rule.mediaCaption ?? "",
+      mediaUrl: rule.mediaUrl ?? "",
+      mediaCaption: rule.mediaCaption ?? "",
+      messageType: rule.messageType ?? "text",
+      extra: rule.extra || { buttons: [] },
     });
     setUseSchedule(!!(rule.scheduleFrom && rule.scheduleTo));
     setOpen(true);
@@ -182,74 +192,180 @@ export default function AutoReply() {
           <DialogHeader>
             <DialogTitle>{editItem ? "Edit Aturan" : "Tambah Aturan Auto Reply"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="px-5 py-4 space-y-4 overflow-y-auto max-h-[75vh]">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Kata Kunci</Label>
+                <Label className="text-sm font-medium">Kata Kunci</Label>
                 <Input placeholder="halo, order, info" value={form.keyword} onChange={(e) => setForm((f) => ({ ...f, keyword: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Tipe Pencocokan</Label>
+                <Label className="text-sm font-medium">Tipe Pencocokan</Label>
                 <Select value={form.matchType} onValueChange={(v) => setForm((f) => ({ ...f, matchType: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(matchTypeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Perangkat (opsional)</Label>
-              <Select value={form.deviceId} onValueChange={(v) => setForm((f) => ({ ...f, deviceId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Semua perangkat" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua perangkat</SelectItem>
-                  {(devices ?? []).map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Balasan</Label>
-              <Textarea placeholder="Halo! Terima kasih sudah menghubungi kami..." rows={3} value={form.reply} onChange={(e) => setForm((f) => ({ ...f, reply: e.target.value }))} />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Tipe Pesan</Label>
+                <Select value={form.messageType || "text"} onValueChange={(v) => setForm((f: any) => ({ ...f, messageType: v, extra: f.extra || {} }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Teks Biasa</SelectItem>
+                    <SelectItem value="button">Pesan Tombol (Interactive)</SelectItem>
+                    <SelectItem value="list">Pesan List (Menu)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Perangkat (opsional)</Label>
+                <Select value={form.deviceId} onValueChange={(v) => setForm((f) => ({ ...f, deviceId: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Semua" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua perangkat</SelectItem>
+                    {(devices ?? []).map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm">URL Gambar / Dokumen <span className="text-muted-foreground font-normal">(opsional)</span></Label>
-              <Input placeholder="https://example.com/gambar.jpg atau link dokumen" value={form.mediaUrl} onChange={(e) => setForm((f) => ({ ...f, mediaUrl: e.target.value }))} />
-              <p className="text-xs text-muted-foreground">Bot akan mengirim media ini bersama balasan teks</p>
-            </div>
-            {form.mediaUrl && (
-              <div className="space-y-2">
-                <Label className="text-sm">Caption Media <span className="text-muted-foreground font-normal">(opsional)</span></Label>
-                <Input placeholder="Caption untuk media..." value={form.mediaCaption} onChange={(e) => setForm((f) => ({ ...f, mediaCaption: e.target.value }))} />
+            <Separator />
+
+            {/* Content Section */}
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Isi Pesan / Body</Label>
+                <Textarea placeholder="Ketik pesan balasan di sini..." rows={3} value={form.reply} onChange={(e) => setForm((f) => ({ ...f, reply: e.target.value }))} className="resize-none" />
               </div>
-            )}
+
+              {form.messageType === "button" && (
+                <div className="space-y-3 p-3 rounded-xl border bg-muted/20 border-border/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Konfigurasi Tombol</Label>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => {
+                      const buttons = [...(form.extra?.buttons || [])];
+                      if (buttons.length < 3) {
+                        buttons.push({ type: "quick_reply", title: "Tombol Baru", url: "", phoneNumber: "" });
+                        setForm((f: any) => ({ ...f, extra: { ...f.extra, buttons } }));
+                      }
+                    }} disabled={(form.extra?.buttons || []).length >= 10}>
+                      <Plus className="w-3.5 h-3.5" /> Tambah
+                    </Button>
+                  </div>
+
+                  {(form.extra?.buttons || []).map((btn: any, idx: number) => (
+                    <div key={idx} className="space-y-2 p-2.5 rounded-lg bg-background border shadow-sm relative group">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Select value={btn.type || "quick_reply"} onValueChange={(v) => {
+                          const buttons = [...form.extra.buttons];
+                          buttons[idx] = { ...buttons[idx], type: v };
+                          setForm((f: any) => ({ ...f, extra: { ...f.extra, buttons } }));
+                        }}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="quick_reply">Quick Reply</SelectItem>
+                            <SelectItem value="url">Link Website (URL)</SelectItem>
+                            <SelectItem value="call">Telepon (Call)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input placeholder="Teks Tombol" className="h-8 text-xs" value={btn.title || btn.displayText || ""}
+                          onChange={(e) => {
+                            const buttons = [...form.extra.buttons];
+                            buttons[idx] = { ...buttons[idx], title: e.target.value, displayText: e.target.value };
+                            setForm((f: any) => ({ ...f, extra: { ...f.extra, buttons } }));
+                          }} />
+                      </div>
+                      {btn.type === "url" && (
+                        <Input placeholder="https://..." className="h-8 text-xs" value={btn.url}
+                          onChange={(e) => {
+                            const buttons = [...form.extra.buttons];
+                            buttons[idx] = { ...buttons[idx], url: e.target.value };
+                            setForm((f: any) => ({ ...f, extra: { ...f.extra, buttons } }));
+                          }} />
+                      )}
+                      {btn.type === "call" && (
+                        <Input placeholder="6281xxx" className="h-8 text-xs" value={btn.phoneNumber || btn.phone}
+                          onChange={(e) => {
+                            const buttons = [...form.extra.buttons];
+                            buttons[idx] = { ...buttons[idx], phoneNumber: e.target.value, phone: e.target.value };
+                            setForm((f: any) => ({ ...f, extra: { ...f.extra, buttons } }));
+                          }} />
+                      )}
+                      <button className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        onClick={() => {
+                          const buttons = form.extra.buttons.filter((_: any, i: number) => i !== idx);
+                          setForm((f: any) => ({ ...f, extra: { ...f.extra, buttons } }));
+                        }}>
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground ml-1">Header (Atas)</Label>
+                      <Input placeholder="Teks Header" className="h-8 text-xs" value={form.extra?.headerText || ""}
+                        onChange={(e) => setForm((f: any) => ({ ...f, extra: { ...f.extra, headerText: e.target.value } }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground ml-1">Footer (Bawah)</Label>
+                      <Input placeholder="Teks Footer" className="h-8 text-xs" value={form.extra?.footer || ""}
+                        onChange={(e) => setForm((f: any) => ({ ...f, extra: { ...f.extra, footer: e.target.value } }))} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Media Attachment <span className="text-muted-foreground font-normal">(Opsional)</span></Label>
+                <div className="relative">
+                  <Input placeholder="https://example.com/image.jpg atau header URL" value={form.mediaUrl} onChange={(e) => setForm((f) => ({ ...f, mediaUrl: e.target.value }))} className="h-10 pr-10" />
+                  {form.mediaUrl && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded flex items-center justify-center bg-green-500/10">
+                      <img src={form.mediaUrl} className="w-4 h-4 object-cover rounded" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">Jika Pesan Tombol aktif, media ini akan jadi Banner utama.</p>
+              </div>
+            </div>
+
+            <Separator />
 
             {/* Schedule section */}
-            <div className="border rounded-lg p-3 space-y-3">
+            <div className={`p-4 rounded-xl border transition-colors ${useSchedule ? "border-purple-200 bg-purple-50/20 dark:border-purple-900/40 dark:bg-purple-950/10" : "bg-muted/10 border-border/50"}`}>
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-purple-500" />Jadwal Aktif</p>
-                  <p className="text-xs text-muted-foreground">Aturan hanya aktif dalam rentang jam tertentu</p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${useSchedule ? "bg-purple-500/10 text-purple-600" : "bg-muted text-muted-foreground"}`}>
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold leading-tight">Jadwal Aktif</p>
+                    <p className="text-[10px] text-muted-foreground">Aktif hanya pada jam operasional tertentu</p>
+                  </div>
                 </div>
                 <Switch checked={useSchedule} onCheckedChange={setUseSchedule} />
               </div>
               {useSchedule && (
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-3 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="space-y-1">
-                    <Label className="text-xs">Dari</Label>
-                    <Input type="time" value={form.scheduleFrom} onChange={(e) => setForm((f) => ({ ...f, scheduleFrom: e.target.value }))} className="h-8 text-sm" />
+                    <Label className="text-[10px] uppercase text-muted-foreground ml-1">Dari Jam</Label>
+                    <Input type="time" value={form.scheduleFrom} onChange={(e) => setForm((f) => ({ ...f, scheduleFrom: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Sampai</Label>
-                    <Input type="time" value={form.scheduleTo} onChange={(e) => setForm((f) => ({ ...f, scheduleTo: e.target.value }))} className="h-8 text-sm" />
+                    <Label className="text-[10px] uppercase text-muted-foreground ml-1">Sampai Jam</Label>
+                    <Input type="time" value={form.scheduleTo} onChange={(e) => setForm((f) => ({ ...f, scheduleTo: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Zona Waktu</Label>
+                    <Label className="text-[10px] uppercase text-muted-foreground ml-1">Zona Waktu</Label>
                     <Select value={form.timezone} onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {TIMEZONES.map((tz) => <SelectItem key={tz} value={tz} className="text-xs">{tz.replace("Asia/", "")}</SelectItem>)}
+                        {TIMEZONES.map((tz) => <SelectItem key={tz} value={tz} className="text-xs">{tz.replace("Asia/", "").replace("_", " ")}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -257,11 +373,16 @@ export default function AutoReply() {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-5 py-4 border-t bg-muted/20">
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={handleSave} disabled={!form.keyword || !form.reply || isPending}>
+            <Button
+              onClick={handleSave}
+              disabled={!form.keyword || !form.reply || isPending}
+              className="px-8 text-white"
+              style={{ background: "linear-gradient(135deg, hsl(145 63% 44%) 0%, hsl(145 63% 38%) 100%)" }}
+            >
               {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {editItem ? "Simpan Perubahan" : "Tambahkan"}
+              {editItem ? "Simpan Perubahan" : "Terbitkan Aturan"}
             </Button>
           </DialogFooter>
         </DialogContent>

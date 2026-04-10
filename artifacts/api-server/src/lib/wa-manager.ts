@@ -536,6 +536,8 @@ export async function startSession(deviceId: number): Promise<SessionState> {
               text: rule.reply,
               mediaUrl: rule.mediaUrl ?? null,
               mediaCaption: rule.mediaCaption ?? null,
+              messageType: (rule as any).messageType || "text",
+              extra: (rule as any).extra || {},
             };
             await db
               .update(autoRepliesTable)
@@ -549,19 +551,94 @@ export async function startSession(deviceId: number): Promise<SessionState> {
       // ── 3. Send reply ───────────────────────────────────────────────────
       if (botReply && sock && state.status === "connected") {
         try {
-          // Send text message
-          await sock.sendMessage(jid, { text: botReply.text });
-          // Send media if present
-          if (botReply.mediaUrl) {
-            const url = botReply.mediaUrl;
-            const caption = botReply.mediaCaption ?? "";
-            const lower = url.toLowerCase();
-            if (lower.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/)) {
-              await sock.sendMessage(jid, { image: { url }, caption } as any);
-            } else if (lower.match(/\.(mp4|mov|avi|mkv)(\?|$)/)) {
-              await sock.sendMessage(jid, { video: { url }, caption } as any);
-            } else {
-              await sock.sendMessage(jid, { document: { url }, caption, fileName: url.split("/").pop() ?? "file" } as any);
+          const replyType = botReply.messageType || "text";
+          const extra = botReply.extra || {};
+
+          if (replyType === "button") {
+            const btns = (extra.buttons ?? [])
+              .filter((b: any) => b?.displayText || b?.title)
+              .map((b: any, i: number) => {
+                const type = b.type ?? "quick_reply";
+                if (type === "url") {
+                  return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                    name: "cta_url",
+                    buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, url: b.url, merchant_url: b.url }),
+                  });
+                }
+                if (type === "call") {
+                  return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                    name: "cta_call",
+                    buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, phone_number: b.phoneNumber || b.phone }),
+                  });
+                }
+                return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                  name: "quick_reply",
+                  buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, id: b.id || `btn_${i + 1}` }),
+                });
+              });
+
+            const headerContent: any = { hasMediaAttachment: !!botReply.mediaUrl };
+            if (botReply.mediaUrl) {
+              headerContent.imageMessage = { url: botReply.mediaUrl };
+            } else if (extra.headerText) {
+              headerContent.title = extra.headerText;
+            }
+
+            const relayMsg = proto.Message.create({
+              interactiveMessage: proto.Message.InteractiveMessage.create({
+                header: proto.Message.InteractiveMessage.Header.create(headerContent),
+                body: proto.Message.InteractiveMessage.Body.create({ text: botReply.text }),
+                footer: proto.Message.InteractiveMessage.Footer.create({ text: extra.footer ?? "" }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                  messageVersion: 1,
+                  buttons: btns,
+                }),
+              }),
+            });
+            await (sock as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
+          } else if (replyType === "list") {
+            const selectBtn = proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+              name: "single_select",
+              buttonParamsJson: JSON.stringify({
+                title: extra.buttonText ?? "Pilih",
+                sections: extra.sections ?? [],
+              }),
+            });
+
+            const headerContent: any = { hasMediaAttachment: !!botReply.mediaUrl };
+            if (botReply.mediaUrl) {
+              headerContent.imageMessage = { url: botReply.mediaUrl };
+            } else if (extra.headerText) {
+              headerContent.title = extra.headerText;
+            }
+
+            const relayMsg = proto.Message.create({
+              interactiveMessage: proto.Message.InteractiveMessage.create({
+                header: proto.Message.InteractiveMessage.Header.create(headerContent),
+                body: proto.Message.InteractiveMessage.Body.create({ text: botReply.text }),
+                footer: proto.Message.InteractiveMessage.Footer.create({ text: extra.footer ?? "" }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                  messageVersion: 1,
+                  buttons: [selectBtn],
+                }),
+              }),
+            });
+            await (sock as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
+          } else {
+            // Default: Send text message
+            await sock.sendMessage(jid, { text: botReply.text });
+            // Send media if present (for backward compatibility / simple media rules)
+            if (botReply.mediaUrl && !botReply.messageType) {
+              const url = botReply.mediaUrl;
+              const caption = botReply.mediaCaption ?? "";
+              const lower = url.toLowerCase();
+              if (lower.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/)) {
+                await sock.sendMessage(jid, { image: { url }, caption } as any);
+              } else if (lower.match(/\.(mp4|mov|avi|mkv)(\?|$)/)) {
+                await sock.sendMessage(jid, { video: { url }, caption } as any);
+              } else {
+                await sock.sendMessage(jid, { document: { url }, caption, fileName: url.split("/").pop() ?? "file" } as any);
+              }
             }
           }
         } catch (err) {
