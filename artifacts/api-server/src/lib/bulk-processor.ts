@@ -134,15 +134,23 @@ export async function processBulkJob({
             }
 
             const relayMsg = proto.Message.create({
-              interactiveMessage: proto.Message.InteractiveMessage.create({
-                header: proto.Message.InteractiveMessage.Header.create(headerContent),
-                body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
-                footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
-                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                  messageVersion: 1,
-                  buttons: btns,
-                }),
-              }),
+              viewOnceMessage: {
+                message: {
+                  messageContextInfo: {
+                    deviceListMetadata: {},
+                    deviceListMetadataVersion: 2
+                  },
+                  interactiveMessage: proto.Message.InteractiveMessage.create({
+                    header: proto.Message.InteractiveMessage.Header.create(headerContent),
+                    body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                      messageVersion: 1,
+                      buttons: btns,
+                    }),
+                  }),
+                }
+              }
             });
             await (session!.socket as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
           } else if (messageType === "list") {
@@ -161,14 +169,22 @@ export async function processBulkJob({
               }),
             });
             const relayMsg = proto.Message.create({
-              interactiveMessage: proto.Message.InteractiveMessage.create({
-                body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
-                footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
-                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                  messageVersion: 1,
-                  buttons: [selectBtn],
-                }),
-              }),
+              viewOnceMessage: {
+                message: {
+                  messageContextInfo: {
+                    deviceListMetadata: {},
+                    deviceListMetadataVersion: 2
+                  },
+                  interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                      messageVersion: 1,
+                      buttons: [selectBtn],
+                    }),
+                  }),
+                }
+              }
             });
             await (session!.socket as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
           } else {
