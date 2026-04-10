@@ -136,11 +136,13 @@ export async function processBulkJob({
                 };
               });
 
-            const headerContent: any = { hasMediaAttachment: !!extra?.headerUrl };
+            const headerContent: any = {};
             if (extra?.headerUrl) {
               headerContent.imageMessage = { url: extra.headerUrl };
+              headerContent.hasMediaAttachment = true;
             } else if (extra?.headerText) {
               headerContent.title = extra.headerText;
+              headerContent.hasMediaAttachment = false;
             }
 
             const messageObj = {
@@ -161,6 +163,7 @@ export async function processBulkJob({
               },
             }, { userJid: (session!.socket as any).user.id });
 
+            logger.info({ jid, messageObj }, "Relaying interactive button message");
             await (session!.socket as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
           } else if (messageType === "list") {
             const selectBtn = {
