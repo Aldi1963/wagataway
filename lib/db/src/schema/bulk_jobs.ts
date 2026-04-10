@@ -19,6 +19,8 @@ export const bulkJobsTable = pgTable("bulk_jobs", {
   recipients: jsonb("recipients").$type<{ phone: string; name?: string }[]>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  messageType: text("message_type").notNull().default("text"), // text, media, button, list
+  extra: jsonb("extra"), // buttons, footer, sections, etc.
 });
 
 export const insertBulkJobSchema = createInsertSchema(bulkJobsTable).omit({ id: true, createdAt: true, updatedAt: true });

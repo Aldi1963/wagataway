@@ -305,7 +305,7 @@ router.post("/messages/send", async (req, res): Promise<void> => {
 
 router.post("/messages/bulk", async (req, res): Promise<void> => {
   const uid = getUser(req);
-  const { deviceId, message, name, mediaUrl, mediaType, scheduledAt } = req.body;
+  const { deviceId, message, name, mediaUrl, mediaType, scheduledAt, messageType = "text", extra } = req.body;
 
   let recipients: { phone: string; name?: string }[] = [];
   if (Array.isArray(req.body.recipients)) {
@@ -314,7 +314,7 @@ router.post("/messages/bulk", async (req, res): Promise<void> => {
     recipients = req.body.phones.map((p: string) => ({ phone: p }));
   }
 
-  if (!deviceId || !message || !recipients.length) {
+  if (!deviceId || (!message && !["media", "sticker"].includes(messageType)) || !recipients.length) {
     res.status(400).json({ message: "Missing required fields", code: "INVALID_REQUEST" });
     return;
   }
@@ -342,7 +342,8 @@ router.post("/messages/bulk", async (req, res): Promise<void> => {
     .insert(bulkJobsTable)
     .values({
       userId: uid, deviceId: devId, name: jobName,
-      message, mediaUrl: mediaUrl ?? null, mediaType: mediaType ?? null,
+      message: message ?? "", mediaUrl: mediaUrl ?? null, mediaType: mediaType ?? null,
+      messageType, extra: extra ?? null,
       total, sent: 0, failed: 0, pending: total,
       status: isScheduled ? "pending" : "running",
       scheduledAt: scheduledDate ?? null,
@@ -353,7 +354,8 @@ router.post("/messages/bulk", async (req, res): Promise<void> => {
   if (!isScheduled) {
     processBulkJob({
       jobId: job.id, userId: uid, deviceId: devId,
-      message, mediaUrl: mediaUrl ?? undefined, mediaType: mediaType ?? undefined,
+      message: message ?? "", mediaUrl: mediaUrl ?? undefined, mediaType: mediaType ?? undefined,
+      messageType, extra,
       recipients: cappedRecipients,
     }).catch(() => {});
   }

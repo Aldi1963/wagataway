@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   MessageSquare, Upload, Loader2, CheckCircle2, XCircle, BarChart3,
   Users, FileText, Send, Sparkles, RefreshCw, Image, Link2, X,
-  Eye, Download, Clock, Calendar,
+  Eye, Download, Clock, Calendar, FileSpreadsheet, Plus, Trash2,
+  Settings2,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,7 +101,65 @@ export default function BulkMessages() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [useSchedule, setUseSchedule] = useState(false);
 
+  // ── Interactive Message State ─────────────────────────────────────────────
+  const [messageType, setMessageType] = useState<"text" | "button" | "list">("text");
+  const [footer, setFooter] = useState("");
+  const [headerUrl, setHeaderUrl] = useState("");
+  const [buttons, setButtons] = useState<any[]>([]); // { type: 'quick_reply' | 'url', title: string, value: string }
+
   const [detailJob, setDetailJob] = useState<BulkJob | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        const importedContacts: PickedContact[] = data
+          .map((row: any) => {
+            const phone = String(row.phone || row.nomor || row.whatsapp || "").replace(/\D/g, "");
+            const name = String(row.name || row.nama || "");
+            if (phone.length < 8) return null;
+            return { id: `import_${phone}_${Math.random()}`, phone, name };
+          })
+          .filter(Boolean) as PickedContact[];
+
+        if (importedContacts.length > 0) {
+          setPickedContacts((prev) => {
+            const existing = new Set(prev.map((c) => c.phone));
+            const unique = importedContacts.filter((c) => !existing.has(c.phone));
+            return [...prev, ...unique];
+          });
+          toast({ title: `Berhasil mengimpor ${importedContacts.length} kontak` });
+        } else {
+          toast({ title: "Tidak ada nomor valid yang ditemukan", variant: "destructive" });
+        }
+      } catch (err) {
+        toast({ title: "Gagal membaca file", variant: "destructive" });
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = ""; // reset
+  };
+
+  const addButton = () => {
+    if (buttons.length >= 3) return;
+    setButtons([...buttons, { type: "quick_reply", title: "", value: "" }]);
+  };
+
+  const updateButton = (index: number, field: string, val: string) => {
+    setButtons((prev) => prev.map((b, i) => (i === index ? { ...b, [field]: val } : b)));
+  };
+
+  const removeButton = (index: number) => {
+    setButtons((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const { data: devices } = useQuery({
     queryKey: ["devices"],
@@ -186,10 +246,22 @@ export default function BulkMessages() {
       return;
     }
     sendBulk.mutate({
-      deviceId, message: message.trim(),
+      deviceId,
+      message: message.trim(),
       name: jobName || `Blast ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
       recipients: allPhones,
-      ...(showMedia && mediaUrl ? { mediaUrl, mediaType } : {}),
+      messageType,
+      extra: messageType === "button" ? {
+        buttons: buttons.map((b) => ({
+          type: b.type,
+          displayText: b.title,
+          url: b.type === "url" ? b.value : undefined,
+          phoneNumber: b.type === "call" ? b.value : undefined,
+        })),
+        footer,
+        headerUrl,
+      } : undefined,
+      ...(showMedia && mediaUrl && messageType === "text" ? { mediaUrl, mediaType } : {}),
       ...(useSchedule && scheduledAt ? { scheduledAt: new Date(scheduledAt).toISOString() } : {}),
     });
   }
@@ -275,13 +347,21 @@ export default function BulkMessages() {
                             {totalCount} nomor
                           </span>
                         )}
-                        <ContactPicker mode="multi" selected={pickedContacts} onSelect={setPickedContacts}
-                          trigger={
-                            <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 text-sm">
-                              <Users className="w-3.5 h-3.5" /> Pilih Kontak
-                            </Button>
-                          }
-                        />
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer">
+                            <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} />
+                            <div className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border rounded-md hover:bg-muted transition-colors">
+                              <FileSpreadsheet className="w-3.5 h-3.5" /> Import Excel
+                            </div>
+                          </label>
+                          <ContactPicker mode="multi" selected={pickedContacts} onSelect={setPickedContacts}
+                            trigger={
+                              <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                                <Users className="w-3.5 h-3.5" /> Pilih Kontak
+                              </Button>
+                            }
+                          />
+                        </div>
                       </div>
                     </div>
                     {pickedContacts.length > 0 && (
@@ -308,51 +388,118 @@ export default function BulkMessages() {
 
                   <Separator className="my-1" />
 
-                  {/* Message */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium flex items-center gap-1.5">
-                        <MessageSquare className="w-4 h-4 text-muted-foreground" /> Pesan
-                      </Label>
-                      <span className="text-xs text-muted-foreground">{message.length} karakter</span>
-                    </div>
-                    <Textarea placeholder="Halo {nama}! Ada promo spesial untuk Anda hari ini..." rows={5} value={message}
-                      onChange={(e) => setMessage(e.target.value)} className="resize-none" />
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      Gunakan <code className="bg-muted px-1 rounded text-[11px]">{"{nama}"}</code> untuk personalisasi nama kontak
-                    </p>
-                  </div>
-
-                  {/* Media section */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium flex items-center gap-1.5">
-                        <Image className="w-4 h-4 text-muted-foreground" /> Lampiran Media
-                        <span className="text-muted-foreground font-normal">(opsional)</span>
-                      </Label>
-                      <Button type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1"
-                        onClick={() => setShowMedia((v) => !v)}>
-                        {showMedia ? <><X className="w-3 h-3" /> Hapus</> : <><Link2 className="w-3 h-3" /> Tambah URL</>}
+                  {/* Message Type Selection */}
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Tipe Pesan</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant={messageType === "text" ? "default" : "outline"}
+                        className="h-9 gap-2 text-xs" onClick={() => setMessageType("text")}>
+                        <MessageSquare className="w-3.5 h-3.5" /> Pesan Teks/Media
+                      </Button>
+                      <Button type="button" variant={messageType === "button" ? "default" : "outline"}
+                        className="h-9 gap-2 text-xs" onClick={() => setMessageType("button")}>
+                        <Settings2 className="w-3.5 h-3.5" /> Pesan Tombol
                       </Button>
                     </div>
-                    {showMedia && (
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="col-span-2">
-                          <Input placeholder="https://example.com/gambar.jpg" value={mediaUrl}
-                            onChange={(e) => setMediaUrl(e.target.value)} className="h-9 text-sm" />
+                  </div>
+
+                  <Separator className="my-1" />
+
+                  {/* Message Content */}
+                  <div className="space-y-4">
+                    {messageType === "button" && (
+                      <div className="space-y-3 p-4 rounded-2xl border bg-muted/20 border-border/50">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium">Header Media <span className="font-normal text-muted-foreground">(Opsional)</span></Label>
+                          <Input placeholder="URL Gambar Header..." value={headerUrl} onChange={(e) => setHeaderUrl(e.target.value)} className="h-9 text-xs" />
                         </div>
-                        <Select value={mediaType} onValueChange={setMediaType}>
-                          <SelectTrigger className="h-9 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="image">Gambar</SelectItem>
-                            <SelectItem value="video">Video</SelectItem>
-                            <SelectItem value="audio">Audio</SelectItem>
-                            <SelectItem value="document">Dokumen</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium">Warna Footer <span className="font-normal text-muted-foreground">(Teks kecil di bawah pesan)</span></Label>
+                          <Input placeholder="Ketik footer..." value={footer} onChange={(e) => setFooter(e.target.value)} className="h-9 text-xs" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold">Daftar Tombol <span className="font-normal text-muted-foreground">(Maks 3)</span></Label>
+                            {buttons.length < 3 && (
+                              <Button type="button" variant="ghost" size="sm" onClick={addButton} className="h-7 text-[10px] gap-1 px-2 h-7 rounded-lg bg-primary/10 text-primary">
+                                <Plus className="w-3 h-3" /> Tambah Tombol
+                              </Button>
+                            )}
+                          </div>
+                          {buttons.map((btn, idx) => (
+                            <div key={idx} className="space-y-2 p-3 rounded-xl border bg-background relative group">
+                              <button type="button" onClick={() => removeButton(idx)} className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="grid grid-cols-2 gap-2">
+                                <Select value={btn.type} onValueChange={(v) => updateButton(idx, "type", v)}>
+                                  <SelectTrigger className="h-8 text-[11px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="quick_reply">Quick Reply</SelectItem>
+                                    <SelectItem value="url">Link Website</SelectItem>
+                                    <SelectItem value="call">Panggilan Telepon</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Input placeholder="Label Tombol" value={btn.title} onChange={(e) => updateButton(idx, "title", e.target.value)} className="h-8 text-[11px]" />
+                              </div>
+                              {btn.type !== "quick_reply" && (
+                                <Input
+                                  placeholder={btn.type === "url" ? "https://wa.me/..." : "Nomor Telepon (628...)"}
+                                  value={btn.value}
+                                  onChange={(e) => updateButton(idx, "value", e.target.value)}
+                                  className="h-8 text-[11px]"
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium flex items-center gap-1.5">
+                          <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                          {messageType === "button" ? "Body Pesan" : "Isi Pesan"}
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{message.length} chars</span>
+                      </div>
+                      <Textarea placeholder="Halo {nama}! Ada promo spesial..." rows={5} value={message}
+                        onChange={(e) => setMessage(e.target.value)} className="resize-none leading-relaxed text-sm" />
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-primary" />
+                        Gunakan <code className="bg-primary/5 text-primary px-1 rounded">{"{nama}"}</code> untuk personalisasi
+                      </p>
+                    </div>
+
+                    {messageType === "text" && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-semibold flex items-center gap-1.5 uppercase tracking-wider text-muted-foreground">
+                            <Image className="w-3.5 h-3.5" /> Lampiran Media
+                          </Label>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 text-[10px] gap-1 uppercase tracking-wider"
+                            onClick={() => setShowMedia((v) => !v)}>
+                            {showMedia ? <><X className="w-3 h-3" /> Tutup</> : <><Link2 className="w-3 h-3" /> Tambah URL</>}
+                          </Button>
+                        </div>
+                        {showMedia && (
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="col-span-3">
+                              <Input placeholder="https://..." value={mediaUrl}
+                                onChange={(e) => setMediaUrl(e.target.value)} className="h-8 text-xs" />
+                            </div>
+                            <Select value={mediaType} onValueChange={setMediaType}>
+                              <SelectTrigger className="h-8 text-[10px] uppercase"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="image">Gambar</SelectItem>
+                                <SelectItem value="video">Video</SelectItem>
+                                <SelectItem value="audio">Audio</SelectItem>
+                                <SelectItem value="document">File</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -5,6 +5,7 @@ import { sendWithAntiBanned, getEffectiveDailyLimit } from "./anti-banned";
 import { getUserPlan } from "./plan-limits";
 import { logger } from "./logger";
 import { sendTelegramNotification, fmtBlastDone } from "./telegram-notify";
+import { proto, generateMessageIDV2 } from "@whiskeysockets/baileys";
 
 interface BulkRecipient {
   phone: string;
@@ -18,6 +19,8 @@ interface BulkProcessOptions {
   message: string;
   mediaUrl?: string;
   mediaType?: string;
+  messageType?: string;
+  extra?: any;
   recipients: BulkRecipient[];
 }
 
@@ -42,6 +45,8 @@ export async function processBulkJob({
   message,
   mediaUrl,
   mediaType,
+  messageType = "text",
+  extra,
   recipients,
 }: BulkProcessOptions): Promise<void> {
   activeJobs.add(jobId);
@@ -98,24 +103,81 @@ export async function processBulkJob({
 
       try {
         if (canSendReal) {
-          if (mediaUrl) {
-            // Send media message
-            const mimeType = mediaType === "image" ? "image/jpeg"
-              : mediaType === "video" ? "video/mp4"
-              : mediaType === "audio" ? "audio/mpeg"
-              : "application/octet-stream";
-            const mediaMsg: any = mediaType === "image"
-              ? { image: { url: mediaUrl }, caption: personalizedMsg }
-              : mediaType === "video"
-              ? { video: { url: mediaUrl }, caption: personalizedMsg }
-              : mediaType === "audio"
-              ? { audio: { url: mediaUrl }, mimetype: mimeType }
-              : { document: { url: mediaUrl }, caption: personalizedMsg, mimetype: mimeType };
+          if (messageType === "button") {
+            const btns = (extra?.buttons ?? [])
+              .filter((b: any) => b?.displayText || b?.title)
+              .map((b: any, bi: number) => {
+                const type = b.type ?? "quick_reply";
+                if (type === "url") {
+                  return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                    name: "cta_url",
+                    buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, url: b.url, merchant_url: b.url }),
+                  });
+                }
+                if (type === "call") {
+                  return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                    name: "cta_call",
+                    buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, phone_number: b.phoneNumber || b.phone }),
+                  });
+                }
+                return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                  name: "quick_reply",
+                  buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, id: b.id || `btn_${bi + 1}` }),
+                });
+              });
 
+            const headerContent: any = { hasMediaAttachment: !!extra?.headerUrl };
+            if (extra?.headerUrl) {
+              headerContent.imageMessage = { url: extra.headerUrl };
+            } else if (extra?.headerText) {
+              headerContent.title = extra.headerText;
+            }
+
+            const relayMsg = proto.Message.create({
+              interactiveMessage: proto.Message.InteractiveMessage.create({
+                header: proto.Message.InteractiveMessage.Header.create(headerContent),
+                body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
+                footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                  messageVersion: 1,
+                  buttons: btns,
+                }),
+              }),
+            });
+            await (session!.socket as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
+          } else if (messageType === "list") {
+            const selectBtn = proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+              name: "single_select",
+              buttonParamsJson: JSON.stringify({
+                title: extra?.buttonText ?? "Pilih",
+                sections: (extra?.sections ?? []).map((s: any) => ({
+                  title: s.title ?? "",
+                  rows: (s.rows ?? []).map((r: any) => ({
+                    title: r.title ?? r.rowTitle ?? String(r),
+                    description: r.description ?? "",
+                    id: r.id ?? r.title ?? String(r),
+                  })),
+                })),
+              }),
+            });
+            const relayMsg = proto.Message.create({
+              interactiveMessage: proto.Message.InteractiveMessage.create({
+                body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
+                footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                  messageVersion: 1,
+                  buttons: [selectBtn],
+                }),
+              }),
+            });
+            await (session!.socket as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
+          } else {
+            // Standard text/media with Anti-Banned support
             if (device.antiBannedEnabled) {
               await sendWithAntiBanned({
                 socket: session!.socket, jid, message: personalizedMsg,
                 recipientName: recipient.name,
+                mediaUrl: mediaUrl, mediaType: mediaType as any,
                 minDelay: i === 0 ? 0 : device.minDelay,
                 maxDelay: device.maxDelay,
                 typingSimulation: device.typingSimulation,
@@ -123,20 +185,16 @@ export async function processBulkJob({
                 applyDelay: i < recipients.length - 1,
               });
             } else {
-              await session!.socket.sendMessage(jid, mediaMsg);
+              if (mediaUrl) {
+                const mediaMsg: any = mediaType === "video" ? { video: { url: mediaUrl }, caption: personalizedMsg }
+                  : mediaType === "audio" ? { audio: { url: mediaUrl }, mimetype: "audio/mpeg" }
+                  : mediaType === "document" ? { document: { url: mediaUrl }, caption: personalizedMsg }
+                  : { image: { url: mediaUrl }, caption: personalizedMsg };
+                await session!.socket.sendMessage(jid, mediaMsg);
+              } else {
+                await session!.socket.sendMessage(jid, { text: personalizedMsg });
+              }
             }
-          } else if (device.antiBannedEnabled) {
-            await sendWithAntiBanned({
-              socket: session!.socket, jid, message: personalizedMsg,
-              recipientName: recipient.name,
-              minDelay: i === 0 ? 0 : device.minDelay,
-              maxDelay: device.maxDelay,
-              typingSimulation: device.typingSimulation,
-              typingDuration: device.typingDuration,
-              applyDelay: i < recipients.length - 1,
-            });
-          } else {
-            await session!.socket.sendMessage(jid, { text: personalizedMsg });
           }
         }
 
@@ -144,6 +202,7 @@ export async function processBulkJob({
           userId, deviceId, phone: recipient.phone,
           message: personalizedMsg, status: "sent",
           mediaUrl: mediaUrl ?? null, bulkJobId: jobId,
+          messageType, extra: extra ? JSON.parse(JSON.stringify(extra)) : null,
         });
 
         await db.update(devicesTable)
@@ -157,6 +216,8 @@ export async function processBulkJob({
           userId, deviceId, phone: recipient.phone,
           message: personalizedMsg, status: "failed",
           mediaUrl: mediaUrl ?? null, bulkJobId: jobId,
+          messageType, extra: extra ? JSON.parse(JSON.stringify(extra)) : null,
+          failedReason: (err as any)?.message ?? "Unknown error",
         });
         failed++;
       }
