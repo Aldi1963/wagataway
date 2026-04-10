@@ -99,6 +99,22 @@ sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d domain-anda.com
 ```
 
+## 🖥️ Deployment via aaPanel
+
+1.  **Akses aaPanel**: Masuk ke dashboard aaPanel Anda.
+2.  **Install Node.js Version Manager**: Pergi ke *App Store* → cari "Node.js project manager" → Install.
+3.  **Tentukan Versi Node.js**: Gunakan Node.js v18 atau v20 di dalam Manager tersebut.
+4.  **Tambah Website**:
+    *   Klik menu **Website** → **Node.js project**.
+    *   Klik **Add Node.js Project**.
+    *   **Project directory**: Arahkan ke folder `artifacts/api-server`.
+    *   **Run command**: `pnpm build && pnpm start`.
+    *   **Project port**: `5000`.
+5.  **Setting Domain & SSL**:
+    *   Klik **Node.js Project Manager** → Project Anda → klik **Website target** untuk menghubungkan domain.
+    *   Gunakan menu **SSL** di aaPanel untuk memasang Let's Encrypt secara otomatis.
+6.  **Environment**: Jangan lupa mengedit file `.env` melalui menu **Files** di aaPanel.
+
 ## 🔒 Keamanan & Sesi
 
 Proyek ini sudah dilengkapi dengan perlindungan data. File sesi WhatsApp (`wa-sessions`) dan file environment (`.env`) secara otomatis diabaikan oleh Git untuk mencegah kebocoran data.
