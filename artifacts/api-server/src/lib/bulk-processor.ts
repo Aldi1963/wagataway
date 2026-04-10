@@ -109,21 +109,31 @@ export async function processBulkJob({
               .map((b: any, bi: number) => {
                 const type = b.type ?? "quick_reply";
                 if (type === "url") {
-                  return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                  return {
                     name: "cta_url",
-                    buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, url: b.url, merchant_url: b.url }),
-                  });
+                    buttonParamsJson: JSON.stringify({ 
+                      display_text: b.displayText || b.title, 
+                      url: b.url, 
+                      merchant_url: b.url 
+                    }),
+                  };
                 }
                 if (type === "call") {
-                  return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                  return {
                     name: "cta_call",
-                    buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, phone_number: b.phoneNumber || b.phone }),
-                  });
+                    buttonParamsJson: JSON.stringify({ 
+                      display_text: b.displayText || b.title, 
+                      phone_number: b.phoneNumber || b.phone 
+                    }),
+                  };
                 }
-                return proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+                return {
                   name: "quick_reply",
-                  buttonParamsJson: JSON.stringify({ display_text: b.displayText || b.title, id: b.id || `btn_${bi + 1}` }),
-                });
+                  buttonParamsJson: JSON.stringify({ 
+                    display_text: b.displayText || b.title, 
+                    id: String(b.id || `btn_${bi + 1}`) 
+                  }),
+                };
               });
 
             const headerContent: any = { hasMediaAttachment: !!extra?.headerUrl };
@@ -133,28 +143,27 @@ export async function processBulkJob({
               headerContent.title = extra.headerText;
             }
 
-            const relayMsg = proto.Message.create({
+            const messageObj = {
+              interactiveMessage: {
+                header: headerContent,
+                body: { text: personalizedMsg },
+                footer: { text: extra?.footer ?? "" },
+                nativeFlowMessage: {
+                  buttons: btns,
+                  messageVersion: 1,
+                },
+              },
+            };
+
+            const msgs = (session!.socket as any).generateWAMessageFromContent(jid, {
               viewOnceMessage: {
-                message: {
-                  messageContextInfo: {
-                    deviceListMetadata: {},
-                    deviceListMetadataVersion: 2
-                  },
-                  interactiveMessage: proto.Message.InteractiveMessage.create({
-                    header: proto.Message.InteractiveMessage.Header.create(headerContent),
-                    body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
-                    footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
-                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                      messageVersion: 1,
-                      buttons: btns,
-                    }),
-                  }),
-                }
-              }
-            });
-            await (session!.socket as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
+                message: messageObj,
+              },
+            }, { userJid: (session!.socket as any).user.id });
+
+            await (session!.socket as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
           } else if (messageType === "list") {
-            const selectBtn = proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+            const selectBtn = {
               name: "single_select",
               buttonParamsJson: JSON.stringify({
                 title: extra?.buttonText ?? "Pilih",
@@ -167,26 +176,26 @@ export async function processBulkJob({
                   })),
                 })),
               }),
-            });
-            const relayMsg = proto.Message.create({
+            };
+
+            const messageObj = {
+              interactiveMessage: {
+                body: { text: personalizedMsg },
+                footer: { text: extra?.footer ?? "" },
+                nativeFlowMessage: {
+                  buttons: [selectBtn],
+                  messageVersion: 1,
+                },
+              },
+            };
+
+            const msgs = (session!.socket as any).generateWAMessageFromContent(jid, {
               viewOnceMessage: {
-                message: {
-                  messageContextInfo: {
-                    deviceListMetadata: {},
-                    deviceListMetadataVersion: 2
-                  },
-                  interactiveMessage: proto.Message.InteractiveMessage.create({
-                    body: proto.Message.InteractiveMessage.Body.create({ text: personalizedMsg }),
-                    footer: proto.Message.InteractiveMessage.Footer.create({ text: extra?.footer ?? "" }),
-                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                      messageVersion: 1,
-                      buttons: [selectBtn],
-                    }),
-                  }),
-                }
-              }
-            });
-            await (session!.socket as any).relayMessage(jid, relayMsg, { messageId: generateMessageIDV2() });
+                message: messageObj,
+              },
+            }, { userJid: (session!.socket as any).user.id });
+
+            await (session!.socket as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
           } else {
             // Standard text/media with Anti-Banned support
             if (device.antiBannedEnabled) {
