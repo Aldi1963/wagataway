@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "NrWjId8kEgr0faCH_6cnB"
+uri = "file://INSTALL.md"
+type = "text"
+title = "Panduan Instalasi WA Gateway — VPS & cPanel"

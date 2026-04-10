@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "WhatsApp Gateway SaaS"
+version = "1.0.0"
+id = "artifacts/wa-gateway"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23977
+
+[services.development]
+run = "pnpm --filter @workspace/wa-gateway run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/wa-gateway", "run", "build" ]
+publicDir = "artifacts/wa-gateway/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23977"
+BASE_PATH = "/"

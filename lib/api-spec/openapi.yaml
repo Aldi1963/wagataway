@@ -1,0 +1,1078 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: WhatsApp Gateway SaaS API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: devices
+    description: Device management
+  - name: messages
+    description: Message sending
+  - name: contacts
+    description: Contact management
+  - name: autoreply
+    description: Auto reply rules
+  - name: billing
+    description: Billing and subscriptions
+  - name: api-keys
+    description: API key management
+  - name: dashboard
+    description: Dashboard statistics
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Register success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /auth/profile:
+    put:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Get recent activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/chart:
+    get:
+      operationId: getDashboardChart
+      tags: [dashboard]
+      summary: Get message activity chart data
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+      responses:
+        "200":
+          description: Chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChartDataPoint"
+
+  /devices:
+    get:
+      operationId: getDevices
+      tags: [devices]
+      summary: List devices
+      responses:
+        "200":
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+    post:
+      operationId: createDevice
+      tags: [devices]
+      summary: Create device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+      responses:
+        "201":
+          description: Device created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+
+  /devices/{id}:
+    get:
+      operationId: getDevice
+      tags: [devices]
+      summary: Get device
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+    delete:
+      operationId: deleteDevice
+      tags: [devices]
+      summary: Delete device
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /devices/{id}/connect:
+    post:
+      operationId: connectDevice
+      tags: [devices]
+      summary: Connect device (get QR code)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: QR code data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QRCodeResponse"
+
+  /devices/{id}/disconnect:
+    post:
+      operationId: disconnectDevice
+      tags: [devices]
+      summary: Disconnect device
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+
+  /messages/send:
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send single message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /messages/bulk:
+    post:
+      operationId: sendBulkMessages
+      tags: [messages]
+      summary: Send bulk messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkMessageRequest"
+      responses:
+        "200":
+          description: Bulk job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkJob"
+
+  /messages:
+    get:
+      operationId: getMessages
+      tags: [messages]
+      summary: List messages
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [sent, failed, pending]
+        - in: query
+          name: deviceId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedMessages"
+
+  /messages/bulk-jobs:
+    get:
+      operationId: getBulkJobs
+      tags: [messages]
+      summary: List bulk message jobs
+      responses:
+        "200":
+          description: Bulk jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BulkJob"
+
+  /contacts:
+    get:
+      operationId: getContacts
+      tags: [contacts]
+      summary: List contacts
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: tag
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Contacts list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedContacts"
+    post:
+      operationId: createContact
+      tags: [contacts]
+      summary: Create contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactRequest"
+      responses:
+        "201":
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+
+  /contacts/{id}:
+    put:
+      operationId: updateContact
+      tags: [contacts]
+      summary: Update contact
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactRequest"
+      responses:
+        "200":
+          description: Contact updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+    delete:
+      operationId: deleteContact
+      tags: [contacts]
+      summary: Delete contact
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /autoreply:
+    get:
+      operationId: getAutoReplies
+      tags: [autoreply]
+      summary: List auto-reply rules
+      responses:
+        "200":
+          description: Rules list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AutoReplyRule"
+    post:
+      operationId: createAutoReply
+      tags: [autoreply]
+      summary: Create auto-reply rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAutoReplyRequest"
+      responses:
+        "201":
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoReplyRule"
+
+  /autoreply/{id}:
+    put:
+      operationId: updateAutoReply
+      tags: [autoreply]
+      summary: Update auto-reply rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAutoReplyRequest"
+      responses:
+        "200":
+          description: Rule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoReplyRule"
+    delete:
+      operationId: deleteAutoReply
+      tags: [autoreply]
+      summary: Delete auto-reply rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /autoreply/{id}/toggle:
+    post:
+      operationId: toggleAutoReply
+      tags: [autoreply]
+      summary: Toggle auto-reply rule active state
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rule toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoReplyRule"
+
+  /api-keys:
+    get:
+      operationId: getApiKeys
+      tags: [api-keys]
+      summary: List API keys
+      responses:
+        "200":
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKey"
+    post:
+      operationId: createApiKey
+      tags: [api-keys]
+      summary: Generate new API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+
+  /api-keys/{id}:
+    delete:
+      operationId: deleteApiKey
+      tags: [api-keys]
+      summary: Revoke API key
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Revoked
+
+  /billing/plans:
+    get:
+      operationId: getBillingPlans
+      tags: [billing]
+      summary: Get available billing plans
+      responses:
+        "200":
+          description: Plans list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingPlan"
+
+  /billing/subscription:
+    get:
+      operationId: getSubscription
+      tags: [billing]
+      summary: Get current subscription
+      responses:
+        "200":
+          description: Current subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /billing/transactions:
+    get:
+      operationId: getBillingTransactions
+      tags: [billing]
+      summary: Get billing transaction history
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+      required: [message]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+      required: [name, email, password]
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: string
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required: [token, user]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: string
+        plan:
+          type: string
+          enum: [free, basic, pro]
+        createdAt:
+          type: string
+      required: [id, name, email, plan]
+
+    DashboardStats:
+      type: object
+      properties:
+        totalMessages:
+          type: integer
+        sentMessages:
+          type: integer
+        failedMessages:
+          type: integer
+        pendingMessages:
+          type: integer
+        activeDevices:
+          type: integer
+        totalDevices:
+          type: integer
+        totalContacts:
+          type: integer
+        successRate:
+          type: number
+      required: [totalMessages, sentMessages, failedMessages, pendingMessages, activeDevices, totalDevices, totalContacts, successRate]
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [message_sent, message_failed, device_connected, device_disconnected, bulk_completed]
+        description:
+          type: string
+        phone:
+          type: string
+        deviceName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, type, description, createdAt]
+
+    ChartDataPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        sent:
+          type: integer
+        failed:
+          type: integer
+        pending:
+          type: integer
+      required: [date, sent, failed, pending]
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [connected, disconnected, connecting]
+        battery:
+          type: integer
+        lastSeen:
+          type: string
+        autoReconnect:
+          type: boolean
+        messagesSent:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, name, status, autoReconnect, messagesSent, createdAt]
+
+    CreateDeviceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        autoReconnect:
+          type: boolean
+      required: [name]
+
+    QRCodeResponse:
+      type: object
+      properties:
+        qrCode:
+          type: string
+        expiresAt:
+          type: string
+      required: [qrCode, expiresAt]
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        phone:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+          enum: [sent, failed, pending]
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        mediaUrl:
+          type: string
+        createdAt:
+          type: string
+      required: [id, phone, message, status, deviceId, createdAt]
+
+    SendMessageRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        message:
+          type: string
+        deviceId:
+          type: string
+        mediaUrl:
+          type: string
+      required: [phone, message, deviceId]
+
+    BulkMessageRequest:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        message:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              phone:
+                type: string
+              name:
+                type: string
+            required: [phone]
+        delay:
+          type: integer
+      required: [deviceId, message, recipients]
+
+    BulkJob:
+      type: object
+      properties:
+        id:
+          type: string
+        total:
+          type: integer
+        sent:
+          type: integer
+        failed:
+          type: integer
+        pending:
+          type: integer
+        status:
+          type: string
+          enum: [running, completed, failed, paused]
+        deviceName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, total, sent, failed, pending, status, createdAt]
+
+    PaginatedMessages:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, limit, totalPages]
+
+    Contact:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name, phone, createdAt]
+
+    CreateContactRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+      required: [name, phone]
+
+    PaginatedContacts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contact"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, limit, totalPages]
+
+    AutoReplyRule:
+      type: object
+      properties:
+        id:
+          type: string
+        keyword:
+          type: string
+        matchType:
+          type: string
+          enum: [exact, contains, starts_with, regex]
+        reply:
+          type: string
+        isActive:
+          type: boolean
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        triggerCount:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, keyword, matchType, reply, isActive, triggerCount, createdAt]
+
+    CreateAutoReplyRequest:
+      type: object
+      properties:
+        keyword:
+          type: string
+        matchType:
+          type: string
+          enum: [exact, contains, starts_with, regex]
+        reply:
+          type: string
+        deviceId:
+          type: string
+        isActive:
+          type: boolean
+      required: [keyword, matchType, reply]
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        key:
+          type: string
+        prefix:
+          type: string
+        lastUsed:
+          type: string
+        createdAt:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required: [id, name, prefix, createdAt, permissions]
+
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required: [name]
+
+    BillingPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        period:
+          type: string
+          enum: [monthly, yearly]
+        features:
+          type: array
+          items:
+            type: string
+        limits:
+          type: object
+          properties:
+            devices:
+              type: integer
+            messagesPerDay:
+              type: integer
+            contacts:
+              type: integer
+          required: [devices, messagesPerDay, contacts]
+        isPopular:
+          type: boolean
+      required: [id, name, price, period, features, limits]
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        planId:
+          type: string
+        planName:
+          type: string
+        status:
+          type: string
+          enum: [active, cancelled, past_due, trialing]
+        currentPeriodStart:
+          type: string
+        currentPeriodEnd:
+          type: string
+        cancelAtPeriodEnd:
+          type: boolean
+      required: [id, planId, planName, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd]
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [paid, pending, failed, refunded]
+        description:
+          type: string
+        createdAt:
+          type: string
+      required: [id, amount, currency, status, description, createdAt]
