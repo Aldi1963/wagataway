@@ -1,27 +1,41 @@
-# 🚀 SaaS WhatsApp Gateway Pro — v1.4.0
+# 🚀 SaaS WhatsApp Gateway Pro — v1.5.0 Premium
 
-Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, dan aman untuk mengelola bisnis Anda melalui WhatsApp. Dibangun dengan teknologi modern untuk menangani ribuan pesan setiap harinya.
+Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, dan aman untuk mengelola bisnis Anda melalui WhatsApp. Dibangun dengan desain **Zen Mode Premium** dan teknologi mutakhir untuk menangani ribuan pesan setiap harinya dengan kehandalan tinggi.
 
 ![Banner](https://images.unsplash.com/photo-1611746872915-64382b5c76da?auto=format&fit=crop&q=80&w=1200&h=400)
 
-## ✨ Fitur Utama
+## ✨ Fitur Unggulan (Premium Edition)
 
-*   **⚡ Multi-Device Management**: Hubungkan banyak nomor WhatsApp dalam satu dashboard admin.
-*   **🤖 AI-Powered CS Bot**: Integrasi robot cerdas (GPT-4/Gemini) untuk menjawab pertanyaan pelanggan 24/7.
-*   **📢 Blast Pesan Massal**: Kirim ribuan pesan ke pelanggan tanpa hambatan dengan pengaturan jeda (delay) anti-banned.
-*   **🛠️ Dashboard Branding**: Kustomisasi Logo, Favicon, dan Riwayat Update langsung dari panel admin.
-*   **🔄 Auto Reply Cerdas**: Balasan otomatis berdasarkan kata kunci (Regex) dan jam kerja.
-*   **📊 Analitik Real-time**: Pantau statistik pengiriman pesan, persentase keberhasilan, dan penggunaan server.
-*   **🔗 API Restful**: Dokumentasi API lengkap untuk integrasi dengan web/apps eksternal.
+### 🤖 AI Knowledge Base (CS Bot)
+*   **Custom Training**: Latih bot Anda dengan ribuan data pengetahuan (file/teks).
+*   **Prompt Engineering**: Atur kepribadian bot anda agar menjawab layaknya Customer Service profesional.
+*   **Context Aware**: AI yang bisa membaca konteks percakapan untuk jawaban yang akurat.
+
+### 📢 Blast Interaktif & Massal
+*   **Interactive Buttons**: Kirim pesan dengan tombol Quick Reply, Link, atau Panggilan Telepon.
+*   **Single Select Lists**: Menu list yang elegan untuk pilihan produk/layanan.
+*   **Excel/CSV Support**: Import ribuan kontak langsung dari spreadsheet secara instan.
+*   **Smart Personalization**: Gunakan placeholder `{nama}` atau variabel lain untuk kedekatan personal.
+
+### 🛡️ Anti-Banned & Security
+*   **Typing Simulation**: Simulasi status "Mengetik..." sebelum pesan terkirim.
+*   **Random Delay**: Pengiriman pesan dengan jeda waktu acak yang bisa diatur.
+*   **Rotation Device**: Rotasi otomatis antar banyak nomor WA untuk membagi beban pesan.
+*   **Blacklist Management**: Hindari pengiriman ke nomor-nomor tertentu secara otomatis.
+
+### 🎨 Zen Design Dashboard
+*   **Premium UI**: Antarmuka modern dengan Glassmorphism, Dark Mode ready, dan Smooth Transitions.
+*   **Mobile Responsive**: Kelola bisnis Anda dari HP maupun Desktop dengan kenyamanan yang sama.
+*   **Live Statistic**: Widget real-time untuk memantau trafik pesan masuk dan keluar.
 
 ## 🛠️ Tech Stack
 
-*   **Frontend**: React.js, Vite, TailwindCSS, Lucide Icons, ShadcnUI.
-*   **Backend**: Node.js, Express.js, Multer (File Uploads).
-*   **Database**: PostgreSQL, Drizzle ORM.
-*   **WA Library**: Baileys (High Performance).
+*   **Frontend**: React.js 18, Vite, TailwindCSS, Framer Motion, ShadcnUI.
+*   **Backend**: Node.js, Express.js (TypeScript), Multer.
+*   **Database**: PostgreSQL, Drizzle ORM (Type-safe & Fast).
+*   **WA Library**: Baileys (Library WA paling stabil & support Multi-Device).
 
-## 🚀 Instalasi Lokal (Development)
+## 🚀 Instalasi Lokal
 
 1.  **Clone Repository**:
     ```bash
@@ -34,94 +48,52 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
     pnpm install
     ```
 
-3.  **Konfigurasi Environment**:
-    Salin file `.env.example` menjadi `.env` di folder `artifacts/api-server` dan `artifacts/wa-gateway`, lalu sesuaikan `DATABASE_URL` Anda.
+3.  **Konfigurasi Database**:
+    Edit `.env` di folder `artifacts/api-server/`:
+    ```env
+    DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+    PORT=5000
+    ```
 
 4.  **Jalankan Aplikasi**:
-    *   **Terminal 1 (Backend)**:
-        ```bash
-        cd artifacts/api-server
-        pnpm dev
-        ```
-    *   **Terminal 2 (Frontend)**:
-        ```bash
-        cd artifacts/wa-gateway
-        pnpm dev
-        ```
+    ```bash
+    # Terminal 1: Backend
+    cd artifacts/api-server && pnpm dev
+    
+    # Terminal 2: Frontend
+    cd artifacts/wa-gateway && pnpm dev
+    ```
 
-## 🌐 Deployment ke VPS (Ubuntu/Debian)
+## 🌐 Deployment VPS (aaPanel / Ubuntu)
 
-### 1. Persiapan Server
-Update OS dan install Node.js (v18+), PostgreSQL, dan PNPM:
+### 1. Persiapan Environment
 ```bash
 sudo apt update && sudo apt upgrade -y
 curl -fsSL https://get.pnpm.io/install.sh | sh -
-# Install PM2 secara global
 npm install -g pm2
 ```
 
-### 2. Build Frontend (Production)
+### 2. Build & Start (Production)
 ```bash
-cd artifacts/wa-gateway
-pnpm build
-```
-Hasil build akan berada di `artifacts/wa-gateway/dist/public`. Backend akan otomatis menghosting file ini jika berada di folder yang benar.
+# Build Frontend
+cd artifacts/wa-gateway && pnpm build
 
-### 3. Setup Backend dengan PM2
-```bash
+# Build & Start Backend
 cd artifacts/api-server
-# Pastikan sudah setting .env
 pnpm build
-pm2 start dist/index.mjs --name "wa-gateway-api"
+pm2 start dist/index.mjs --name "wa-saas-gateway"
 pm2 save
 ```
 
-### 4. Konfigurasi Nginx (Reverse Proxy)
-Gunakan Nginx untuk mengarahkan domain ke port backend (default: 5000):
-```nginx
-server {
-    server_name domain-anda.com;
+### 3. Nginx Reverse Proxy
+Arahkan domain Anda ke port `5000` melalui Nginx atau menu Website di aaPanel. Gunakan SSL dari Let's Encrypt untuk keamanan maksimal.
 
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-### 5. SSL (Certbot)
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d domain-anda.com
-```
-
-## 🖥️ Deployment via aaPanel
-
-1.  **Akses aaPanel**: Masuk ke dashboard aaPanel Anda.
-2.  **Install Node.js Version Manager**: Pergi ke *App Store* → cari "Node.js project manager" → Install.
-3.  **Tentukan Versi Node.js**: Gunakan Node.js v18 atau v20 di dalam Manager tersebut.
-4.  **Tambah Website**:
-    *   Klik menu **Website** → **Node.js project**.
-    *   Klik **Add Node.js Project**.
-    *   **Project directory**: Arahkan ke folder `artifacts/api-server`.
-    *   **Run command**: `pnpm build && pnpm start`.
-    *   **Project port**: `5000`.
-5.  **Setting Domain & SSL**:
-    *   Klik **Node.js Project Manager** → Project Anda → klik **Website target** untuk menghubungkan domain.
-    *   Gunakan menu **SSL** di aaPanel untuk memasang Let's Encrypt secara otomatis.
-6.  **Environment**: Jangan lupa mengedit file `.env` melalui menu **Files** di aaPanel.
-
-## 🔒 Keamanan & Sesi
-
-Proyek ini sudah dilengkapi dengan perlindungan data. File sesi WhatsApp (`wa-sessions`) dan file environment (`.env`) secara otomatis diabaikan oleh Git untuk mencegah kebocoran data.
-
-## 📄 Lisensi
-
-Platform ini merupakan perangkat lunak komersial. Dilarang mendistribusikan ulang tanpa izin tertulis dari pemilik repo.
+## 🖥️ Roadmap Update (v1.5.0+)
+- [x] **Interactive Messaging support** (Buttons & Lists).
+- [x] **Excel/CSV bulk import contact**.
+- [x] **Advanced AI Knowledge Base system**.
+- [ ] Integration with Webview for Custom App.
+- [ ] Multi-Admin Agency support.
 
 ---
-*Developed by Aldi1963*
+Developed with ❤️ by **Aldi1963** for better business connectivity.
