@@ -234,7 +234,7 @@ export default function CsBot() {
                        <Button onClick={()=>{setEditFaq(null);setFaqOpen(true)}} className="gap-2"><Plus className="w-4 h-4"/> Tambah FAQ</Button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {faqs?.filter(f=>f.question.toLowerCase().includes(faqSearch.toLowerCase())).map(f=>(
+                       {(Array.isArray(faqs) ? faqs : []).filter(f=>f.question.toLowerCase().includes(faqSearch.toLowerCase())).map(f=>(
                           <Card key={f.id} className="relative group">
                              <CardContent className="p-4">
                                 <div className="flex justify-between items-start mb-2">
@@ -258,7 +258,7 @@ export default function CsBot() {
                        <Button variant="outline" size="sm" onClick={()=>setKnowledgeOpen(true)}>Tambah Info</Button>
                     </div>
                     <div className="space-y-2">
-                       {knowledgeBase?.map(k=>(
+                       {(Array.isArray(knowledgeBase) ? knowledgeBase : []).map(k=>(
                           <Card key={k.id} className="p-4 flex items-center justify-between">
                              <div className="flex items-center gap-3">
                                 <FileText className="w-5 h-5 text-primary" />
