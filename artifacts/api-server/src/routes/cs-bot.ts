@@ -5,6 +5,10 @@ import { getUserFromToken } from "./auth";
 import { generateAiReply, checkAiAccess } from "../lib/cs-bot-ai";
 import { isConvBotPaused, pauseConvBot } from "./chat";
 import { handleOrderFlow } from "../lib/bot-order-flow";
+import multer from "multer";
+import { extractTextFromFile } from "../lib/file-extractor";
+import fs from "fs";
+import { AiProvider } from "../lib/cs-bot-ai";
 
 export interface BotReply {
   text: string;
@@ -19,6 +23,11 @@ function getUser(req: any): number {
   const token = (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   return (token ? getUserFromToken(token) : null) ?? 1;
 }
+
+const upload = multer({
+  dest: "public/uploads/temp/",
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -481,6 +490,53 @@ router.post("/cs-bot/:deviceId/scrape-website", async (req, res): Promise<void> 
   }
 });
 
+// ── POST /cs-bot/:deviceId/upload-knowledge — extract text from PDF/Doc ───────
+router.post("/cs-bot/:deviceId/upload-knowledge", upload.single("file"), async (req: any, res): Promise<void> => {
+  const uid = getUser(req);
+  const deviceId = Number(req.params.deviceId);
+  
+  if (!req.file) {
+    res.status(400).json({ message: "Tidak ada file yang diupload" });
+    return;
+  }
+
+  const [bot] = await db.select().from(csBotsTable).where(
+    and(eq(csBotsTable.deviceId, deviceId), eq(csBotsTable.userId, uid))
+  );
+  if (!bot) {
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(404).json({ message: "Bot tidak ditemukan" });
+    return;
+  }
+
+  try {
+    const text = await extractTextFromFile(req.file.path, req.file.mimetype);
+    
+    // Clean up temp file
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+    if (!text.trim()) {
+      res.status(400).json({ message: "Gagal mengekstrak teks: file kosong atau tidak terbaca." });
+      return;
+    }
+
+    const title = req.file.originalname;
+    const [item] = await db.insert(csBotKnowledgeTable).values({
+      userId: uid,
+      botId: bot.id,
+      title,
+      content: text,
+      sourceType: "file",
+      charCount: text.length,
+    }).returning();
+
+    res.status(201).json(item);
+  } catch (err: any) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ message: `Gagal memproses file: ${err.message}` });
+  }
+});
+
 // ── POST /cs-bot/:deviceId/test ───────────────────────────────────────────────
 router.post("/cs-bot/:deviceId/test", async (req, res): Promise<void> => {
   const uid = getUser(req);
@@ -488,7 +544,42 @@ router.post("/cs-bot/:deviceId/test", async (req, res): Promise<void> => {
   const { message } = req.body;
   if (!message) { res.status(400).json({ message: "Pesan wajib diisi" }); return; }
   const reply = await processBotMessage(deviceId, uid, "test", message);
-  res.json({ reply: reply ?? "(Bot tidak aktif atau tidak ada jawaban yang cocok)" });
+  res.json({ reply: reply?.text ?? "(Bot tidak aktif atau tidak ada jawaban yang cocok)" });
+});
+
+// ── POST /cs-bot/:deviceId/test-api — verify AI connectivity ──────────────────
+router.post("/cs-bot/:deviceId/test-api", async (req, res): Promise<void> => {
+   const uid = getUser(req);
+   const deviceId = Number(req.params.deviceId);
+   const { provider, apiKey, model } = req.body as { provider: AiProvider; apiKey: string; model: string };
+
+   if (!provider || (!apiKey && provider !== 'platform')) {
+      res.status(400).json({ message: "Provider and API Key are required" });
+      return;
+   }
+
+   const testCtx = {
+      botName: "API Tester",
+      systemPrompt: "Respond with 'Koneksi Berhasil' and nothing else.",
+      businessContext: "",
+      websiteContent: "",
+      model: model || "gpt-4o-mini",
+      maxTokens: 50,
+      faqs: [],
+      provider: provider,
+      providerApiKey: apiKey,
+   };
+
+   try {
+      const reply = await generateAiReply("Hello", testCtx, uid);
+      if (reply) {
+         res.json({ success: true, message: reply, model: testCtx.model });
+      } else {
+         res.status(401).json({ success: false, message: "Provider returned empty response. Check your key or quota." });
+      }
+   } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || "Failed to connect to AI provider" });
+   }
 });
 
 // ── POST /cs-bot/receive — simulate receiving a message ───────────────────────

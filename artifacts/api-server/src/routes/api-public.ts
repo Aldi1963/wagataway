@@ -11,6 +11,8 @@ import { getSession } from "../lib/wa-manager";
 import { getUserPlan, countTodayMessages } from "../lib/plan-limits";
 import { sendWithAntiBanned } from "../lib/anti-banned";
 import { proto, generateMessageIDV2 } from "@whiskeysockets/baileys";
+import { sendOfficialMessage, formatOfficialInteractive } from "../lib/official-api";
+import { validateSafeUrl } from "../lib/security";
 import crypto from "crypto";
 
 const router = Router();
@@ -145,6 +147,26 @@ async function sendMessageHandler(req: Request, res: Response): Promise<void> {
   if (!device) return;
 
   const phone = String(number).replace(/\D/g, "");
+
+  // ── Official API Branch ──────────────────────────────────────────────────
+  if (device.provider === "official") {
+    try {
+      const response = await sendOfficialMessage({
+        accessToken: device.officialAccessToken!,
+        phoneId: device.officialPhoneId!,
+        to: phone,
+        message: { type: "text", text: { body: String(message) } }
+      });
+      const msg = await recordMessage(auth.userId, device.id, phone, String(message));
+      await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
+      ok(res, { id: String(msg.id), number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Message sent via Official API");
+      return;
+    } catch (e: any) {
+      fail(res, `Official API Error: ${e.message}`, 500);
+      return;
+    }
+  }
+
   const session = getSession(device.id);
 
   if (session?.socket && session.status === "connected") {
@@ -183,12 +205,40 @@ async function sendMediaHandler(req: Request, res: Response): Promise<void> {
   const { sender, number, url, caption = "", type = "image" } = params(req);
 
   if (!number || !url) { fail(res, "Parameter number dan url diperlukan"); return; }
+  
+  // ── SSRF Protection ──────────────────────────────────────────────────────
+  if (!(await validateSafeUrl(String(url)))) {
+    fail(res, "URL tidak aman atau tidak valid", 400);
+    return;
+  }
+
   if (!await checkQuota(auth.userId, res)) return;
 
   const device = await resolveDevice(auth.userId, sender, res);
   if (!device) return;
 
   const phone = String(number).replace(/\D/g, "");
+
+  // ── Official API Branch ──────────────────────────────────────────────────
+  if (device.provider === "official") {
+    try {
+      const mediaType = (String(type) || "image").toLowerCase() as any;
+      const response = await sendOfficialMessage({
+        accessToken: device.officialAccessToken!,
+        phoneId: device.officialPhoneId!,
+        to: phone,
+        message: { [mediaType]: { link: String(url), caption: String(caption) }, type: mediaType }
+      });
+      const msg = await recordMessage(auth.userId, device.id, phone, caption ? String(caption) : "[media]", String(url));
+      await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
+      ok(res, { id: String(msg.id), number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Media sent via Official API");
+      return;
+    } catch (e: any) {
+      fail(res, `Official API Error: ${e.message}`, 500);
+      return;
+    }
+  }
+
   const session = getSession(device.id);
 
   if (session?.socket && session.status === "connected") {
@@ -264,6 +314,36 @@ router.post("/send-button", async (req: Request, res: Response): Promise<void> =
 
   const phone = String(number).replace(/\D/g, "");
   const btns: any[] = Array.isArray(buttons) ? buttons : JSON.parse(String(buttons));
+
+  // ── Official API Branch ──────────────────────────────────────────────────
+  if (device.provider === "official") {
+    try {
+      const payload = formatOfficialInteractive({
+        type: "button",
+        body: String(message),
+        footer: String(footer),
+        buttons: btns.map((b: any, i: number) => ({
+          type: "reply",
+          title: b.text || b.title,
+          id: b.id || `btn_${i + 1}`
+        }))
+      });
+      const response = await sendOfficialMessage({
+        accessToken: device.officialAccessToken!,
+        phoneId: device.officialPhoneId!,
+        to: phone,
+        message: payload
+      });
+      const msg = await recordMessage(auth.userId, device.id, phone, String(message));
+      await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
+      ok(res, { id: String(msg.id), number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Button message sent via Official API");
+      return;
+    } catch (e: any) {
+      fail(res, `Official API Error: ${e.message}`, 500);
+      return;
+    }
+  }
+
   const session = getSession(device.id);
 
   if (session?.socket && session.status === "connected") {
@@ -532,7 +612,7 @@ async function deviceInfoHandler(req: Request, res: Response): Promise<void> {
     id: String(device.id),
     phone: device.phone,
     name: device.name,
-    status: session?.status ?? device.status,
+    status: device.provider === "official" ? device.status : (session?.status ?? device.status),
     battery: device.battery,
     auto_reconnect: device.autoReconnect,
     messages_sent: device.messagesSent,

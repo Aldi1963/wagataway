@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,6 +13,7 @@ export const usersTable = pgTable("users", {
   isSuspended: boolean("is_suspended").notNull().default(false),
   googleId: text("google_id").unique(),
   openaiApiKey: text("openai_api_key"),
+  aiSettings: jsonb("ai_settings").notNull().default({}),
   twoFaEnabled: boolean("two_fa_enabled").notNull().default(false),
   twoFaSecret: text("two_fa_secret"),
   cleanupDays: integer("cleanup_days").notNull().default(90),

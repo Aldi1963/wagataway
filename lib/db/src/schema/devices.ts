@@ -7,6 +7,12 @@ export const devicesTable = pgTable("devices", {
   userId: integer("user_id").notNull(),
   name: text("name").notNull(),
   phone: text("phone"),
+  // ── Connection Settings ───────────────────────────────────────────────────
+  provider: text("provider").notNull().default("baileys"), // 'baileys' | 'official'
+  officialPhoneId: text("official_phone_id"),
+  officialBusinessAccountId: text("official_business_account_id"),
+  officialAccessToken: text("official_access_token"),
+
   status: text("status").notNull().default("disconnected"),
   battery: integer("battery").default(100),
   lastSeen: timestamp("last_seen", { withTimezone: true }),

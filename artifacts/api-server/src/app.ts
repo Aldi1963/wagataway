@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import helmet from "helmet";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
@@ -11,46 +12,61 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app: Express = express();
 
-// Trust the first proxy in the chain (Replit / nginx / CDN)
-// Required for express-rate-limit to correctly identify real client IPs
+// ── Security Hardening ───────────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP if it interferes with SPA dist
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Strictly allow only necessary headers and methods
+app.use(cors({
+  origin: true, // In production, replace with your actual domain
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+}));
+
+// Limit JSON body size to prevent DOS
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+
+// Trust the first proxy in the chain
 app.set("trust proxy", 1);
 
-// Frontend dist — resolved relative to this file (dist/index.mjs → ../../wa-gateway/dist/public)
+// Request Timeout (Anti-Slowloris)
+app.use((req, _res, next) => {
+  req.setTimeout(30000, () => {
+    const err: any = new Error("Request Timeout");
+    err.status = 408;
+    next(err);
+  });
+  next();
+});
+
+// Frontend dist detection
 const frontendDist = path.resolve(__dirname, "../../wa-gateway/dist/public");
 const frontendExists = fs.existsSync(path.join(frontendDist, "index.html"));
 
 logger.info({ frontendDist, frontendExists }, "Frontend static path");
 
-// Serve uploaded files statically
-app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
-
-// Always attempt to serve built frontend assets (skipped automatically if files don't exist)
-if (frontendExists) {
-  app.use(express.static(frontendDist));
-}
-
+// Logging
 app.use(
   pinoHttp({
     logger,
     serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
+      req: (req) => ({ id: req.id, method: req.method, url: req.url?.split("?")[0] }),
+      res: (res) => ({ statusCode: res.statusCode }),
     },
-  }),
+  })
 );
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Serve uploads
+app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
+
+// Serve frontend
+if (frontendExists) {
+  app.use(express.static(frontendDist));
+}
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -58,21 +74,25 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", router);
 
-// SPA fallback — serve index.html for all non-API routes when frontend is built
+// SPA fallback (catch-all for frontend)
 if (frontendExists) {
-  app.get("/{*path}", (_req, res) => {
-    res.sendFile(path.join(frontendDist, "index.html"), (err) => {
-      if (err) {
-        logger.error({ err }, "Failed to send index.html");
-        res.status(500).send("Server error");
-      }
-    });
+  // Catch all routes that don't start with /api or /uploads
+  app.get(/^((?!\/(api|uploads|test-server)).)*$/, (_req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
-  // Dev fallback: API-only mode
   app.get("/", (_req, res) => {
     res.json({ status: "ok", message: "WA Gateway API running", frontend: "not built" });
   });
 }
+
+// Global Error Handler (Prevents sensitive data leaks)
+app.use((err: any, _req: any, res: any, _next: any) => {
+  logger.error({ err }, "Unhandled error");
+  res.status(err.status || 500).json({
+    message: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message,
+    code: err.code || "INTERNAL_ERROR"
+  });
+});
 
 export default app;

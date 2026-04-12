@@ -5,9 +5,11 @@ import { useDynamicSEO } from "@/hooks/use-dynamic-seo";
 import {
   ChevronDown, ChevronRight, Menu, X, Zap, Bot, MessageSquareText,
   Repeat2, BarChart2, Smartphone, Star, CheckCircle2, ArrowRight,
-  Mail, Phone, ExternalLink, Crown, Shield,
+  Mail, Phone, ExternalLink, Crown, Shield, Facebook, Twitter,
+  Instagram, Github, Linkedin
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence, useScroll, useSpring } from "framer-motion";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,13 +100,16 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 // ── Animated Section ─────────────────────────────────────────────────────────
 
 function AnimSection({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref as React.RefObject<HTMLElement>);
   return (
-    <div ref={ref} className={cn("transition-all duration-700", inView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8", className)}
-      style={{ transitionDelay: `${delay}ms` }}>
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-100px" }}
+      transition={{ duration: 0.8, delay: delay / 1000, ease: [0.21, 0.47, 0.32, 0.98] }}
+      className={className}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }
 
@@ -124,6 +129,13 @@ function StatCard({ value, label }: { value: string; label: string }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001
+  });
+
   const scrolled = useScrolled(60);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -177,7 +189,12 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+    <div className="relative min-h-screen bg-background text-foreground overflow-x-hidden selection:bg-emerald-500/30">
+      {/* Scroll Progress Bar */}
+      <motion.div
+        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400 z-[100] origin-left"
+        style={{ scaleX }} 
+      />
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <header className={cn("fixed top-0 left-0 right-0 z-50 transition-all duration-300",
@@ -245,134 +262,283 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16 -mt-16">
         {/* Background blobs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-400/20 dark:bg-emerald-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: "4s" }} />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-400/15 dark:bg-teal-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: "6s", animationDelay: "1s" }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-300/10 dark:bg-emerald-700/5 rounded-full blur-3xl" />
-          {/* Grid pattern */}
-          <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.06]"
-            style={{ backgroundImage: "linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              x: [0, 50, 0],
+              y: [0, -50, 0],
+            }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="absolute top-1/4 left-1/4 w-[40rem] h-[40rem] bg-emerald-500/10 dark:bg-emerald-600/5 rounded-full blur-[120px]" 
+          />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.3, 1],
+              x: [0, -70, 0],
+              y: [0, 40, 0],
+            }}
+            transition={{ duration: 25, repeat: Infinity, ease: "linear", delay: 2 }}
+            className="absolute bottom-1/4 right-1/4 w-[35rem] h-[35rem] bg-teal-500/10 dark:bg-teal-600/5 rounded-full blur-[100px]" 
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_var(--background)_100%)] opacity-70" />
+          
+          {/* Enhanced Grid pattern */}
+          <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.1]"
+            style={{ backgroundImage: "radial-gradient(circle, #4ade80 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 text-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-24 text-center z-10">
           {/* Pill badge */}
           {d?.siteTagline && (
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-sm font-medium mb-8 animate-fade-in">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-emerald-500/5 backdrop-blur-md border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-semibold mb-10 shadow-xl shadow-emerald-500/5"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
               {d.siteTagline}
-            </div>
+            </motion.div>
           )}
 
           {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-tight tracking-tight mb-6">
-            {(d?.hero.title ?? "Kelola WhatsApp\nBisnis Anda\ndengan Mudah").split("\n").map((line, i, arr) => (
-              <span key={i} className={cn("block", i === 1 ? "bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent" : "text-foreground")}>
-                {line}{i < arr.length - 1 ? "" : ""}
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="text-6xl sm:text-7xl md:text-8xl font-black leading-[1.1] tracking-tighter mb-8"
+          >
+            {(d?.hero.title ?? "Transformasi WhatsApp\nBisnis Anda\nJadi Lebih Cerdas").split("\n").map((line, i, arr) => (
+              <span key={i} className={cn("block pb-1", i === 1 ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 bg-clip-text text-transparent" : "text-foreground")}>
+                {line}
               </span>
             ))}
-          </h1>
+          </motion.h1>
 
           {/* Subtitle */}
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed mb-10">
-            {d?.hero.subtitle ?? "Platform all-in-one untuk blast pesan massal, auto reply cerdas, CS Bot bertenaga AI, dan analitik real-time."}
-          </p>
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="text-xl md:text-2xl text-muted-foreground/80 max-w-3xl mx-auto leading-relaxed mb-12 font-medium"
+          >
+            {d?.hero.subtitle ?? "Solusi WhatsApp Gateway terlengkap: Blast massal, Auto-reply AI, Layanan CS multi-perangkat, dan Analitik mendalam dalam satu dashboard premium."}
+          </motion.p>
 
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center mb-16">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="flex flex-col sm:flex-row gap-5 justify-center mb-20"
+          >
             <Link href="/register">
-              <button className="group px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-2xl text-base hover:opacity-90 transition-all shadow-lg shadow-emerald-500/30 flex items-center gap-2">
-                {d?.hero.cta1 ?? "Mulai Gratis Sekarang"}
-                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              <button className="group relative px-10 py-5 bg-foreground text-background font-bold rounded-2xl text-lg hover:bg-emerald-500 hover:text-white transition-all duration-300 shadow-2xl hover:shadow-emerald-500/25 flex items-center justify-center gap-3 active:scale-95 overflow-hidden">
+                <span className="relative z-10">{d?.hero.cta1 ?? "Mulai Sekarang"}</span>
+                <ArrowRight size={22} className="relative z-10 group-hover:translate-x-1.5 transition-transform" />
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             </Link>
             <Link href="/login">
-              <button className="px-8 py-3.5 border border-border hover:border-primary/50 text-foreground font-semibold rounded-2xl text-base hover:bg-muted/50 transition-all">
-                {d?.hero.cta2 ?? "Masuk ke Dashboard"}
+              <button className="px-10 py-5 border-2 border-border/60 hover:border-emerald-500/50 text-foreground font-bold rounded-2xl text-lg hover:bg-emerald-500/5 transition-all duration-300 backdrop-blur-sm active:scale-95">
+                {d?.hero.cta2 ?? "Lihat Demo"}
               </button>
             </Link>
-          </div>
+          </motion.div>
 
-          {/* Hero visual — image if set, otherwise dashboard mockup */}
-          <div className="relative max-w-4xl mx-auto">
-          {d?.hero.image ? (
-            <div className="relative rounded-2xl overflow-hidden border border-border/60 shadow-2xl shadow-black/10">
-              <img
-                src={d.hero.image}
-                alt="Hero"
-                className="w-full h-auto object-cover max-h-[500px]"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent pointer-events-none" />
-            </div>
-          ) : (
-            <>
-            <div className="relative rounded-2xl border border-border/60 bg-card/80 backdrop-blur shadow-2xl shadow-black/10 overflow-hidden">
+          {/* Hero visual — enhanced dashboard mockup */}
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 1, delay: 0.8, ease: "circOut" }}
+            className="relative group cursor-default"
+          >
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-[2.5rem] blur opacity-20 group-hover:opacity-30 transition-opacity" />
+            <div className="relative max-w-5xl mx-auto rounded-[2.2rem] border border-white/10 bg-background/40 backdrop-blur-3xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] dark:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.6)] overflow-hidden">
               {/* Fake browser chrome */}
-              <div className="flex items-center gap-2 px-4 py-3 bg-muted/50 border-b border-border/40">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-rose-400" />
-                  <div className="w-3 h-3 rounded-full bg-amber-400" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-400" />
+              <div className="flex items-center justify-between px-6 py-4 bg-muted/30 border-b border-white/5">
+                <div className="flex gap-2">
+                  <div className="w-3.5 h-3.5 rounded-full bg-rose-500/80" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-amber-500/80" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-500/80" />
                 </div>
-                <div className="flex-1 mx-4 h-5 bg-background rounded-md flex items-center px-2">
-                  <span className="text-[10px] text-muted-foreground">app.wagateway.id/dashboard</span>
+                <div className="flex-1 max-w-sm mx-4 h-7 bg-background/50 rounded-lg border border-white/5 flex items-center justify-center px-4">
+                  <span className="text-[11px] text-muted-foreground/60 font-medium tracking-wide flex items-center gap-2">
+                    <Shield size={10} className="text-emerald-500" /> app.wagateway.pro
+                  </span>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-4 h-4 rounded bg-white/5" />
+                  <div className="w-4 h-4 rounded bg-white/5" />
                 </div>
               </div>
-              {/* Dashboard preview (stylized) */}
-              <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: "Pesan Terkirim", value: "12.847", trend: "+18%", color: "text-emerald-500" },
-                  { label: "Perangkat Aktif", value: "8 / 10", trend: "Terhubung", color: "text-blue-500" },
-                  { label: "Auto Reply", value: "247", trend: "+5 baru", color: "text-violet-500" },
-                  { label: "CS Bot Chat", value: "1.293", trend: "+32%", color: "text-amber-500" },
-                ].map((s, i) => (
-                  <div key={i} className="bg-background rounded-xl border border-border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">{s.label}</p>
-                    <p className={cn("text-xl font-extrabold", s.color)}>{s.value}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{s.trend}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="px-4 md:px-6 pb-4 md:pb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2 bg-background rounded-xl border border-border p-3 h-24 flex flex-col gap-1.5">
-                  <p className="text-xs text-muted-foreground">Aktivitas Pesan</p>
-                  <div className="flex items-end gap-1 h-12">
-                    {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map((h, i) => (
-                      <div key={i} className="flex-1 rounded-sm bg-emerald-400/60 dark:bg-emerald-500/50" style={{ height: `${h}%` }} />
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-background rounded-xl border border-border p-3 h-24 flex flex-col gap-2">
-                  <p className="text-xs text-muted-foreground">Status CS Bot</p>
-                  {[{ l: "Aktif", v: 86, c: "bg-emerald-400" }, { l: "Offline", v: 14, c: "bg-zinc-300 dark:bg-zinc-600" }].map((s) => (
-                    <div key={s.l} className="flex items-center gap-2 text-xs">
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className={cn("h-full rounded-full", s.c)} style={{ width: `${s.v}%` }} />
+              
+              {/* Modern Dashboard Layout Preview */}
+              <div className="p-8 md:p-10">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+                  {[
+                    { label: "Total Broadcast", value: "852.410", percentage: "+24.5%", color: "text-emerald-500", icon: Zap },
+                    { label: "Active Nodes", value: "32", percentage: "Optimal", color: "text-blue-500", icon: Smartphone },
+                    { label: "Auto Reply Hits", value: "12,4k", percentage: "+12.2%", color: "text-violet-500", icon: Bot },
+                    { label: "System Uptime", value: "99.98%", percentage: "Secure", color: "text-rose-500", icon: Shield },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-background/20 backdrop-blur-xl rounded-2xl border border-white/5 p-5 hover:bg-white/5 transition-colors group/card">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className={cn("p-2.5 rounded-xl bg-white/5 group-hover/card:scale-110 transition-transform", s.color)}>
+                          <s.icon size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500">{s.percentage}</span>
                       </div>
-                      <span className="text-muted-foreground w-10 text-right">{s.v}%</span>
+                      <p className="text-xs text-muted-foreground/60 font-medium mb-1">{s.label}</p>
+                      <p className={cn("text-2xl font-black tracking-tight", s.color)}>{s.value}</p>
                     </div>
                   ))}
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-2 bg-background/20 backdrop-blur-xl rounded-3xl border border-white/5 p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h4 className="text-sm font-bold opacity-80">Messaging Growth</h4>
+                      <div className="flex gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <div className="w-2 h-2 rounded-full bg-teal-500/30" />
+                      </div>
+                    </div>
+                    <div className="flex items-end gap-2.5 h-32 md:h-40">
+                      {[30, 45, 35, 60, 50, 85, 40, 70, 95, 65, 80, 100].map((h, i) => (
+                        <motion.div 
+                          key={i} 
+                          initial={{ height: 0 }}
+                          animate={{ height: `${h}%` }}
+                          transition={{ duration: 1, delay: 1 + (i * 0.05) }}
+                          className="flex-1 rounded-t-lg bg-gradient-to-t from-emerald-500/20 via-emerald-500/40 to-emerald-500 hover:opacity-80 transition-opacity cursor-pointer shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="bg-background/20 backdrop-blur-xl rounded-3xl border border-white/5 p-6 h-full flex flex-col justify-center">
+                      <h4 className="text-sm font-bold opacity-80 mb-6 flex items-center gap-2">
+                        <Bot size={16} className="text-emerald-500" /> AI Agent Status
+                      </h4>
+                      <div className="space-y-5">
+                        {[
+                          { l: "Support Bot", v: 94, c: "bg-emerald-500" },
+                          { l: "Sales Agent", v: 78, c: "bg-teal-500" },
+                          { l: "Auto Responder", v: 100, c: "bg-blue-500" }
+                        ].map((s) => (
+                          <div key={s.l}>
+                            <div className="flex justify-between text-[11px] mb-2 font-semibold">
+                              <span className="opacity-60">{s.l}</span>
+                              <span className="text-emerald-400">{s.v}%</span>
+                            </div>
+                            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${s.v}%` }}
+                                transition={{ duration: 1.5, delay: 1.2 }}
+                                className={cn("h-full rounded-full shadow-[0_0_10px_rgba(16,185,129,0.2)]", s.c)} 
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            {/* Floating badge */}
-            <div className="absolute -top-3 -right-3 md:-right-6 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg shadow-emerald-500/40 rotate-3">
-              Live Preview ✨
-            </div>
-            </>
-          )}
-          </div>
+            {/* Floating context badges */}
+            <motion.div 
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute -top-6 -right-8 md:-right-12 bg-emerald-500 text-white text-sm font-black px-6 py-2.5 rounded-2xl shadow-[0_20px_40px_rgba(16,185,129,0.4)] rotate-3 border border-emerald-400/50"
+            >
+              Ultra Fast ⚡
+            </motion.div>
+            <motion.div 
+              animate={{ y: [0, 10, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+              className="absolute -bottom-6 -left-8 md:-left-12 bg-background/80 backdrop-blur-xl border border-white/10 text-foreground text-sm font-black px-6 py-2.5 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.1)] -rotate-3"
+            >
+              Enterprise Ready 🏢
+            </motion.div>
+          </motion.div>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-muted-foreground animate-bounce">
-          <ChevronDown size={20} />
+        {/* Decorative Floating Icons */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden hidden lg:block">
+          {[
+            { Icon: MessageSquareText, top: "20%", left: "10%", delay: 0, color: "text-emerald-500/20" },
+            { Icon: Zap, top: "15%", right: "15%", delay: 1, color: "text-amber-500/20" },
+            { Icon: Bot, bottom: "30%", left: "15%", delay: 2, color: "text-blue-500/20" },
+            { Icon: Shield, bottom: "20%", right: "10%", delay: 3, color: "text-rose-500/20" },
+            { Icon: Crown, top: "40%", right: "20%", delay: 4, color: "text-violet-500/20" },
+          ].map((item, i) => (
+            <motion.div
+              key={i}
+              className={cn("absolute scale-150", item.color)}
+              style={{ top: item.top, left: item.left, right: item.right, bottom: item.bottom }}
+              animate={{
+                y: [0, -20, 0],
+                rotate: [0, 10, -10, 0],
+                opacity: [0.1, 0.3, 0.1]
+              }}
+              transition={{
+                duration: 6 + Math.random() * 4,
+                repeat: Infinity,
+                delay: item.delay,
+              }}
+            >
+              <item.Icon size={48} strokeWidth={1} />
+            </motion.div>
+          ))}
         </div>
+        {/* Scroll indicator */}
+        <motion.div 
+          animate={{ y: [0, 10, 0] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-muted-foreground/50 font-bold uppercase tracking-[0.2em] text-[10px]"
+        >
+          <span>Scroll</span>
+          <div className="w-px h-12 bg-gradient-to-t from-emerald-500 to-transparent" />
+        </motion.div>
       </section>
 
-      {/* ── Stats ──────────────────────────────────────────────────────────── */}
+      {/* ── Logo Marquee (Trusted By) ────────────────────────────────────────── */}
+      <section className="py-12 border-b border-border/40 bg-zinc-50/50 dark:bg-zinc-900/50 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 mb-8 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Dipercaya oleh industri terkemuka</p>
+        </div>
+        <div className="relative flex overflow-x-hidden">
+          <div className="animate-marquee whitespace-nowrap flex items-center gap-16 py-4">
+            {["Gojek", "Tokopedia", "Shopee", "BliBli", "Astra", "Mandiri", "Angkasa", "Freeport"].map((name, i) => (
+              <div key={i} className="flex items-center gap-2 grayscale hover:grayscale-0 opacity-50 hover:opacity-100 transition-all cursor-pointer">
+                <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center font-black text-xs">
+                  {name.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="font-bold tracking-tight text-lg text-muted-foreground">{name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="absolute top-0 animate-marquee2 whitespace-nowrap flex items-center gap-16 py-4">
+             {["Gojek", "Tokopedia", "Shopee", "BliBli", "Astra", "Mandiri", "Angkasa", "Freeport"].map((name, i) => (
+              <div key={i+"-2"} className="flex items-center gap-2 grayscale hover:grayscale-0 opacity-50 hover:opacity-100 transition-all cursor-pointer">
+                <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center font-black text-xs">
+                  {name.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="font-bold tracking-tight text-lg text-muted-foreground">{name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       {d?.show.stats !== false && d?.stats && d.stats.length > 0 && (
         <section className="py-16 border-y border-border/40 bg-muted/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -388,27 +554,42 @@ export default function LandingPage() {
       )}
 
       {/* ── Features ───────────────────────────────────────────────────────── */}
-      <section id="features" className="py-20 md:py-28">
+      <section id="features" className="py-24 md:py-32 relative group">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-px bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <AnimSection>
-            <div className="text-center mb-14">
-              <span className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm font-semibold mb-3 uppercase tracking-widest">
-                <Zap size={14} /> Fitur Unggulan
-              </span>
-              <h2 className="text-3xl md:text-4xl font-extrabold mb-4">Semua yang Anda Butuhkan</h2>
-              <p className="text-muted-foreground max-w-xl mx-auto">Platform lengkap untuk otomatisasi WhatsApp bisnis Anda</p>
+            <div className="text-center mb-20">
+              <motion.div 
+                whileHover={{ scale: 1.05 }}
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-6"
+              >
+                <Zap size={14} className="animate-pulse" /> Platform Terunggul
+              </motion.div>
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 tracking-tight">Kuasai Komunikasi,<br/>Kembangkan Bisnis</h2>
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">Dari startup hingga perusahaan besar, teknologi kami dirancang untuk menangani ribuan percakapan setiap detik dengan akurasi 100%.</p>
             </div>
           </AnimSection>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {(d?.features ?? []).map((f, i) => (
               <AnimSection key={i} delay={i * 80}>
-                <div className="group relative rounded-2xl border border-border hover:border-emerald-400/50 bg-card hover:bg-card/80 p-6 transition-all hover:shadow-lg hover:-translate-y-1">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400/20 to-teal-400/20 border border-emerald-400/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <DynIcon name={f.icon} size={22} className="text-emerald-600 dark:text-emerald-400" />
+                <motion.div 
+                   whileHover={{ y: -10, scale: 1.02 }}
+                   className="group relative rounded-[2rem] border border-border/60 hover:border-emerald-500/50 bg-card hover:bg-card/80 p-10 transition-all duration-500 hover:shadow-[0_40px_80px_-20px_rgba(16,185,129,0.15)] overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <DynIcon name={f.icon} size={120} strokeWidth={1} />
                   </div>
-                  <h3 className="font-bold text-lg mb-2">{f.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
-                </div>
+                  <div className="relative z-10">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300 shadow-sm">
+                      <DynIcon name={f.icon} size={28} />
+                    </div>
+                    <h3 className="font-black text-2xl mb-4 tracking-tight">{f.title}</h3>
+                    <p className="text-muted-foreground/80 leading-relaxed font-medium">{f.desc}</p>
+                    <div className="mt-8 flex items-center gap-2 text-emerald-500 font-bold text-sm cursor-pointer hover:gap-3 transition-all pt-4 border-t border-border/40">
+                      Pelajari Selengkapnya <ChevronRight size={16} />
+                    </div>
+                  </div>
+                </motion.div>
               </AnimSection>
             ))}
           </div>
@@ -599,59 +780,118 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-border/40 bg-muted/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-          <div className="flex flex-col md:flex-row justify-between gap-6 mb-8">
-            {/* Brand */}
-            <div className="max-w-xs">
-              <div className="flex items-center gap-2 font-extrabold text-lg mb-2">
-                <div className="w-8 h-8 flex items-center justify-center shrink-0">
+      <footer className="relative border-t border-border/40 bg-background pt-24 pb-12 overflow-hidden">
+        {/* Background Decorations */}
+        <div className="absolute inset-0 pointer-events-none opacity-40">
+           <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] -translate-x-1/2 translate-y-1/2" />
+           <div className="absolute top-0 right-0 w-80 h-80 bg-teal-500/5 rounded-full blur-[100px] translate-x-1/3 -translate-y-1/3" />
+        </div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 mb-20">
+            {/* Brand Section */}
+            <div className="lg:col-span-5 space-y-8">
+              <div className="flex items-center gap-3 font-black text-2xl tracking-tighter group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+                <div className="w-12 h-12 flex items-center justify-center bg-foreground text-background rounded-2xl shadow-xl group-hover:rotate-12 transition-transform duration-300">
                   {d?.siteLogo?.startsWith("/") || d?.siteLogo?.startsWith("http") ? (
-                    <img src={d.siteLogo} alt="Logo" className="w-full h-full object-contain" />
+                    <img src={d.siteLogo} alt="Logo" className="w-full h-full object-contain p-2 inverted" />
                   ) : (
-                    <span className="text-xl">{d?.siteLogo ?? "⚡"}</span>
+                    <span className="text-2xl">{d?.siteLogo ?? "⚡"}</span>
                   )}
                 </div>
-                <span>{siteName}</span>
+                <span className="bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">{siteName}</span>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">{d?.siteTagline ?? "Platform WhatsApp #1 di Indonesia"}</p>
+              <p className="text-base text-muted-foreground leading-relaxed max-w-sm font-medium">
+                {d?.siteTagline ?? "Platform WhatsApp Gateway All-in-One terpercaya untuk skalabilitas bisnis masa depan Anda."}
+              </p>
+              <div className="flex items-center gap-4">
+                {[
+                  { Icon: Twitter, href: "#" },
+                  { Icon: Instagram, href: "#" },
+                  { Icon: Linkedin, href: "#" },
+                  { Icon: Github, href: "#" },
+                  { Icon: Facebook, href: "#" },
+                ].map((social, i) => (
+                  <a key={i} href={social.href} className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-emerald-500 hover:text-white transition-all duration-300 shadow-sm">
+                    <social.Icon size={18} />
+                  </a>
+                ))}
+              </div>
             </div>
 
-            {/* Links */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-sm">
-              <div className="space-y-2">
-                <p className="font-semibold text-xs uppercase tracking-widest text-muted-foreground">Produk</p>
-                {["Fitur", "Harga", "API Docs"].map((l) => (
-                  <button key={l} onClick={() => l === "Fitur" ? scrollTo("features") : l === "Harga" ? scrollTo("pricing") : undefined}
-                    className="block text-muted-foreground hover:text-foreground transition-colors">{l}</button>
-                ))}
+            {/* Links Sections */}
+            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-12">
+              <div className="space-y-6">
+                <h5 className="font-black text-xs uppercase tracking-[0.2em] text-foreground/40">Solusi</h5>
+                <ul className="space-y-4">
+                  {[
+                    { l: "Fitur Utama", id: "features" },
+                    { l: "Cara Kerja", id: "how-it-works" },
+                    { l: "Harga", id: "pricing" },
+                    { l: "Enterprise", id: "pricing" },
+                    { l: "API Docs", href: "#" }
+                  ].map((l, i) => (
+                    <li key={i}>
+                      {l.id ? (
+                        <button onClick={() => scrollTo(l.id)} className="text-sm font-bold text-muted-foreground hover:text-emerald-500 transition-colors flex items-center gap-2 group">
+                          <ChevronRight size={14} className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                          {l.l}
+                        </button>
+                      ) : (
+                        <a href={l.href} className="text-sm font-bold text-muted-foreground hover:text-emerald-500 transition-colors flex items-center gap-2 group">
+                          <ChevronRight size={14} className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                          {l.l}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="space-y-2">
-                <p className="font-semibold text-xs uppercase tracking-widest text-muted-foreground">Akun</p>
-                {[["Daftar", "/register"], ["Masuk", "/login"]].map(([l, href]) => (
-                  <Link key={l} href={href} className="block text-muted-foreground hover:text-foreground transition-colors">{l}</Link>
-                ))}
+
+              <div className="space-y-6">
+                <h5 className="font-black text-xs uppercase tracking-[0.2em] text-foreground/40">Perusahaan</h5>
+                <ul className="space-y-4">
+                  {["Tentang Kami", "Karir", "Blog", "Partner", "Kebijakan Privasi", "Ketentuan Layanan"].map((l, i) => (
+                    <li key={i}>
+                      <a href="#" className="text-sm font-bold text-muted-foreground hover:text-emerald-500 transition-colors flex items-center gap-2 group">
+                        <ChevronRight size={14} className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                        {l}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="space-y-2">
-                <p className="font-semibold text-xs uppercase tracking-widest text-muted-foreground">Kontak</p>
-                {d?.contact?.email && (
-                  <a href={`mailto:${d.contact.email}`} className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                    <Mail size={12} /> {d.contact.email}
-                  </a>
-                )}
-                {d?.contact?.whatsapp && (
-                  <a href={`https://wa.me/${d.contact.whatsapp}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                    <Phone size={12} /> WhatsApp
-                  </a>
-                )}
+
+              <div className="space-y-6 col-span-2 sm:col-span-1">
+                <h5 className="font-black text-xs uppercase tracking-[0.2em] text-foreground/40">Dukungan</h5>
+                <div className="space-y-6">
+                  {d?.contact?.email && (
+                    <div className="space-y-2">
+                       <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">Email</p>
+                       <a href={`mailto:${d.contact.email}`} className="text-sm font-bold text-muted-foreground hover:text-emerald-500 transition-colors break-all">
+                        {d.contact.email}
+                      </a>
+                    </div>
+                  )}
+                  {d?.contact?.whatsapp && (
+                    <div className="space-y-2">
+                       <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">Phone</p>
+                       <a href={`https://wa.me/${d.contact.whatsapp}`} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-muted-foreground hover:text-emerald-500 transition-colors flex items-center gap-2">
+                        <Phone size={14} className="text-emerald-500" /> WhatsApp CS
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-          <div className="border-t border-border/40 pt-6 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-muted-foreground">
-            <p>{d?.footerText ?? `© ${new Date().getFullYear()} ${siteName}. All rights reserved.`}</p>
-            <div className="flex items-center gap-4">
-              <Link href="/login" className="hover:text-foreground transition-colors">Dashboard</Link>
-              <Link href="/register" className="hover:text-foreground transition-colors">Daftar</Link>
+
+          <div className="pt-12 border-t border-border/40 flex flex-col md:flex-row justify-between items-center gap-8 text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+            <p className="opacity-60">{d?.footerText ?? `© ${new Date().getFullYear()} ${siteName}. Dibuat dengan ❤️ untuk UMKM Indonesia.`}</p>
+            <div className="flex items-center gap-8">
+              <Link href="/login" className="hover:text-emerald-500 transition-colors">Dashboard Portal</Link>
+              <Link href="/register" className="hover:text-emerald-500 transition-colors">Daftar Akun</Link>
+              <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[9px] border border-emerald-500/20">v2.4.0 Secure</span>
             </div>
           </div>
         </div>

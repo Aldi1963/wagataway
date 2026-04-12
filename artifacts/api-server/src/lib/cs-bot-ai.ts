@@ -20,9 +20,21 @@ async function getAiBaseUrl(): Promise<string | undefined> {
   return row?.value || undefined;
 }
 
-export async function getUserOpenaiKey(userId: number): Promise<string | null> {
-  const [user] = await db.select({ openaiApiKey: usersTable.openaiApiKey }).from(usersTable).where(eq(usersTable.id, userId));
-  return user?.openaiApiKey || null;
+export async function getUserAiKey(userId: number, provider?: AiProvider): Promise<string | null> {
+  const [user] = await db
+    .select({ openaiApiKey: usersTable.openaiApiKey, aiSettings: usersTable.aiSettings })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId));
+  if (!user) return null;
+
+  const settings = typeof user.aiSettings === "string" ? JSON.parse(user.aiSettings) : user.aiSettings;
+  const targetProvider = provider ?? settings?.provider ?? "openai";
+
+  // Legacy fallback for OpenAI
+  if (targetProvider === "openai" && user.openaiApiKey) return user.openaiApiKey;
+
+  // Key from JSON settings
+  return settings?.keys?.[targetProvider] || null;
 }
 
 export async function checkUserPlanAllowsAi(userId: number): Promise<boolean> {
@@ -42,7 +54,12 @@ export interface AiAccessInfo {
 }
 
 export async function checkAiAccess(userId: number): Promise<AiAccessInfo> {
-  const ownKey = await getUserOpenaiKey(userId);
+  const [user] = await db.select({ aiSettings: usersTable.aiSettings, openaiApiKey: usersTable.openaiApiKey }).from(usersTable).where(eq(usersTable.id, userId));
+  const settings = typeof user?.aiSettings === "string" ? JSON.parse(user.aiSettings) : user?.aiSettings;
+  const provider = settings?.provider ?? "openai";
+  
+  let ownKey = settings?.keys?.[provider] || (provider === "openai" ? user?.openaiApiKey : null);
+  
   if (ownKey) {
     return {
       allowed: true,
@@ -194,27 +211,41 @@ export async function generateAiReply(
     }
   }
 
-  // ── Platform / user-level OpenAI key fallback ─────────────────────────────
+  // ── Platform / user-level AI key fallback ─────────────────────────────
   let apiKey: string | null = null;
   if (userId) {
-    apiKey = await getUserOpenaiKey(userId);
+    apiKey = await getUserAiKey(userId, provider === "platform" ? undefined : provider);
   }
-  if (!apiKey) {
+
+  // If we still don't have a key and provider is platform, use admin settings
+  if (!apiKey && provider === "platform") {
     apiKey = await getAdminApiKey();
+    const defaultModel = await getDefaultModel();
+    const model = ctx.model || defaultModel;
+    const baseURL = await getAiBaseUrl();
+    try {
+      return await callOpenAICompat(apiKey!, model, maxTokens, systemPrompt, incomingMsg, baseURL);
+    } catch (err) {
+      console.error("[cs-bot-ai] Error calling platform AI:", err);
+      return null;
+    }
   }
+
   if (!apiKey) {
-    console.warn("[cs-bot-ai] No API key available — AI reply skipped");
+    console.warn(`[cs-bot-ai] No API key available for ${provider} — AI reply skipped`);
     return null;
   }
 
-  const defaultModel = await getDefaultModel();
-  const model = ctx.model || defaultModel;
-  const baseURL = await getAiBaseUrl();
+  const model = ctx.model;
 
   try {
+    if (provider === "anthropic") {
+      return await callAnthropic(apiKey, model, maxTokens, systemPrompt, incomingMsg);
+    }
+    const baseURL = PROVIDER_BASE_URLS[provider === "platform" ? "openai" : provider];
     return await callOpenAICompat(apiKey, model, maxTokens, systemPrompt, incomingMsg, baseURL);
   } catch (err) {
-    console.error("[cs-bot-ai] Error calling platform AI:", err);
+    console.error(`[cs-bot-ai] Error calling ${provider}:`, err);
     return null;
   }
 }

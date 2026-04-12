@@ -26,6 +26,10 @@ router.get("/devices", async (req, res): Promise<void> => {
       name: d.name,
       phone: d.phone,
       status: d.status,
+      provider: d.provider,
+      officialPhoneId: d.officialPhoneId,
+      officialBusinessAccountId: d.officialBusinessAccountId,
+      officialAccessToken: d.officialAccessToken,
       battery: d.battery,
       lastSeen: d.lastSeen?.toISOString(),
       autoReconnect: d.autoReconnect,
@@ -42,26 +46,22 @@ router.get("/devices", async (req, res): Promise<void> => {
 
 router.post("/devices", async (req, res): Promise<void> => {
   const uid = getUser(req);
-  const parsed = CreateDeviceBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request", code: "INVALID_REQUEST" });
-    return;
-  }
-
-  // ── Plan limit check ───────────────────────────────────────────────────────
-  const [plan, currentCount] = await Promise.all([getUserPlan(uid), countUserDevices(uid)]);
-  const err = limitError(currentCount, plan.limitDevices, "perangkat");
-  if (err) { res.status(403).json({ ...err, planName: plan.planName }); return; }
-  // ──────────────────────────────────────────────────────────────────────────
+  const { 
+    name, phone, provider, officialPhoneId, officialBusinessAccountId, officialAccessToken, autoReconnect 
+  } = req.body;
 
   const [device] = await db
     .insert(devicesTable)
     .values({
       userId: uid,
-      name: parsed.data.name,
-      phone: parsed.data.phone ?? null,
-      autoReconnect: parsed.data.autoReconnect ?? true,
-      status: "disconnected",
+      name: name,
+      phone: phone ?? null,
+      provider: provider || "baileys",
+      officialPhoneId: officialPhoneId ?? null,
+      officialBusinessAccountId: officialBusinessAccountId ?? null,
+      officialAccessToken: officialAccessToken ?? null,
+      autoReconnect: autoReconnect ?? true,
+      status: provider === "official" ? "connected" : "disconnected",
       messagesSent: 0,
     })
     .returning();
@@ -71,6 +71,8 @@ router.post("/devices", async (req, res): Promise<void> => {
     name: device.name,
     phone: device.phone,
     status: device.status,
+    provider: device.provider,
+    officialPhoneId: device.officialPhoneId,
     battery: device.battery,
     lastSeen: device.lastSeen?.toISOString(),
     autoReconnect: device.autoReconnect,
@@ -114,23 +116,44 @@ router.put("/devices/:id", async (req, res): Promise<void> => {
   const uid = getUser(req);
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
-  const { name, phone, autoReconnect, notifyOnDisconnect, notifyOnConnect, rotationEnabled, rotationWeight, rotationGroup } = req.body;
+  const { 
+    name, phone, autoReconnect, notifyOnDisconnect, notifyOnConnect, 
+    rotationEnabled, rotationWeight, rotationGroup, status,
+    provider, officialPhoneId, officialBusinessAccountId, officialAccessToken
+  } = req.body;
+
   const updates: any = {};
   if (name !== undefined) updates.name = name;
   if (phone !== undefined) updates.phone = phone;
+  if (status !== undefined) updates.status = status;
+  if (provider !== undefined) updates.provider = provider;
+  if (officialPhoneId !== undefined) updates.officialPhoneId = officialPhoneId;
+  if (officialBusinessAccountId !== undefined) updates.officialBusinessAccountId = officialBusinessAccountId;
+  if (officialAccessToken !== undefined) updates.officialAccessToken = officialAccessToken;
   if (autoReconnect !== undefined) updates.autoReconnect = autoReconnect;
   if (notifyOnDisconnect !== undefined) updates.notifyOnDisconnect = notifyOnDisconnect;
   if (notifyOnConnect !== undefined) updates.notifyOnConnect = notifyOnConnect;
   if (rotationEnabled !== undefined) updates.rotationEnabled = Boolean(rotationEnabled);
   if (rotationWeight !== undefined) updates.rotationWeight = Math.max(1, Math.min(100, parseInt(rotationWeight, 10) || 1));
   if (rotationGroup !== undefined) updates.rotationGroup = String(rotationGroup);
+
   const [device] = await db
     .update(devicesTable)
     .set(updates)
     .where(and(eq(devicesTable.id, id), eq(devicesTable.userId, uid)))
     .returning();
+
   if (!device) { res.status(404).json({ message: "Device not found" }); return; }
-  res.json({ id: String(device.id), name: device.name, phone: device.phone, status: device.status, autoReconnect: device.autoReconnect, notifyOnDisconnect: device.notifyOnDisconnect, notifyOnConnect: device.notifyOnConnect });
+  res.json({ 
+    id: String(device.id), 
+    name: device.name, 
+    phone: device.phone, 
+    status: device.status, 
+    provider: device.provider,
+    autoReconnect: device.autoReconnect, 
+    notifyOnDisconnect: device.notifyOnDisconnect, 
+    notifyOnConnect: device.notifyOnConnect 
+  });
 });
 
 router.delete("/devices/:id", async (req, res): Promise<void> => {
@@ -144,6 +167,35 @@ router.delete("/devices/:id", async (req, res): Promise<void> => {
     .where(and(eq(devicesTable.id, id), eq(devicesTable.userId, uid)));
 
   res.sendStatus(204);
+});
+
+router.patch("/devices/:id", async (req, res): Promise<void> => {
+  const uid = getUser(req);
+  const id = parseInt(req.params.id, 10);
+  const { status, officialPhoneId, officialBusinessAccountId, officialAccessToken } = req.body;
+
+  const updates: any = {};
+  if (status !== undefined) updates.status = status;
+  if (officialPhoneId !== undefined) updates.officialPhoneId = officialPhoneId;
+  if (officialBusinessAccountId !== undefined) updates.officialBusinessAccountId = officialBusinessAccountId;
+  if (officialAccessToken !== undefined) updates.officialAccessToken = officialAccessToken;
+
+  const [device] = await db
+    .update(devicesTable)
+    .set(updates)
+    .where(and(eq(devicesTable.id, id), eq(devicesTable.userId, uid)))
+    .returning();
+
+  if (!device) {
+    res.status(404).json({ message: "Device not found" });
+    return;
+  }
+
+  res.json({
+    id: String(device.id),
+    status: device.status,
+    officialPhoneId: device.officialPhoneId,
+  });
 });
 
 // ── SSE endpoint: streams QR codes and connection status ──────────────────────

@@ -102,6 +102,7 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      "@napi-rs/canvas",
     ],
     sourcemap: "linked",
     plugins: [

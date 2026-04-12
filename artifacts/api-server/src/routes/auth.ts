@@ -14,7 +14,11 @@ import { sendWelcomeEmail } from "../lib/email";
 const router: IRouter = Router();
 
 // ── Secret key for HMAC token signing ────────────────────────────────────────
-const TOKEN_SECRET = process.env.SESSION_SECRET ?? "fallback-dev-secret-change-in-prod";
+const TOKEN_SECRET = process.env.SESSION_SECRET;
+if (!TOKEN_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET must be set in production!");
+}
+const ACTUAL_SECRET = TOKEN_SECRET ?? "fallback-dev-secret";
 // Token validity: 30 days
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -71,7 +75,7 @@ function verifyPassword(input: string, stored: string): boolean {
 // Format: base64url(payload).base64url(hmac)
 
 function sign(data: string): string {
-  return crypto.createHmac("sha256", TOKEN_SECRET).update(data).digest("base64url");
+  return crypto.createHmac("sha256", ACTUAL_SECRET).update(data).digest("base64url");
 }
 
 export function generateToken(userId: number): string {
@@ -82,22 +86,22 @@ export function generateToken(userId: number): string {
 
 export function getUserFromToken(token: string): number | null {
   try {
-    if (token.includes(".")) {
-      // New signed format
-      const lastDot = token.lastIndexOf(".");
-      const payload = token.slice(0, lastDot);
-      const sig = token.slice(lastDot + 1);
-      const expected = sign(payload);
-      if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-      const parsed = JSON.parse(Buffer.from(payload, "base64url").toString());
-      if (!parsed.userId || !parsed.ts) return null;
-      // Check expiry
-      if (Date.now() - parsed.ts > TOKEN_TTL_MS) return null;
-      return parsed.userId;
-    }
-    // Legacy unsigned token (backward compat — accept for migration window)
-    const parsed = JSON.parse(Buffer.from(token, "base64").toString());
-    return parsed.userId ?? null;
+    if (!token.includes(".")) return null;
+    
+    // New signed format
+    const lastDot = token.lastIndexOf(".");
+    const payload = token.slice(0, lastDot);
+    const sig = token.slice(lastDot + 1);
+    const expected = sign(payload);
+    
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+    
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (!parsed.userId || !parsed.ts) return null;
+    
+    // Check expiry
+    if (Date.now() - parsed.ts > TOKEN_TTL_MS) return null;
+    return parsed.userId;
   } catch {
     return null;
   }
@@ -300,6 +304,7 @@ router.put("/auth/profile", async (req, res): Promise<void> => {
   if (parsed.data.email) updateData.email = parsed.data.email.toLowerCase().trim();
   if (parsed.data.avatar) updateData.avatar = parsed.data.avatar;
   if (parsed.data.newPassword) updateData.password = hashPasswordScrypt(parsed.data.newPassword);
+  if ((parsed.data as any).aiSettings) (updateData as any).aiSettings = (parsed.data as any).aiSettings;
 
   const [user] = await db
     .update(usersTable)

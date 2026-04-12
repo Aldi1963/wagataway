@@ -8,6 +8,7 @@ interface AuthUser {
   avatar?: string | null;
   plan?: string | null;
   role?: string | null;
+  aiSettings?: any;
 }
 
 interface AuthContextType {

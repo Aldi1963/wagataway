@@ -64,6 +64,7 @@ export const UpdateProfileBody = zod.object({
   avatar: zod.string().optional(),
   currentPassword: zod.string().optional(),
   newPassword: zod.string().optional(),
+  aiSettings: zod.string().optional(),
 });
 
 export const UpdateProfileResponse = zod.object({

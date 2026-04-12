@@ -5,7 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Loader2, Eye, EyeOff, UserCircle, Shield, ShieldCheck,
-  ShieldOff, CheckCircle2,
+  ShieldOff, CheckCircle2, Brain, Zap, Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,81 @@ export default function Profile() {
             {updateProfile.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             Simpan Profil
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* AI Integration */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Brain className="w-4 h-4 text-primary" /> Integrasi AI (Global)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Konfigurasi API key AI default untuk seluruh akun Anda. CS Bot akan menggunakan pengaturan ini jika tidak ada konfigurasi khusus per-perangkat.
+          </p>
+          
+          <div className="space-y-3">
+            <Label className="text-xs">Provider Default</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "openai", label: "OpenAI", icon: "🟢" },
+                { id: "gemini", label: "Gemini", icon: "🔵" },
+                { id: "anthropic", label: "Anthropic", icon: "🔷" },
+                { id: "groq", label: "Groq", icon: "⚡" },
+              ].map((p) => {
+                const settings = typeof user?.aiSettings === "string" ? JSON.parse(user.aiSettings) : user?.aiSettings;
+                const active = (settings?.provider ?? "openai") === p.id;
+                return (
+                  <Button
+                    key={p.id}
+                    variant={active ? "default" : "outline"}
+                    className="justify-start gap-2 h-9 text-xs"
+                    onClick={() => {
+                      const newSettings = { ...(settings ?? {}), provider: p.id };
+                      updateProfile.mutate({ aiSettings: JSON.stringify(newSettings) });
+                    }}
+                  >
+                    <span>{p.icon}</span> {p.label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            {[
+               { id: "openai", label: "OpenAI API Key", placeholder: "sk-...", prefix: "sk-" },
+               { id: "gemini", label: "Gemini API Key", placeholder: "AIza...", prefix: "AIza" },
+            ].map((p) => {
+              const settings = typeof user?.aiSettings === "string" ? JSON.parse(user.aiSettings) : user?.aiSettings;
+              const val = settings?.keys?.[p.id] || (p.id === "openai" ? (user as any).openaiApiKey : "");
+              
+              return (
+                <div key={p.id} className="space-y-2">
+                  <Label className="text-xs">{p.label}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder={p.placeholder}
+                      defaultValue={val}
+                      className="font-mono text-xs"
+                      onBlur={(e) => {
+                        const newKey = e.target.value.trim();
+                        if (newKey === val) return;
+                        const newSettings = { 
+                          ...(settings ?? {}), 
+                          keys: { ...(settings?.keys ?? {}), [p.id]: newKey } 
+                        };
+                        updateProfile.mutate({ aiSettings: JSON.stringify(newSettings) });
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 

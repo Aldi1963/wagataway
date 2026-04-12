@@ -49,6 +49,10 @@ interface Device {
   name: string;
   phone?: string;
   status: string;
+  provider?: "baileys" | "official";
+  officialPhoneId?: string;
+  officialBusinessAccountId?: string;
+  officialAccessToken?: string;
   battery?: number;
   lastSeen?: string;
   autoReconnect?: boolean;
@@ -66,6 +70,10 @@ export default function Devices() {
   const [phone, setPhone] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [autoReconnect, setAutoReconnect] = useState(true);
+  const [provider, setProvider] = useState<"baileys" | "official">("baileys");
+  const [officialPhoneId, setOfficialPhoneId] = useState("");
+  const [officialBusinessAccountId, setOfficialBusinessAccountId] = useState("");
+  const [officialAccessToken, setOfficialAccessToken] = useState("");
 
   const [webhookDialogOpen, setWebhookDialogOpen] = useState(false);
   const [webhookTargetDevice, setWebhookTargetDevice] = useState<Device | null>(null);
@@ -129,6 +137,15 @@ export default function Devices() {
         toast({ title: "Gagal menambahkan perangkat", variant: "destructive" });
       }
     },
+  });
+
+  const updateDeviceStatus = useMutation({
+    mutationFn: (body: { id: string; status: string }) =>
+      apiFetch(`/devices/${body.id}`, { 
+        method: "PATCH", 
+        body: JSON.stringify({ status: body.status }) 
+      }).then((r) => r.json()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 
   const disconnectDevice = useMutation({
@@ -362,8 +379,17 @@ export default function Devices() {
                       <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${statusColor(device.status)}`} />
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">{device.name}</p>
-                      <p className="text-xs text-muted-foreground">{device.phone ?? "Belum scan QR"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm">{device.name}</p>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1 leading-none uppercase">
+                          {device.provider === "official" ? "Official" : "Web"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {device.provider === "official" 
+                          ? device.officialPhoneId || "Cloud API"
+                          : device.phone || "Belum scan QR"}
+                      </p>
                     </div>
                   </div>
                   <DropdownMenu>
@@ -373,7 +399,15 @@ export default function Devices() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {device.status === "connected" ? (
+                      {device.provider === "official" ? (
+                        <DropdownMenuItem onClick={() => updateDeviceStatus.mutate({ 
+                          id: device.id, 
+                          status: device.status === "connected" ? "disconnected" : "connected" 
+                        })}>
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          {device.status === "connected" ? "Klik Disconnect" : "Klik Connect"}
+                        </DropdownMenuItem>
+                      ) : device.status === "connected" ? (
                         <DropdownMenuItem onClick={() => disconnectDevice.mutate(device.id)}>
                           <WifiOff className="w-4 h-4 mr-2" />
                           Putuskan
@@ -609,7 +643,10 @@ export default function Devices() {
       {/* Add Device Dialog */}
       <Dialog open={addOpen} onOpenChange={(open) => {
         setAddOpen(open);
-        if (!open) { setName(""); setPhone(""); setWebhookUrl(""); setAutoReconnect(true); }
+        if (!open) { 
+          setName(""); setPhone(""); setWebhookUrl(""); setAutoReconnect(true); 
+          setProvider("baileys"); setOfficialPhoneId(""); setOfficialBusinessAccountId(""); setOfficialAccessToken("");
+        }
       }}>
         <DialogContent>
           <DialogHeader>
@@ -624,42 +661,98 @@ export default function Devices() {
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Nomor WhatsApp</Label>
-              <Input
-                placeholder="628123456789 (tanpa tanda +)"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                type="tel"
-              />
-              <p className="text-xs text-muted-foreground">*Gunakan kode negara tanpa tanda +</p>
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5">
-                <Link className="w-3.5 h-3.5" />
-                Link Webhook
-              </Label>
-              <Input
-                placeholder="https://example.com/webhook"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                type="url"
-              />
-              <p className="text-xs text-muted-foreground">*Opsional — webhook otomatis dibuat jika diisi</p>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Auto Reconnect</Label>
-                <p className="text-xs text-muted-foreground">Hubungkan otomatis jika terputus</p>
+            <div className="space-y-4 pt-2 border-t">
+              <div className="space-y-2">
+                <Label>Pilih Provider</Label>
+                <Tabs value={provider} onValueChange={(v: any) => setProvider(v)}>
+                  <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="baileys">WhatsApp Web (Baileys)</TabsTrigger>
+                    <TabsTrigger value="official">WhatsApp Official (Cloud API)</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-              <Switch checked={autoReconnect} onCheckedChange={setAutoReconnect} />
+
+              {provider === "official" ? (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <Label>Phone Number ID</Label>
+                    <Input 
+                      placeholder="Contoh: 1098..." 
+                      value={officialPhoneId} 
+                      onChange={(e) => setOfficialPhoneId(e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WhatsApp Business Account ID</Label>
+                    <Input 
+                      placeholder="Contoh: 1023..." 
+                      value={officialBusinessAccountId} 
+                      onChange={(e) => setOfficialBusinessAccountId(e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Permanent Access Token</Label>
+                    <Input 
+                      placeholder="EAAG..." 
+                      value={officialAccessToken} 
+                      onChange={(e) => setOfficialAccessToken(e.target.value)} 
+                      type="password"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <Label>Nomor WhatsApp</Label>
+                    <Input
+                      placeholder="628123456789 (tanpa tanda +)"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      type="tel"
+                    />
+                    <p className="text-xs text-muted-foreground">*Gunakan kode negara tanpa tanda +</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Auto Reconnect</Label>
+                      <p className="text-xs text-muted-foreground">Hubungkan otomatis jika terputus</p>
+                    </div>
+                    <Switch checked={autoReconnect} onCheckedChange={setAutoReconnect} />
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Link className="w-3.5 h-3.5" />
+                  Link Webhook (Opsional)
+                </Label>
+                <Input
+                  placeholder="https://example.com/webhook"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  type="url"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Batal</Button>
             <Button
-              onClick={() => addDevice.mutate({ name, phone: phone.trim() || undefined, autoReconnect, webhookUrl: webhookUrl.trim() || undefined })}
-              disabled={!name.trim() || addDevice.isPending}
+              onClick={() => addDevice.mutate({ 
+                name, 
+                phone: provider === "baileys" ? (phone.trim() || undefined) : undefined, 
+                provider,
+                officialPhoneId: provider === "official" ? officialPhoneId : undefined,
+                officialBusinessAccountId: provider === "official" ? officialBusinessAccountId : undefined,
+                officialAccessToken: provider === "official" ? officialAccessToken : undefined,
+                autoReconnect, 
+                webhookUrl: webhookUrl.trim() || undefined 
+              })}
+              disabled={
+                !name.trim() || 
+                (provider === "official" && (!officialPhoneId || !officialAccessToken)) ||
+                addDevice.isPending
+              }
             >
               {addDevice.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Simpan

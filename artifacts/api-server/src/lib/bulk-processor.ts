@@ -6,6 +6,7 @@ import { getUserPlan } from "./plan-limits";
 import { logger } from "./logger";
 import { sendTelegramNotification, fmtBlastDone } from "./telegram-notify";
 import { proto, generateMessageIDV2 } from "@whiskeysockets/baileys";
+import { sendOfficialMessage, formatOfficialInteractive } from "./official-api";
 
 interface BulkRecipient {
   phone: string;
@@ -58,8 +59,10 @@ export async function processBulkJob({
     const plan = await getUserPlan(userId);
     const effectiveLimit = await getEffectiveDailyLimit(device, plan.limitMessagesPerDay);
 
-    const session = getSession(deviceId);
-    const canSendReal = !!(session?.socket && session.status === "connected");
+    const session = device.provider === "official" ? null : getSession(deviceId);
+    const canSendReal = device.provider === "official" 
+      ? !!(device.officialPhoneId && device.officialAccessToken)
+      : !!(session?.socket && session.status === "connected");
 
     // ── Filter blacklisted numbers ────────────────────────────────────────────
     const allPhones = recipients.map((r) => r.phone);
@@ -103,128 +106,159 @@ export async function processBulkJob({
 
       try {
         if (canSendReal) {
-          if (messageType === "button") {
-            const btns = (extra?.buttons ?? [])
-              .filter((b: any) => b?.displayText || b?.title)
-              .map((b: any, bi: number) => {
-                const type = b.type ?? "quick_reply";
-                if (type === "url") {
-                  return {
-                    name: "cta_url",
-                    buttonParamsJson: JSON.stringify({ 
-                      display_text: b.displayText || b.title, 
-                      url: b.url, 
-                      merchant_url: b.url 
-                    }),
-                  };
-                }
-                if (type === "call") {
-                  return {
-                    name: "cta_call",
-                    buttonParamsJson: JSON.stringify({ 
-                      display_text: b.displayText || b.title, 
-                      phone_number: b.phoneNumber || b.phone 
-                    }),
-                  };
-                }
-                return {
-                  name: "quick_reply",
-                  buttonParamsJson: JSON.stringify({ 
-                    display_text: b.displayText || b.title, 
-                    id: String(b.id || `btn_${bi + 1}`) 
-                  }),
-                };
-              });
+          if (device.provider === "official") {
+            // ── Official API Logic ────────────────────────────────────────────
+            const config = { phoneId: device.officialPhoneId!, accessToken: device.officialAccessToken! };
+            let officialPayload: any = {};
 
-            const headerContent: any = {};
-            if (extra?.headerUrl) {
-              headerContent.imageMessage = { url: extra.headerUrl };
-              headerContent.hasMediaAttachment = true;
-            } else if (extra?.headerText) {
-              headerContent.title = extra.headerText;
-              headerContent.hasMediaAttachment = false;
+            if (messageType === "button") {
+              officialPayload = formatOfficialInteractive(personalizedMsg, extra?.footer, extra?.buttons || []);
+            } else if (mediaUrl) {
+              const typeMap: any = { image: "image", video: "video", audio: "audio", document: "document" };
+              const type = typeMap[mediaType!] || "image";
+              officialPayload = {
+                type,
+                [type]: {
+                  link: mediaUrl,
+                  ...(type !== "audio" ? { caption: personalizedMsg } : {}),
+                },
+              };
+            } else {
+              officialPayload = {
+                type: "text",
+                text: { body: personalizedMsg },
+                preview_url: true,
+              };
             }
 
-            const messageObj = {
-              interactiveMessage: {
-                header: headerContent,
-                body: { text: personalizedMsg },
-                footer: { text: extra?.footer ?? "" },
-                nativeFlowMessage: {
-                  buttons: btns,
-                  messageVersion: 1,
-                },
-              },
-            };
-
-            const msgs = (session!.socket as any).generateWAMessageFromContent(jid, {
-              viewOnceMessage: {
-                message: messageObj,
-              },
-            }, { userJid: (session!.socket as any).user.id });
-
-            logger.info({ jid, messageObj }, "Relaying interactive button message");
-            await (session!.socket as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
-          } else if (messageType === "list") {
-            const selectBtn = {
-              name: "single_select",
-              buttonParamsJson: JSON.stringify({
-                title: extra?.buttonText ?? "Pilih",
-                sections: (extra?.sections ?? []).map((s: any) => ({
-                  title: s.title ?? "",
-                  rows: (s.rows ?? []).map((r: any) => ({
-                    title: r.title ?? r.rowTitle ?? String(r),
-                    description: r.description ?? "",
-                    id: r.id ?? r.title ?? String(r),
-                  })),
-                })),
-              }),
-            };
-
-            const messageObj = {
-              interactiveMessage: {
-                body: { text: personalizedMsg },
-                footer: { text: extra?.footer ?? "" },
-                nativeFlowMessage: {
-                  buttons: [selectBtn],
-                  messageVersion: 1,
-                },
-              },
-            };
-
-            const msgs = (session!.socket as any).generateWAMessageFromContent(jid, {
-              viewOnceMessage: {
-                message: messageObj,
-              },
-            }, { userJid: (session!.socket as any).user.id });
-
-            await (session!.socket as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
+            await sendOfficialMessage(config, jid, officialPayload);
           } else {
-            // Standard text/media with Anti-Banned support
-            if (device.antiBannedEnabled) {
-              await sendWithAntiBanned({
-                socket: session!.socket, jid, message: personalizedMsg,
-                recipientName: recipient.name,
-                mediaUrl: mediaUrl, mediaType: mediaType as any,
-                minDelay: i === 0 ? 0 : device.minDelay,
-                maxDelay: device.maxDelay,
-                typingSimulation: device.typingSimulation,
-                typingDuration: device.typingDuration,
-                applyDelay: i < recipients.length - 1,
-              });
+            // ── Baileys Logic ─────────────────────────────────────────────────
+            const sock = session!.socket;
+            if (messageType === "button") {
+              const btns = (extra?.buttons ?? [])
+                .filter((b: any) => b?.displayText || b?.title)
+                .map((b: any, bi: number) => {
+                  const type = b.type ?? "quick_reply";
+                  if (type === "url") {
+                    return {
+                      name: "cta_url",
+                      buttonParamsJson: JSON.stringify({ 
+                        display_text: b.displayText || b.title, 
+                        url: b.url, 
+                        merchant_url: b.url 
+                      }),
+                    };
+                  }
+                  if (type === "call") {
+                    return {
+                      name: "cta_call",
+                      buttonParamsJson: JSON.stringify({ 
+                        display_text: b.displayText || b.title, 
+                        phone_number: b.phoneNumber || b.phone 
+                      }),
+                    };
+                  }
+                  return {
+                    name: "quick_reply",
+                    buttonParamsJson: JSON.stringify({ 
+                      display_text: b.displayText || b.title, 
+                      id: String(b.id || `btn_${bi + 1}`) 
+                    }),
+                  };
+                });
+
+              const headerContent: any = {};
+              if (extra?.headerUrl) {
+                headerContent.imageMessage = { url: extra.headerUrl };
+                headerContent.hasMediaAttachment = true;
+              } else if (extra?.headerText) {
+                headerContent.title = extra.headerText;
+                headerContent.hasMediaAttachment = false;
+              }
+
+              const messageObj = {
+                interactiveMessage: {
+                  header: headerContent,
+                  body: { text: personalizedMsg },
+                  footer: { text: extra?.footer ?? "" },
+                  nativeFlowMessage: {
+                    buttons: btns,
+                    messageVersion: 1,
+                  },
+                },
+              };
+
+              const msgs = (sock as any).generateWAMessageFromContent(jid, {
+                viewOnceMessage: {
+                  message: messageObj,
+                },
+              }, { userJid: (sock as any).user.id });
+
+              logger.info({ jid, messageObj }, "Relaying interactive button message");
+              await (sock as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
+            } else if (messageType === "list") {
+              const selectBtn = {
+                name: "single_select",
+                buttonParamsJson: JSON.stringify({
+                  title: extra?.buttonText ?? "Pilih",
+                  sections: (extra?.sections ?? []).map((s: any) => ({
+                    title: s.title ?? "",
+                    rows: (s.rows ?? []).map((r: any) => ({
+                      title: r.title ?? r.rowTitle ?? String(r),
+                      description: r.description ?? "",
+                      id: r.id ?? r.title ?? String(r),
+                    })),
+                  })),
+                }),
+              };
+
+              const messageObj = {
+                interactiveMessage: {
+                  body: { text: personalizedMsg },
+                  footer: { text: extra?.footer ?? "" },
+                  nativeFlowMessage: {
+                    buttons: [selectBtn],
+                    messageVersion: 1,
+                  },
+                },
+              };
+
+              const msgs = (sock as any).generateWAMessageFromContent(jid, {
+                viewOnceMessage: {
+                  message: messageObj,
+                },
+              }, { userJid: (sock as any).user.id });
+
+              await (sock as any).relayMessage(jid, msgs.message, { messageId: msgs.key.id });
             } else {
-              if (mediaUrl) {
-                const mediaMsg: any = mediaType === "video" ? { video: { url: mediaUrl }, caption: personalizedMsg }
-                  : mediaType === "audio" ? { audio: { url: mediaUrl }, mimetype: "audio/mpeg" }
-                  : mediaType === "document" ? { document: { url: mediaUrl }, caption: personalizedMsg }
-                  : { image: { url: mediaUrl }, caption: personalizedMsg };
-                await session!.socket.sendMessage(jid, mediaMsg);
+              // Standard text/media with Anti-Banned support
+              if (device.antiBannedEnabled) {
+                await sendWithAntiBanned({
+                  socket: sock, jid, message: personalizedMsg,
+                  recipientName: recipient.name,
+                  mediaUrl: mediaUrl, mediaType: mediaType as any,
+                  minDelay: i === 0 ? 0 : device.minDelay,
+                  maxDelay: device.maxDelay,
+                  typingSimulation: device.typingSimulation,
+                  typingDuration: device.typingDuration,
+                  applyDelay: i < recipients.length - 1,
+                });
               } else {
-                await session!.socket.sendMessage(jid, { text: personalizedMsg });
+                if (mediaUrl) {
+                  const mediaMsg: any = mediaType === "video" ? { video: { url: mediaUrl }, caption: personalizedMsg }
+                    : mediaType === "audio" ? { audio: { url: mediaUrl }, mimetype: "audio/mpeg" }
+                    : mediaType === "document" ? { document: { url: mediaUrl }, caption: personalizedMsg }
+                    : { image: { url: mediaUrl }, caption: personalizedMsg };
+                  await sock.sendMessage(jid, mediaMsg);
+                } else {
+                  await sock.sendMessage(jid, { text: personalizedMsg });
+                }
               }
             }
           }
         }
+
 
         await db.insert(messagesTable).values({
           userId, deviceId, phone: recipient.phone,

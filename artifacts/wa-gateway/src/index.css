@@ -271,3 +271,27 @@
   75%       { transform: rotate(-4deg); }
   90%       { transform: rotate(4deg); }
 }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes marquee2 {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+
+.animate-marquee2 {
+  animation: marquee2 40s linear infinite;
+}
+
+/* Pause marquee on hover */
+.animate-marquee:hover, 
+.animate-marquee2:hover {
+  animation-play-state: paused;
+}

@@ -35,8 +35,12 @@ import botOrdersRouter from "./bot-orders";
 import adminWaBotRouter from "./admin-wa-bot";
 import groupsRouter from "./groups";
 import { requireAuth } from "../middlewares/require-auth";
+import { globalRateLimit, publicApiRateLimit } from "../lib/rate-limiters";
 
 const router: IRouter = Router();
+
+// Global Limiter for all routes
+router.use(globalRateLimit);
 
 // Public routes (no auth required)
 router.use(healthRouter);
@@ -45,7 +49,8 @@ router.use(otpAuthRouter);
 router.use(publicRouter);
 router.use(linksRouter); // /l/:code is public redirect
 
-// Public API Layer — api_key param auth (semua endpoint dokumentasi)
+// Public API Layer — with stricter rate limit
+router.use(publicApiRateLimit);
 router.use(apiPublicRouter);
 
 // Webhook receive endpoint is public (called by WA server with API key check internally)

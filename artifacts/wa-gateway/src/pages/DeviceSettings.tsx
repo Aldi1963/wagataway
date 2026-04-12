@@ -42,6 +42,9 @@ export default function DeviceSettings() {
       phone: device?.phone ?? "",
       webhookUrl: "",
       autoReconnect: device?.autoReconnect ?? true,
+      officialPhoneId: device?.officialPhoneId ?? "",
+      officialBusinessAccountId: device?.officialBusinessAccountId ?? "",
+      officialAccessToken: device?.officialAccessToken ?? "",
     },
   });
 
@@ -205,18 +208,61 @@ export default function DeviceSettings() {
               </div>
 
               <div className="flex gap-2">
-                <Button
-                  className="flex-1 gap-2"
-                  onClick={() => reconnect.mutate()}
-                  disabled={reconnect.isPending || device.status === "connected"}
-                >
-                  {reconnect.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
-                  Hubungkan via QR
-                </Button>
-                <Button variant="outline" className="flex-1 gap-2">
-                  <Phone className="w-4 h-4" />
-                  Kode Pairing
-                </Button>
+                {device.provider === "baileys" ? (
+                  <>
+                    <Button
+                      className="flex-1 gap-2"
+                      onClick={() => reconnect.mutate()}
+                      disabled={reconnect.isPending || device.status === "connected"}
+                    >
+                      {reconnect.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                      Hubungkan via QR
+                    </Button>
+                    <Button variant="outline" className="flex-1 gap-2">
+                      <Phone className="w-4 h-4" />
+                      Kode Pairing
+                    </Button>
+                  </>
+                ) : (
+                  <div className="w-full space-y-4 pt-2">
+                    <div className="flex items-center justify-between p-3 rounded-xl border bg-primary/5">
+                      <div>
+                        <p className="text-sm font-medium">Status API Resmi</p>
+                        <p className="text-xs text-muted-foreground">Aktifkan untuk mulai mengirim pesan</p>
+                      </div>
+                      <Switch 
+                        checked={device.status === "connected"} 
+                        onCheckedChange={(conn) => save.mutate({ status: conn ? "connected" : "disconnected" })} 
+                      />
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Phone ID</Label>
+                        <Input {...register("officialPhoneId")} placeholder="Masukkan Phone ID..." />
+                        <p className="text-[10px] text-muted-foreground">Dapatkan dari Meta for Developers &gt; WhatsApp &gt; API Setup</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">WA Business Account ID</Label>
+                        <Input {...register("officialBusinessAccountId")} placeholder="Masukkan WABA ID..." />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">System User Access Token</Label>
+                        <Input {...register("officialAccessToken")} type="password" placeholder="EAA..." />
+                        <p className="text-[10px] text-muted-foreground">Gunakan Permanent Access Token dari Business Settings</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="w-full gap-2" 
+                        onClick={handleSubmit((d) => save.mutate(d))}
+                        disabled={save.isPending}
+                      >
+                        {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        Simpan Kredensial API
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

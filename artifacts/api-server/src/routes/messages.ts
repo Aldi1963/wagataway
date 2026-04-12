@@ -8,6 +8,8 @@ import { sendWithAntiBanned } from "../lib/anti-banned";
 import { processBulkJob, cancelBulkJob, isJobRunning } from "../lib/bulk-processor";
 import { scheduleRetry } from "../lib/retry-processor";
 import { proto, generateMessageIDV2 } from "@whiskeysockets/baileys";
+import { sendOfficialMessage, formatOfficialInteractive } from "../lib/official-api";
+import { validateSafeUrl } from "../lib/security";
 
 const router: IRouter = Router();
 
@@ -21,6 +23,7 @@ async function pickRotationDevice(uid: number, rotationGroup = "default"): Promi
   const devices = await db.select().from(devicesTable)
     .where(and(eq(devicesTable.userId, uid), eq(devicesTable.rotationEnabled, true)));
   const connected = devices.filter((d) => {
+    if (d.provider === "official") return d.status === "connected" && (!rotationGroup || d.rotationGroup === rotationGroup);
     const session = getSession(d.id);
     return session?.status === "connected" && (!rotationGroup || d.rotationGroup === rotationGroup);
   });
@@ -51,6 +54,12 @@ router.post("/messages/send", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── SSRF Protection ──────────────────────────────────────────────────────
+  if (mediaUrl && !(await validateSafeUrl(mediaUrl))) {
+    res.status(400).json({ message: "Invalid or unsafe media URL", code: "UNSAFE_URL" });
+    return;
+  }
+
   const [plan, todayCount] = await Promise.all([getUserPlan(uid), countTodayMessages(uid)]);
   const err = limitError(todayCount, plan.limitMessagesPerDay, "pesan hari ini");
   if (err) { res.status(403).json({ ...err, planName: plan.planName }); return; }
@@ -75,6 +84,66 @@ router.post("/messages/send", async (req, res): Promise<void> => {
 
   const session = getSession(devId);
 
+  // ── Official API Branch ──────────────────────────────────────────────────
+  if (device?.provider === "official") {
+    try {
+      let payload: any;
+      if (messageType === "button") {
+        payload = formatOfficialInteractive({
+          type: "button",
+          body: message ?? "",
+          footer: extra?.footer,
+          header: extra?.headerUrl ? { type: "image", image: { link: extra.headerUrl } } : undefined,
+          buttons: (extra?.buttons ?? []).map((b: any) => ({
+            type: b.type === "url" ? "url" : b.type === "call" ? "call" : "reply",
+            title: b.displayText || b.title,
+            ...(b.type === "url" ? { url: b.url } : b.type === "call" ? { phone_number: b.phoneNumber || b.phone } : { id: b.id })
+          }))
+        });
+      } else if (messageType === "media") {
+        const type = (extra?.mediaType || "image").toLowerCase() as any;
+        payload = {
+          type,
+          [type]: { link: mediaUrl || extra?.url, caption: extra?.caption || message }
+        };
+      } else {
+        payload = { type: "text", text: { body: message } };
+      }
+
+      const response = await sendOfficialMessage({
+        accessToken: device.officialAccessToken!,
+        phoneId: device.officialPhoneId!,
+        to: phone.replace(/\D/g, ""),
+        message: payload
+      });
+
+      const [msg] = await db.insert(messagesTable).values({
+        userId: uid, deviceId: devId, phone,
+        message: message ?? "[media]", status: "sent",
+        externalId: response.messages?.[0]?.id,
+        mediaUrl: mediaUrl ?? extra?.url ?? null,
+        messageType,
+      }).returning();
+
+      await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, devId));
+
+      res.json({
+        id: String(msg.id),
+        phone: msg.phone,
+        message: msg.message,
+        status: msg.status,
+        deviceId: String(msg.deviceId),
+        externalId: msg.externalId,
+        createdAt: msg.createdAt?.toISOString(),
+      });
+      return;
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to send via Official API", code: "API_ERROR" });
+      return;
+    }
+  }
+
+  // ── Baileys Branch ────────────────────────────────────────────────────────
   if (session?.socket && session.status === "connected" && device) {
     const jid = `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
 
@@ -316,6 +385,12 @@ router.post("/messages/bulk", async (req, res): Promise<void> => {
 
   if (!deviceId || (!message && !["media", "sticker"].includes(messageType)) || !recipients.length) {
     res.status(400).json({ message: "Missing required fields", code: "INVALID_REQUEST" });
+    return;
+  }
+
+  // ── SSRF Protection ──────────────────────────────────────────────────────
+  if (mediaUrl && !(await validateSafeUrl(mediaUrl))) {
+    res.status(400).json({ message: "Invalid or unsafe media URL", code: "UNSAFE_URL" });
     return;
   }
 
