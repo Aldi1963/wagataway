@@ -519,6 +519,7 @@ function formatPlan(p: typeof plansTable.$inferSelect) {
     webhookEnabled: p.webhookEnabled ?? false,
     liveChatEnabled: p.liveChatEnabled ?? false,
     apiAccessEnabled: p.apiAccessEnabled ?? true,
+    commerceEnabled: p.commerceEnabled ?? false,
     sortOrder: p.sortOrder,
     createdAt: p.createdAt?.toISOString(),
     updatedAt: p.updatedAt?.toISOString(),
@@ -560,6 +561,7 @@ router.post("/admin/plans", async (req, res): Promise<void> => {
     isPopular: Boolean(b.isPopular ?? false),
     isActive: Boolean(b.isActive ?? true),
     aiCsBotEnabled: Boolean(b.aiCsBotEnabled ?? false),
+    commerceEnabled: Boolean(b.commerceEnabled ?? false),
     bulkMessagingEnabled: b.bulkMessagingEnabled !== undefined ? Boolean(b.bulkMessagingEnabled) : true,
     webhookEnabled: Boolean(b.webhookEnabled ?? false),
     liveChatEnabled: Boolean(b.liveChatEnabled ?? false),
@@ -596,6 +598,7 @@ router.put("/admin/plans/:id", async (req, res): Promise<void> => {
   if (b.isPopular !== undefined) updates.isPopular = Boolean(b.isPopular);
   if (b.isActive !== undefined) updates.isActive = Boolean(b.isActive);
   if (b.aiCsBotEnabled !== undefined) updates.aiCsBotEnabled = Boolean(b.aiCsBotEnabled);
+  if (b.commerceEnabled !== undefined) updates.commerceEnabled = Boolean(b.commerceEnabled);
   if (b.bulkMessagingEnabled !== undefined) updates.bulkMessagingEnabled = Boolean(b.bulkMessagingEnabled);
   if (b.webhookEnabled !== undefined) updates.webhookEnabled = Boolean(b.webhookEnabled);
   if (b.liveChatEnabled !== undefined) updates.liveChatEnabled = Boolean(b.liveChatEnabled);

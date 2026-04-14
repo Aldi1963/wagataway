@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Pencil, Trash2, Check, Star, PackageCheck, ToggleLeft, ToggleRight,
-  Loader2, AlertTriangle, Infinity, Package, Sparkles,
+  Loader2, AlertTriangle, Infinity, Package, Sparkles, ShoppingBag,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ interface Plan {
   webhookEnabled: boolean;
   liveChatEnabled: boolean;
   apiAccessEnabled: boolean;
+  commerceEnabled: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -86,6 +87,7 @@ const emptyForm = {
   webhookEnabled: false,
   liveChatEnabled: false,
   apiAccessEnabled: true,
+  commerceEnabled: false,
   sortOrder: 0,
 };
 
@@ -157,6 +159,7 @@ export default function AdminPackages() {
       webhookEnabled: plan.webhookEnabled ?? false,
       liveChatEnabled: plan.liveChatEnabled ?? false,
       apiAccessEnabled: plan.apiAccessEnabled ?? true,
+      commerceEnabled: plan.commerceEnabled ?? false,
       sortOrder: plan.sortOrder,
     });
     setSlugManual(true);
@@ -327,6 +330,7 @@ export default function AdminPackages() {
                     {plan.bulkMessagingEnabled && <span className="text-[10px] bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 rounded px-1.5 py-0.5">Blast</span>}
                     {plan.webhookEnabled && <span className="text-[10px] bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded px-1.5 py-0.5">Webhook</span>}
                     {plan.liveChatEnabled && <span className="text-[10px] bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded px-1.5 py-0.5">Live Chat</span>}
+                    {plan.commerceEnabled && <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 rounded px-1.5 py-0.5">Commerce</span>}
                   </div>
                 </div>
                 {/* Features */}
@@ -567,6 +571,17 @@ export default function AdminPackages() {
               <div className="flex items-center gap-3">
                 <Switch checked={form.liveChatEnabled} onCheckedChange={(v) => setField("liveChatEnabled", v)} id="liveChat" />
                 <Label htmlFor="liveChat" className="cursor-pointer">Live Chat</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={form.commerceEnabled} onCheckedChange={(v) => setField("commerceEnabled", v)} id="commerceCenter" />
+                <div>
+                  <Label htmlFor="commerceCenter" className="cursor-pointer flex items-center gap-1.5 font-bold text-emerald-600">
+                    <ShoppingBag className="h-3.5 w-3.5" /> Commerce Center
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                    Akses RajaOngkir, Katalog AI, dan Orders management
+                  </p>
+                </div>
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
-import { db, settingsTable, plansTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, settingsTable, plansTable, usersTable, botProductsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 // ── Platform config helpers ───────────────────────────────────────────────────
 
@@ -108,6 +108,8 @@ export interface AiBotContext {
   // Provider override per-bot
   provider?: AiProvider;
   providerApiKey?: string;
+  deviceId?: number;
+  catalog?: string;
 }
 
 // ── Build system prompt ───────────────────────────────────────────────────────
@@ -128,8 +130,12 @@ function buildSystemPrompt(ctx: AiBotContext): string {
     ? `\n\nKonten website bisnis (gunakan sebagai referensi untuk menjawab pertanyaan):\n${ctx.websiteContent.slice(0, 3000)}`
     : "";
 
+  const catalogBlock = ctx.catalog
+    ? `\n\nKatalog Produk Aktif (gunakan untuk merekomendasikan produk atau menjawab ketersediaan):\n${ctx.catalog}`
+    : "";
+
   return (
-    `${ctx.systemPrompt}${businessBlock}${websiteBlock}${faqBlock}\n\n` +
+    `${ctx.systemPrompt}${businessBlock}${websiteBlock}${faqBlock}${catalogBlock}\n\n` +
     `Nama bot kamu: ${ctx.botName}. ` +
     `Jawab dalam 1-3 kalimat singkat. ` +
     `Jika tidak tahu jawabannya, sarankan pelanggan untuk menghubungi agen manusia.`
@@ -187,6 +193,18 @@ export async function generateAiReply(
   userId?: number,
 ): Promise<string | null> {
   const provider: AiProvider = ctx.provider ?? "platform";
+
+  // Build catalog context if deviceId is provided
+  if (ctx.deviceId) {
+    const products = await db.select({ name: botProductsTable.name, price: botProductsTable.price, code: botProductsTable.code, stock: botProductsTable.stock })
+      .from(botProductsTable)
+      .where(and(eq(botProductsTable.userId, userId!), eq(botProductsTable.deviceId, ctx.deviceId), eq(botProductsTable.isActive, true)));
+    
+    if (products.length > 0) {
+      ctx.catalog = products.map(p => `- ${p.name} [Kode: ${p.code}] - Harga: Rp${Number(p.price).toLocaleString('id-ID')} (Stok: ${p.stock ?? 'Tersedia'})`).join('\n');
+    }
+  }
+
   const systemPrompt = buildSystemPrompt(ctx);
   const maxTokens = ctx.maxTokens;
 

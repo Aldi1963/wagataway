@@ -1,5 +1,6 @@
-import { db, botProductsTable, botOrdersTable, botOrderSessionsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, botProductsTable, botOrdersTable, botOrderSessionsTable, botCategoriesTable, botPaymentMethodsTable, botOwnerSettingsTable, plansTable, subscriptionsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
+import { RajaOngkirService } from "./rajaongkir";
 
 // Format currency IDR
 function formatRp(amount: string | number): string {
@@ -13,12 +14,35 @@ async function buildCatalog(userId: number, deviceId: number): Promise<string> {
   );
   if (!products.length) return "Belum ada produk yang tersedia.";
 
-  const lines = products.map((p, i) => {
-    const stock = p.stock !== null ? (Number(p.stock) > 0 ? `(stok: ${p.stock})` : `❌ habis`) : "";
-    return `*${i + 1}. ${p.name}* [${p.code}]\n   ${p.description || "Tanpa deskripsi"}\n   💰 ${formatRp(p.price)} ${stock}`;
+  const categories = await db.select().from(botCategoriesTable).where(
+    and(eq(botCategoriesTable.userId, userId), eq(botCategoriesTable.deviceId, deviceId))
+  );
+
+  const catMap = new Map(categories.map(c => [c.id, c.name]));
+
+  // Group products by category
+  const grouped: Record<string, typeof products> = { "Lainnya": [] };
+  products.forEach(p => {
+    const catName = p.categoryId ? (catMap.get(p.categoryId) ?? "Lainnya") : "Lainnya";
+    if (!grouped[catName]) grouped[catName] = [];
+    grouped[catName]!.push(p);
   });
 
-  return `📦 *Katalog Produk*\n\n${lines.join("\n\n")}\n\n_Ketik kode produk atau nomor urut untuk memesan_`;
+  let catalogText = `✨ *OFFICIAL CATALOG* ✨\n`;
+  catalogText += `───────────────────\n\n`;
+  let globalIndex = 1;
+
+  for (const [catName, prodList] of Object.entries(grouped)) {
+    if (prodList.length === 0) continue;
+    catalogText += `🔱 *${catName.toUpperCase()}*\n`;
+    prodList.forEach(p => {
+       const stock = p.stock !== null ? (Number(p.stock) > 0 ? `(Stok: ${p.stock})` : ` *HABIS*`) : "";
+       catalogText += `${globalIndex++}. *${p.name}* [${p.code}]\n   💰 ${formatRp(p.price)} ${stock}\n\n`;
+    });
+  }
+
+  catalogText += `───────────────────\n`;
+  return catalogText + `💡 _Ketik Nama, Kode, atau Nomor untuk memesan._`;
 }
 
 // Get or create order session
@@ -71,8 +95,6 @@ export async function handleOrderFlow(
   const lower = msg.trim().toLowerCase();
   const trimmed = msg.trim();
 
-  // Trigger keywords — intentionally specific to avoid capturing common conversation words
-  // "pesan" alone is NOT a trigger (it means "message" too), use "mau pesan", "mau order", "mau beli"
   const catalogTriggers = [
     "katalog", "lihat produk", "daftar produk", "menu produk",
     "mau pesan", "mau beli", "mau order", "ingin pesan", "ingin beli", "ingin order",
@@ -80,40 +102,66 @@ export async function handleOrderFlow(
     "order sekarang", "beli sekarang",
   ];
   const cancelTriggers = ["batal", "cancel", "keluar"];
+  const trackTriggers = ["cek pesanan", "status pesanan", "cek order", "lacak pesanan"];
 
   const session = await getSession(userId, deviceId, phone);
 
-  // ── Session timeout: clear sessions older than 60 minutes ────────────────
   if (session && session.step !== "idle") {
     const updatedAt = new Date(session.updatedAt).getTime();
-    const now = Date.now();
-    const diffMinutes = (now - updatedAt) / 1000 / 60;
-    if (diffMinutes > 60) {
+    if ((Date.now() - updatedAt) / 1000 / 60 > 60) {
       await clearSession(userId, deviceId, phone);
-      // Don't return — treat as fresh idle session
     }
   }
 
   const freshSession = await getSession(userId, deviceId, phone);
   const step = freshSession?.step ?? "idle";
 
-  // Cancel at any step
   if (cancelTriggers.some((t) => lower.includes(t)) && step !== "idle") {
     await clearSession(userId, deviceId, phone);
     return "❌ Pemesanan dibatalkan. Ketik *katalog* untuk melihat produk kembali.";
   }
 
-  // ── IDLE — check if this is a catalog/order trigger ──────────────────────
+  // --- ORDER TRACKING ---
+  if (trackTriggers.some(t => lower.startsWith(t)) || (step === "idle" && lower.startsWith("status"))) {
+     const parts = lower.split(' ');
+     const orderId = parts.length > 1 ? parts[parts.length - 1].replace('#', '') : null;
+     
+     if (orderId && /^\d+$/.test(orderId)) {
+        const [order] = await db.select().from(botOrdersTable).where(and(eq(botOrdersTable.id, parseInt(orderId, 10)), eq(botOrdersTable.userId, userId)));
+        if (!order) return `Maaf, pesanan dengan ID #${orderId} tidak ditemukan.`;
+        
+        const statusMap:any = { pending: "⏱️ Menunggu", confirmed: "✅ Dikonfirmasi", processing: "⚙️ Diproses", shipped: "🚚 Dikirim", done: "🏁 Selesai", cancelled: "❌ Dibatalkan" };
+        return (
+          `📋 *STATUS PESANAN #${order.id}*\n` +
+          `───────────────────\n\n` +
+          `🛍️ *Produk*: ${order.productName}\n` +
+          `📦 *Status*: ${statusMap[order.status] || order.status}\n` +
+          `💳 *Pembayaran*: ${order.paymentStatus === 'paid' ? '✅ Lunas' : '⚠️ Belum Bayar'}\n` +
+          `📍 *Alamat*: ${order.customerAddress}\n\n` +
+          `───────────────────\n` +
+          `_Terima kasih telah mempercayai kami!_`
+        );
+     }
+     return "Untuk cek pesanan, ketik: *cek pesanan [ID_ORDER]*\nContoh: _cek pesanan 123_";
+  }
+
   if (step === "idle") {
     if (catalogTriggers.some((t) => lower.includes(t))) {
+      // ── FEATURE GATING CHECK ──────────────────────────────────────────────
+      const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, sub?.planId || "free"));
+      
+      if (!plan || !plan.commerceEnabled) {
+         return "⚠️ *Fitur Commerce Premium*\n\nMaaf, sistem pemesanan otomatis dan cek ongkir hanya tersedia untuk pengguna *Enterprise*.\n\nSilakan upgrade paket Anda di dashboard billing untuk mengaktifkan fitur ini! 🚀";
+      }
+
       await upsertSession(userId, deviceId, phone, { step: "pick_product" });
       const catalog = await buildCatalog(userId, deviceId);
       return catalog + "\n\n_Ketik *batal* kapan saja untuk membatalkan._";
     }
-    return null; // not an order message
+    return null;
   }
 
-  // ── PICK PRODUCT ──────────────────────────────────────────────────────────
   if (step === "pick_product") {
     const products = await db.select().from(botProductsTable).where(
       and(eq(botProductsTable.userId, userId), eq(botProductsTable.deviceId, deviceId), eq(botProductsTable.isActive, true))
@@ -124,19 +172,13 @@ export async function handleOrderFlow(
     }
 
     let chosen = null;
-
-    // Match by number
     if (/^\d+$/.test(trimmed)) {
       const idx = parseInt(trimmed, 10) - 1;
       if (idx >= 0 && idx < products.length) chosen = products[idx];
     }
-
-    // Match by code
     if (!chosen) {
-      chosen = products.find((p) => p.code.toLowerCase() === trimmed.toUpperCase());
+      chosen = products.find((p) => p.code.toLowerCase() === trimmed.toLowerCase());
     }
-
-    // Match by partial name
     if (!chosen) {
       chosen = products.find((p) => p.name.toLowerCase().includes(lower));
     }
@@ -149,108 +191,219 @@ export async function handleOrderFlow(
       return `Maaf, *${chosen.name}* sedang habis stok. Pilih produk lain.`;
     }
 
+    const nextStep = chosen.variants ? "pick_variant" : "pick_qty";
+    const variantsList = chosen.variants ? JSON.parse(chosen.variants) : [];
+    
     await upsertSession(userId, deviceId, phone, {
-      step: "pick_qty",
+      step: nextStep,
       productId: chosen.id,
       productName: chosen.name,
       productPrice: chosen.price,
+      variantOptions: chosen.variants, 
     });
+
+    if (nextStep === "pick_variant") {
+       const v = variantsList[0];
+       return `✅ Produk: *${chosen.name}*\n\nSilakan pilih *${v.name}*:\n` + v.options.split(',').map((o:string, i:number) => `${i+1}. ${o.trim()}`).join('\n');
+    }
 
     return `✅ Produk: *${chosen.name}*\n💰 Harga: ${formatRp(chosen.price)}\n\nBerapa *jumlah* yang ingin dipesan?`;
   }
 
-  // ── PICK QTY ──────────────────────────────────────────────────────────────
+  if (step === "pick_variant") {
+     const variants = JSON.parse(freshSession?.variantOptions ?? '[]');
+     const v = variants[0];
+     const options = v.options.split(',').map((o:string) => o.trim());
+     let picked = null;
+
+     if (/^\d+$/.test(trimmed)) {
+        const idx = parseInt(trimmed, 10) - 1;
+        if (idx >= 0 && idx < options.length) picked = options[idx];
+     } else {
+        picked = options.find((o:string) => o.toLowerCase() === lower);
+     }
+
+     if (!picked) {
+        return `Pilihan tidak valid. Silakan pilih *${v.name}*:\n` + options.map((o:string, i:number) => `${i+1}. ${o}`).join('\n');
+     }
+
+     await upsertSession(userId, deviceId, phone, { step: "pick_qty", variantOptions: picked });
+     return `Sip! *${picked}* terpilih.\n\nBerapa *jumlah* yang ingin dipesan?`;
+  }
+
   if (step === "pick_qty") {
     const qty = parseInt(trimmed, 10);
-    if (isNaN(qty) || qty <= 0) {
-      return "Masukkan jumlah yang valid (angka lebih dari 0).";
-    }
+    if (isNaN(qty) || qty <= 0) return "Masukkan jumlah yang valid (angka).";
 
-    // Check stock
     if (freshSession?.productId) {
       const [product] = await db.select().from(botProductsTable).where(eq(botProductsTable.id, freshSession.productId));
       if (product?.stock !== null && qty > Number(product?.stock)) {
-        return `Stok tidak cukup. Tersisa *${product?.stock}* unit. Masukkan jumlah yang lebih kecil.`;
+        return `Stok tidak cukup. Tersisa *${product?.stock}* unit.`;
       }
     }
 
     await upsertSession(userId, deviceId, phone, { step: "ask_name", qty });
     const total = formatRp(Number(freshSession?.productPrice ?? 0) * qty);
-    return `📦 *${freshSession?.productName}* × ${qty} = *${total}*\n\nSilakan masukkan *nama lengkap* Anda:`;
+    return `📦 *${freshSession?.productName}*${freshSession?.variantOptions ? ` (${freshSession.variantOptions})` : ''} × ${qty} = *${total}*\n\nMasukkan *nama lengkap* Anda:`;
   }
 
-  // ── ASK NAME ──────────────────────────────────────────────────────────────
   if (step === "ask_name") {
-    if (trimmed.length < 2) return "Nama terlalu pendek. Masukkan nama lengkap Anda.";
+    if (trimmed.length < 2) return "Masukkan nama lengkap Anda.";
     await upsertSession(userId, deviceId, phone, { step: "ask_address", customerName: trimmed });
-    return `Halo *${trimmed}*! 👋\n\nSekarang masukkan *alamat pengiriman* Anda:`;
+    return `Halo *${trimmed}*! Masukkan *alamat pengiriman* lengkap:`;
   }
 
-  // ── ASK ADDRESS ──────────────────────────────────────────────────────────
   if (step === "ask_address") {
-    if (trimmed.length < 5) return "Alamat terlalu pendek. Masukkan alamat lengkap.";
-    await upsertSession(userId, deviceId, phone, { step: "confirm", customerAddress: trimmed });
+    if (trimmed.length < 5) return "Masukkan alamat lengkap.";
+    
+    const [settings] = await db.select().from(botOwnerSettingsTable).where(and(eq(botOwnerSettingsTable.userId, userId), eq(botOwnerSettingsTable.deviceId, deviceId)));
+    
+    if (settings?.shippingCalcType === 'rajaongkir' && settings.rajaongkirApiKey) {
+      await upsertSession(userId, deviceId, phone, { step: "pick_city", customerAddress: trimmed });
+      return `Bisa info di *kota/kabupaten* mana Anda berada? agar saya bisa hitung ongkir otomatis.`;
+    }
+
+    const shippingFee = Number(settings?.defaultShippingFee ?? 0);
+    await upsertSession(userId, deviceId, phone, { step: "confirm", customerAddress: trimmed, shippingFee });
 
     const s = await getSession(userId, deviceId, phone);
-    const total = formatRp(Number(s?.productPrice ?? 0) * (s?.qty ?? 1));
+    const subtotal = Number(s?.productPrice ?? 0) * (s?.qty ?? 1);
+    const total = subtotal + shippingFee;
 
     return (
-      `📋 *Konfirmasi Pesanan*\n\n` +
-      `🛍️ Produk: ${s?.productName}\n` +
-      `📦 Jumlah: ${s?.qty}\n` +
-      `💰 Total: *${total}*\n` +
+      `📋 *KONFIRMASI PESANAN*\n\n` +
+      `🛍️ Produk: ${s?.productName}${s?.variantOptions ? ` (${s.variantOptions})` : ''}\n` +
+      `📦 Qty: ${s?.qty}\n` +
+      `💰 Subtotal: ${formatRp(subtotal)}\n` +
+      `🚚 Ongkir: ${formatRp(shippingFee)}\n` +
+      `✨ *Total Bayar: ${formatRp(total)}*\n\n` +
       `👤 Nama: ${s?.customerName}\n` +
       `📍 Alamat: ${trimmed}\n\n` +
-      `Balas *YA* untuk konfirmasi atau *BATAL* untuk membatalkan.`
+      `Balas *YA* untuk konfirmasi.`
     );
   }
 
-  // ── CONFIRM ───────────────────────────────────────────────────────────────
-  if (step === "confirm") {
-    if (!["ya", "yes", "ok", "oke", "konfirmasi", "setuju", "lanjut"].includes(lower)) {
-      return `Balas *YA* untuk konfirmasi pesanan, atau *BATAL* untuk membatalkan.`;
+  if (step === "pick_city") {
+    const [settings] = await db.select().from(botOwnerSettingsTable).where(and(eq(botOwnerSettingsTable.userId, userId), eq(botOwnerSettingsTable.deviceId, deviceId)));
+    if (!settings?.rajaongkirApiKey) return "Maaf, terjadi kesalahan konfigurasi ongkir.";
+
+    const service = new RajaOngkirService(settings.rajaongkirApiKey, (settings.rajaongkirAccountType as any) ?? "starter");
+    const cities = await service.getCities();
+    
+    // Simple filter
+    const matches = cities.filter(c => c.city_name.toLowerCase().includes(lower) || lower.includes(c.city_name.toLowerCase()));
+
+    if (matches.length === 0) return `Kota *${trimmed}* tidak ditemukan. Bisa tulis nama kotanya saja? (contoh: Jakarta Selatan)`;
+    
+    if (matches.length > 5) return `Ditemukan terlalu banyak kota (${matches.length}). Bisa lebih spesifik?`;
+
+    if (matches.length > 1 && !/^\d+$/.test(trimmed)) {
+       return `Ditemukan beberapa kecocokan. Pilih nomornya:\n` + matches.map((m, i) => `${i+1}. ${m.type} ${m.city_name} (${m.province})`).join('\n');
     }
+
+    let selected = matches[0];
+    if (/^\d+$/.test(trimmed)) {
+       const idx = parseInt(trimmed, 10) - 1;
+       if (idx >= 0 && idx < matches.length) selected = matches[idx];
+    }
+
+    // Now calculate cost
+    const costs = await service.calculateCost(settings.rajaongkirOriginId!, selected.city_id, 1000, 'jne');
+    if (!costs.length) return "Maaf, tidak ada layanan pengiriman tersedia untuk kota ini.";
+
+    const option = costs[0].cost[0]; // Take first service
+    const shippingFee = option.value;
+
+    await upsertSession(userId, deviceId, phone, { 
+      step: "confirm", 
+      cityId: selected.city_id, 
+      shippingFee,
+      shippingCourier: 'JNE',
+      shippingService: costs[0].service
+    });
+
+    const s = await getSession(userId, deviceId, phone);
+    const subtotal = Number(s?.productPrice ?? 0) * (s?.qty ?? 1);
+    const total = subtotal + shippingFee;
+
+    return (
+      `📋 *KONFIRMASI PESANAN*\n\n` +
+      `🛍️ Produk: ${s?.productName}${s?.variantOptions ? ` (${s.variantOptions})` : ''}\n` +
+      `📦 Qty: ${s?.qty}\n` +
+      `💰 Subtotal: ${formatRp(subtotal)}\n` +
+      `🚚 Ongkir (JNE): ${formatRp(shippingFee)}\n` +
+      `✨ *Total Bayar: ${formatRp(total)}*\n\n` +
+      `👤 Nama: ${s?.customerName}\n` +
+      `📍 Alamat: ${s?.customerAddress}\n` +
+      `🏙️ Kota: ${selected.type} ${selected.city_name}\n\n` +
+      `Balas *YA* untuk konfirmasi.`
+    );
+  }
+
+  if (step === "confirm") {
+    if (!["ya", "yes", "ok", "oke", "siap"].includes(lower)) return `Balas *YA* untuk konfirmasi pesanan.`;
 
     const s = await getSession(userId, deviceId, phone);
     if (!s || !s.productId) {
       await clearSession(userId, deviceId, phone);
-      return "Sesi pesanan tidak ditemukan. Silakan mulai ulang dengan ketik *katalog*.";
+      return "Sesi hilang. Ketik *katalog* untuk mulai baru.";
     }
 
     const qty = s.qty ?? 1;
-    const total = Number(s.productPrice ?? 0) * qty;
+    const shippingFee = Number(s.shippingFee ?? 0);
+    const total = (Number(s.productPrice ?? 0) * qty) + shippingFee;
 
-    // Save order
     const [order] = await db.insert(botOrdersTable).values({
-      userId,
-      deviceId,
-      productId: s.productId,
-      productName: s.productName ?? "",
-      productPrice: String(s.productPrice ?? 0),
-      qty,
-      totalPrice: String(total),
-      customerPhone: phone,
-      customerName: s.customerName ?? "",
-      customerAddress: s.customerAddress ?? "",
-      status: "pending",
+      userId, deviceId, productId: s.productId, productName: s.productName ?? "",
+      productPrice: String(s.productPrice ?? 0), qty, totalPrice: String(total),
+      shippingFee: String(shippingFee),
+      variantOptions: s.variantOptions, customerPhone: phone,
+      customerName: s.customerName ?? "", customerAddress: s.customerAddress ?? "",
+      status: "pending", paymentStatus: "unpaid"
     }).returning();
 
-    // Reduce stock if set
     const [product] = await db.select().from(botProductsTable).where(eq(botProductsTable.id, s.productId));
     if (product?.stock !== null) {
-      await db.update(botProductsTable)
-        .set({ stock: Math.max(0, Number(product.stock) - qty) })
-        .where(eq(botProductsTable.id, s.productId));
+      await db.update(botProductsTable).set({ stock: Math.max(0, Number(product.stock) - qty) }).where(eq(botProductsTable.id, s.productId));
     }
 
-    await clearSession(userId, deviceId, phone);
+    // --- Owner Settings check ---
+    const [settings] = await db.select().from(botOwnerSettingsTable).where(and(eq(botOwnerSettingsTable.userId, userId), eq(botOwnerSettingsTable.deviceId, deviceId)));
+    
+    // Alert Owner conceptual (logs)
+    if (product?.stock !== null && (Number(product.stock) - qty) <= (product.minStock ?? 0) && settings?.stockAlertEnabled) {
+      console.log(`[ALERT] Stock Low/Empty for ${product.name}. Owner: ${settings.ownerPhone}`);
+    }
+
+    // --- Payment Instructions ---
+    let paymentNote = "";
+    if (settings?.paymentInstructionEnabled) {
+      const pm = await db.select().from(botPaymentMethodsTable).where(and(eq(botPaymentMethodsTable.userId, userId), eq(botPaymentMethodsTable.deviceId, deviceId), eq(botPaymentMethodsTable.isActive, true)));
+      if (pm.length > 0) {
+        paymentNote = "\n\n💳 *INSTRUKSI PEMBAYARAN:*\n" + pm.map(p => `- *${p.provider}* (${p.accountName})\n  ${p.accountNumber}${p.instructions ? `\n  _${p.instructions}_` : ''}`).join('\n\n');
+      }
+    }
+
+    await upsertSession(userId, deviceId, phone, { step: "await_proof", orderId: order.id });
 
     return (
-      `✅ *Pesanan #${order.id} Berhasil Dibuat!*\n\n` +
+      `✅ *PESANAN #${order.id} BERHASIL!*\n\n` +
       `🛍️ ${order.productName} × ${qty}\n` +
-      `💰 Total: *${formatRp(total)}*\n\n` +
-      `Tim kami akan segera menghubungi Anda untuk konfirmasi pembayaran dan pengiriman. Terima kasih! 🙏`
+      `💰 Total: *${formatRp(total)}*${paymentNote}\n\n` +
+      `Silakan upload/kirim *FOTO BUKTI TRANSFER* di sini untuk mempercepat verifikasi. 🙏`
     );
+  }
+
+  if (step === "await_proof") {
+     if (lower.includes("http") || lower.includes("image_reception_placeholder")) {
+        const orderId = freshSession?.orderId;
+        if (orderId) {
+          await db.update(botOrdersTable).set({ proofImageUrl: trimmed }).where(eq(botOrdersTable.id, orderId));
+          await clearSession(userId, deviceId, phone);
+          return "✅ Bukti transfer telah diterima! Kami akan segera memverifikasi pesanan Anda. Terima kasih! 🙏";
+        }
+     }
+     return "Menunggu bukti transfer... Silakan kirimkan foto bukti pembayaran Anda.";
   }
 
   return null;

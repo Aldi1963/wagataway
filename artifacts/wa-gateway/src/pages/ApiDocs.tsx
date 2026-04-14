@@ -396,6 +396,110 @@ const endpoints: ApiEndpoint[] = [
     },
   },
   {
+    id: "check-numbers",
+    title: "Batch Check Number",
+    methods: ["POST"],
+    endpoint: "/check-numbers",
+    description: "Memeriksa banyak nomor sekaligus apakah terdaftar di WhatsApp.",
+    params: [
+      { name: "api_key", type: "string", required: true, description: "API Key akun Anda" },
+      { name: "sender", type: "string", required: true, description: "Nomor perangkat pengirim" },
+      { name: "phones", type: "array", required: true, description: "Daftar nomor yang ingin dicek, contoh: ['628xx', '628xx']" },
+    ],
+    jsonExample: {
+      api_key: "1234567890",
+      sender: "62888xxxx",
+      phones: ["628123456789", "628998765432"],
+    },
+    responseExample: {
+      status: true,
+      data: [
+        { number: "628123456789", exists: true, jid: "628123456789@s.whatsapp.net" },
+        { number: "628998765432", exists: false },
+      ],
+      total: 2,
+    },
+  },
+  {
+    id: "list-groups",
+    title: "List Groups",
+    methods: ["GET"],
+    endpoint: "/groups",
+    description: "Mengambil daftar semua grup yang diikuti oleh perangkat pengirim.",
+    params: [
+      { name: "api_key", type: "string", required: true, description: "API Key akun Anda" },
+      { name: "sender", type: "string", required: true, description: "Nomor perangkat pengirim" },
+    ],
+    urlExample: `/groups?api_key=1234567890&sender=62888xxxx`,
+    responseExample: {
+      status: true,
+      data: [
+        { id: "120363023849501234@g.us", subject: "Grup Alumni" },
+        { id: "120363023849505678@g.us", subject: "Keluarga Besar" },
+      ],
+      total: 2,
+    },
+  },
+  {
+    id: "send-group",
+    title: "Send to Group",
+    methods: ["POST"],
+    endpoint: "/send-group",
+    description: "Mengirim pesan teks ke grup WhatsApp berdasarkan Group ID.",
+    params: [
+      { name: "api_key", type: "string", required: true, description: "API Key akun Anda" },
+      { name: "sender", type: "string", required: true, description: "Nomor perangkat pengirim" },
+      { name: "groupId", type: "string", required: true, description: "ID grup tujuan (contoh: 12345@g.us)" },
+      { name: "message", type: "string", required: true, description: "Isi pesan" },
+    ],
+    jsonExample: {
+      api_key: "1234567890",
+      sender: "62888xxxx",
+      groupId: "120363023849501234@g.us",
+      message: "Halo semuanya!",
+    },
+    responseExample: { status: true, message: "Success", data: { id: "123", groupId: "120363023849501234@g.us", status: "sent" } },
+  },
+  {
+    id: "commerce-products",
+    title: "Bot Products",
+    methods: ["GET"],
+    endpoint: "/commerce/products",
+    description: "Mengambil daftar produk katalog bot yang terdaftar pada perangkat.",
+    params: [
+      { name: "api_key", type: "string", required: true, description: "API Key akun Anda" },
+      { name: "sender", type: "string", required: true, description: "Nomor perangkat pengirim" },
+    ],
+    urlExample: `/commerce/products?api_key=1234567890&sender=62888xxxx`,
+    responseExample: {
+      status: true,
+      data: [
+        { id: 1, name: "Kopi Gula Aren", price: 15000, stock: 50 },
+      ],
+      total: 1,
+    },
+    notes: ["Fitur ini hanya tersedia pada paket Enterprise."],
+  },
+  {
+    id: "commerce-categories",
+    title: "Bot Categories",
+    methods: ["GET"],
+    endpoint: "/commerce/categories",
+    description: "Mengambil daftar kategori produk bot.",
+    params: [
+      { name: "api_key", type: "string", required: true, description: "API Key akun Anda" },
+      { name: "sender", type: "string", required: true, description: "Nomor perangkat pengirim" },
+    ],
+    urlExample: `/commerce/categories?api_key=1234567890&sender=62888xxxx`,
+    responseExample: {
+      status: true,
+      data: [
+        { id: 1, name: "Minuman Dingin" },
+      ],
+      total: 1,
+    },
+  },
+  {
     id: "example-webhook",
     title: "Example Webhook",
     methods: ["POST"],

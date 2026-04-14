@@ -72,6 +72,7 @@ export async function getPlansFromDb() {
     webhookEnabled: p.webhookEnabled ?? false,
     liveChatEnabled: p.liveChatEnabled ?? false,
     apiAccessEnabled: p.apiAccessEnabled ?? true,
+    commerceEnabled: p.commerceEnabled ?? false,
   }));
 }
 
@@ -147,8 +148,7 @@ router.get("/billing/usage", async (req, res): Promise<void> => {
   }
 
   res.json({
-    planId: plan.planId,
-    planName: plan.planName,
+    ...plan,
     usage: {
       devices: usageStat(devices, plan.limitDevices),
       messagesPerDay: usageStat(msgToday, plan.limitMessagesPerDay),

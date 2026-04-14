@@ -11,6 +11,12 @@ export interface PlanLimits {
   limitBulkRecipients: number;
   limitScheduledMessages: number;
   limitAutoReplies: number;
+  aiCsBotEnabled: boolean;
+  bulkMessagingEnabled: boolean;
+  webhookEnabled: boolean;
+  liveChatEnabled: boolean;
+  apiAccessEnabled: boolean;
+  commerceEnabled: boolean;
 }
 
 export async function getUserPlan(userId: number): Promise<PlanLimits> {
@@ -27,6 +33,12 @@ export async function getUserPlan(userId: number): Promise<PlanLimits> {
     limitBulkRecipients: plan?.limitBulkRecipients ?? 100,
     limitScheduledMessages: plan?.limitScheduledMessages ?? 10,
     limitAutoReplies: plan?.limitAutoReplies ?? 5,
+    aiCsBotEnabled: plan?.aiCsBotEnabled ?? false,
+    bulkMessagingEnabled: plan?.bulkMessagingEnabled ?? true,
+    webhookEnabled: plan?.webhookEnabled ?? false,
+    liveChatEnabled: plan?.liveChatEnabled ?? false,
+    apiAccessEnabled: plan?.apiAccessEnabled ?? true,
+    commerceEnabled: plan?.commerceEnabled ?? false,
   };
 }
 

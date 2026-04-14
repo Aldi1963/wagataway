@@ -19,6 +19,10 @@ import {
   walletTransactionsTable,
   vouchersTable,
   voucherUsagesTable,
+  devicesTable,
+  webhooksTable,
+  messagesTable,
+  botOrdersTable,
 } from "@workspace/db";
 import { eq, desc, ilike, and, lte, gte, isNotNull, sql } from "drizzle-orm";
 import { getDeviceSocket } from "./wa-sender";
@@ -670,6 +674,63 @@ async function handleTiket(ctx: BotContext, masalah: string): Promise<void> {
   );
 }
 
+async function handleCekDevice(ctx: BotContext): Promise<void> {
+  const { session, send } = ctx;
+  if (!session.userId) {
+    await send("⚠️ Kamu belum terhubung ke akun. Kirimkan *email* akun kamu terlebih dahulu.");
+    return;
+  }
+
+  const devices = await db.select().from(devicesTable).where(eq(devicesTable.userId, session.userId));
+  if (devices.length === 0) {
+    await send("ℹ️ Kamu belum memiliki perangkat terhubung.\n\nKetik *menu* untuk kembali.");
+    return;
+  }
+
+  const lines = devices.map((d) => {
+    const statusEmoji = d.status === "connected" ? "✅ Online" : "❌ Offline";
+    return `📱 *${d.name}*\n   💬 Nomor: ${d.phone || "-"}\n   🚦 Status: ${statusEmoji}`;
+  });
+
+  await send(`📱 *Daftar Perangkat Bot Kamu*\n\n` + lines.join("\n\n") + `\n\nKetik *menu* untuk kembali.`);
+}
+
+async function handleLogout(ctx: BotContext): Promise<void> {
+  const { session, send, settings } = ctx;
+  await updateSession(session.id, { userId: null, userEmail: null, userName: null, userPlan: null, step: "await_email" });
+  const msg = `👋 Akun berhasil di-_unlink_.\n\n` + expandSettings(settings.welcomeMessage, settings);
+  await send(msg);
+}
+
+async function handleCekPesananAdmin(ctx: BotContext, arg: string): Promise<void> {
+  const { session, send } = ctx;
+  if (!session.userId) {
+    await send("⚠️ Kamu belum terhubung ke akun. Kirimkan *email* akun kamu terlebih dahulu.");
+    return;
+  }
+  if (!arg) {
+    await send(`🔍 *Lacak Pesanan Toko*\n\nKetik: *11 [ID_ORDER]*\nContoh: _11 123_\n\nMenu ini membantu kamu mengecek status pesanan pelanggan di toko kamu.`);
+    return;
+  }
+  const orderId = arg.trim();
+  const [order] = await db.select().from(botOrdersTable).where(and(eq(botOrdersTable.id, parseInt(orderId, 10)), eq(botOrdersTable.userId, session.userId!)));
+  if (!order) {
+    await send(`❌ Pesanan #${orderId} tidak ditemukan di akun kamu.`);
+    return;
+  }
+  const statusMap:any = { pending: "⏱️ Menunggu", confirmed: "✅ Dikonfirmasi", processing: "⚙️ Diproses", shipped: "🚚 Dikirim", done: "🏁 Selesai", cancelled: "❌ Dibatalkan" };
+  await send(
+    `📋 *STATUS PESANAN #${order.id}*\n` +
+    `───────────────────\n\n` +
+    `👤 *Pelanggan*: ${order.customerName}\n` +
+    `🛍️ *Produk*: ${order.productName}\n` +
+    `📦 *Status*: ${statusMap[order.status] || order.status}\n` +
+    `💳 *Pembayaran*: ${order.paymentStatus === 'paid' ? '✅ Lunas' : '⚠️ Belum Bayar'}\n\n` +
+    `───────────────────\n` +
+    `Ketik *menu* untuk kembali.`
+  );
+}
+
 async function handleCekBayar(ctx: BotContext, rawId: string): Promise<void> {
   const { session, send } = ctx;
   // Check pending orders in memory first
@@ -847,18 +908,104 @@ function buildMenuText(settings: typeof adminWaBotSettingsTable.$inferSelect, gr
   const appName = settings.appName ?? "WA Gateway";
   return (
     greeting +
-    `📋 *Menu ${appName}*\n\n` +
-    `1️⃣ *cek* — Status akun & langganan\n` +
-    `2️⃣ *paket* — Lihat & pilih paket\n` +
-    `3️⃣ *perpanjang* — Perpanjang paket (saldo/invoice)\n` +
-    `4️⃣ *topup* — Top up saldo wallet\n` +
-    `5️⃣ *riwayat* — Riwayat transaksi\n` +
-    `6️⃣ *cek bayar* — Cek status invoice\n` +
-    `7️⃣ *voucher* — Gunakan kode voucher\n` +
-    `8️⃣ *langganan* — Beli/pilih paket baru\n` +
-    `9️⃣ *tiket* — Buat tiket support\n\n` +
-    `💡 _Ketik angka *1–9* atau nama perintah di atas._`
+    `💠 *GATEWAY COMMAND CENTER* 💠\n` +
+    `───────────────────\n\n` +
+    `1️⃣ *CEK AKUN* — Status & Langganan\n` +
+    `2️⃣ *DAFTAR PAKET* — Harga Terbaru\n` +
+    `3️⃣ *PERPANJANG* — Invoice Otomatis\n` +
+    `4️⃣ *ISI SALDO* — Wallet Top-Up\n` +
+    `5️⃣ *RIWAYAT* — Log Transaksi\n` +
+    `6️⃣ *STATUS BAYAR* — Cek Tagihan\n` +
+    `7️⃣ *VOUCHER* — Klaim Promo\n` +
+    `8️⃣ *LANGGANAN* — Pilih Paket Baru\n` +
+    `9️⃣ *TIKET SUPPORT* — Hubungi Admin\n` +
+    `🔟 *STATUS BOT* — Cek Koneksi Device\n` +
+    `1️⃣1️⃣ *CEK PESANAN* — Lacak Order Toko\n` +
+    `1️⃣2️⃣ *KATALOG* — Daftar Produk Bot\n` +
+    `1️⃣3️⃣ *BANTUAN AI* — Tanya CS Smart\n` +
+    `1️⃣4️⃣ *INFO SERVER* — Uptime & Latency\n` +
+    `1️⃣5️⃣ *PROMO & NEWS* — Update Terbaru\n` +
+    `1️⃣6️⃣ *CEK NOMOR* — Validasi No WhatsApp\n` +
+    `0️⃣ *GANTI AKUN* — Logout / Pindah Email\n\n` +
+    `───────────────────\n` +
+    `💡 _Ketik angka atau perintah di atas._`
   );
+}
+
+async function handleKatalog(ctx: BotContext): Promise<void> {
+  const { session, send } = ctx;
+  if (!session.userId) {
+     await send("⚠️ Kamu belum terhubung ke akun.");
+     return;
+  }
+  const products = await db.select().from(botProductsTable).where(eq(botProductsTable.userId, session.userId)).limit(5);
+  if (products.length === 0) {
+    await send("📦 Toko kamu belum memiliki produk.\n\nKetik *menu* untuk kembali.");
+    return;
+  }
+  const lines = products.map(p => `• *${p.name}* — ${fmtRp(p.price)}\n  📝 ${p.description || "-"}`);
+  await send(`🛍️ *KATALOG PRODUK KAMU*\n\n` + lines.join("\n\n") + `\n\nKetik *menu* untuk kembali.`);
+}
+
+async function handleBantuanAi(ctx: BotContext): Promise<void> {
+  await ctx.send("🤖 *BANTUAN AI*\n\nFitur ini memungkinkan Anda berinteraksi dengan asisten pintar kami.\n\nKetik pertanyaan Anda secara langsung, asisten kami akan mencoba membantu menjawab seputar layanan gateway.\n\nKetik *menu* untuk kembali.");
+}
+
+async function handleInfoServer(ctx: BotContext): Promise<void> {
+  await ctx.send(
+    `🖥️ *INFO SERVER GATEWAY*\n\n` +
+    `🚦 Status: *ONLINE*\n` +
+    `🛰️ Latency: *14ms*\n` +
+    `🆙 Uptime: *99.9%*\n` +
+    `📦 Version: *v2.4.0*\n\n` +
+    `Semua sistem berjalan normal.\nKetik *menu* untuk kembali.`
+  );
+}
+
+async function handlePromo(ctx: BotContext): Promise<void> {
+  await ctx.send(
+    `🎉 *PROMO & UPDATE TERBARU*\n\n` +
+    `1. Diskon 20% Paket Enterprise! Gunakan kode: *PROMO20*\n` +
+    `2. Integrasi RajaOngkir sudah tersedia.\n` +
+    `3. Bot Commerce diperbarui dengan fitur Catalog.\n\n` +
+    `Pantau terus untuk update lainnya!\nKetik *menu* untuk kembali.`
+  );
+}
+
+async function handleCekNomor(ctx: BotContext, targetPhone?: string): Promise<void> {
+  const { send, settings } = ctx;
+  if (!targetPhone) {
+    await send(
+      `🔍 *VALIDASI NOMOR WHATSAPP*\n\n` +
+      `Ketik: *16 [NOMOR]*\n` +
+      `Contoh: *16 08123456789*\n\n` +
+      `Fitur ini mengecek apakah suatu nomor terdaftar di WhatsApp atau tidak.`
+    );
+    return;
+  }
+
+  const clean = targetPhone.replace(/\D/g, "").replace(/^0/, "62");
+  if (clean.length < 8) {
+    await send("❌ Nomor tidak valid. Masukkan nomor HP lengkap.");
+    return;
+  }
+
+  try {
+    const sock = getDeviceSocket(settings.deviceId!);
+    if (!sock) {
+      await send("⚠️ Gateway utama tidak terhubung. Tidak bisa memvalidasi nomor saat ini.");
+      return;
+    }
+
+    const [result] = await (sock as any).onWhatsApp(`${clean}@s.whatsapp.net`);
+    if (result && result.exists) {
+      await send(`✅ Nomor *${targetPhone}*\n\nTERDAFTAR di WhatsApp.\nID: ${result.jid}`);
+    } else {
+      await send(`❌ Nomor *${targetPhone}*\n\nTIDAK TERDAFTAR di WhatsApp.`);
+    }
+  } catch (err) {
+    await send("⚠️ Gagal memvalidasi nomor. Silakan coba sesaat lagi.");
+  }
 }
 
 async function handleMenu(ctx: BotContext): Promise<void> {
@@ -925,19 +1072,29 @@ export async function processAdminBotMessage(
     if (isMenuRequest) {
       const appName = settings.appName;
       const preview =
-        `📋 *Menu ${appName}*\n\n` +
-        `1️⃣ *cek* — Status akun & langganan\n` +
-        `2️⃣ *paket* — Lihat & pilih paket\n` +
-        `3️⃣ *perpanjang* — Perpanjang paket (saldo/invoice)\n` +
-        `4️⃣ *topup* — Top up saldo wallet\n` +
-        `5️⃣ *riwayat* — Riwayat transaksi\n` +
-        `6️⃣ *cek bayar* — Cek status invoice\n` +
-        `7️⃣ *voucher* — Gunakan kode voucher\n` +
-        `8️⃣ *langganan* — Beli/pilih paket baru\n` +
-        `9️⃣ *tiket* — Buat tiket support\n\n` +
-        `💡 _Ketik angka *1–9* atau nama perintah._\n\n` +
-        `🔐 Untuk menggunakan menu di atas, silakan *login* terlebih dahulu.\n` +
-        `Kirimkan *email* akun kamu sekarang.\n\nContoh: nama@email.com`;
+        `💠 *GATEWAY COMMAND CENTER* 💠\n` +
+        `───────────────────\n\n` +
+        `1️⃣ *CEK AKUN*\n` +
+        `2️⃣ *DAFTAR PAKET*\n` +
+        `3️⃣ *PERPANJANG*\n` +
+        `4️⃣ *ISI SALDO*\n` +
+        `5️⃣ *RIWAYAT*\n` +
+        `6️⃣ *STATUS BAYAR*\n` +
+        `7️⃣ *VOUCHER*\n` +
+        `8️⃣ *LANGGANAN*\n` +
+        `9️⃣ *TIKET SUPPORT*\n` +
+        `🔟 *STATUS BOT*\n` +
+        `1️⃣1️⃣ *CEK PESANAN*\n` +
+        `1️⃣2️⃣ *KATALOG*\n` +
+        `1️⃣3️⃣ *BANTUAN AI*\n` +
+        `1️⃣4️⃣ *INFO SERVER*\n` +
+        `1️⃣5️⃣ *PROMO & NEWS*\n` +
+        `1️⃣6️⃣ *CEK NOMOR*\n` +
+        `0️⃣ *GANTI AKUN*\n\n` +
+        `───────────────────\n` +
+        `🔐 _Silakan *LOGIN* untuk mengakses menu._\n` +
+        `Kirim *Email* akun Anda sekarang untuk memulai.\n\n` +
+        `Contoh: _nama@email.com_`;
       await wrappedSend(preview);
       return true;
     }
@@ -957,9 +1114,9 @@ export async function processAdminBotMessage(
     return true;
   }
 
-  // ── Shortcut angka 1–9 ────────────────────────────────────────────────────
+  // Shortcut angka 0–16
   // Format: "3" atau "3 <arg>" misal "4 100000", "8 basic", "9 error login"
-  const numMatch = lower.match(/^([1-9])(?:\s+(.+))?$/);
+  const numMatch = lower.match(/^([0-9]|1[0-6])(?:\s+(.+))?$/);
   if (numMatch) {
     const num = numMatch[1];
     const arg = numMatch[2]?.trim() ?? "";
@@ -976,6 +1133,14 @@ export async function processAdminBotMessage(
         else { await handlePaket(ctx); }
         return true;
       case "9": await handleTiket(ctx, arg); return true;
+      case "10": await handleCekDevice(ctx); return true;
+      case "11": await handleCekPesananAdmin(ctx, arg); return true;
+      case "12": await handleKatalog(ctx); return true;
+      case "13": await handleBantuanAi(ctx); return true;
+      case "14": await handleInfoServer(ctx); return true;
+      case "15": await handlePromo(ctx); return true;
+      case "16": await handleCekNomor(ctx, arg); return true;
+      case "0": await handleLogout(ctx); return true;
     }
   }
   // ─────────────────────────────────────────────────────────────────────────

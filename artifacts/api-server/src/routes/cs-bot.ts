@@ -195,6 +195,7 @@ export async function processBotMessage(
     faqs: faqs.map((f) => ({ question: f.question, answer: f.answer, category: f.category })),
     provider: botProvider,
     providerApiKey: botApiKey,
+    deviceId: deviceId,
   };
 
   const hasBotOwnKey = botProvider !== "platform" && botApiKey.trim().length > 0;

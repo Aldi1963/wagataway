@@ -126,6 +126,13 @@ export default function CsBot() {
     onError: () => toast({ title: "Gagal menyimpan", variant: "destructive" }),
   });
 
+  const { data: usage } = useQuery({
+    queryKey: ["billing-usage"],
+    queryFn: () => apiFetch("/billing/usage").then((r) => r.json()),
+  });
+
+  const isPremium = usage?.aiCsBotEnabled ?? true;
+
   const saveFaq = useMutation({
     mutationFn: (body: any) => {
       const url = editFaq ? `/cs-bot/${selectedDeviceId}/faqs/${editFaq.id}` : `/cs-bot/${selectedDeviceId}/faqs`;
@@ -224,7 +231,24 @@ export default function CsBot() {
               <TabsTrigger value="test" className="gap-2 py-2.5 rounded-lg"><PlayCircle className="w-3.5 h-3.5" /> Simulator</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="ai"><AiSettingsForm bot={bot} deviceId={selectedDeviceId} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
+            <TabsContent value="ai">
+              {!isPremium ? (
+                <Card className="rounded-[40px] border-none shadow-2xl overflow-hidden relative group">
+                  <CardContent className="p-20 text-center relative z-10 flex flex-col items-center justify-center space-y-6">
+                    <div className="w-24 h-24 bg-primary/10 rounded-[32px] flex items-center justify-center">
+                      <Sparkles className="w-12 h-12 text-primary" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-3xl font-black tracking-tight">AI Brain Premium</h3>
+                      <p className="text-muted-foreground text-sm max-w-md mx-auto">Fitur kecerdasan buatan, basis pengetahuan otomatis, dan asisten hybrid hanya tersedia pada paket *Enterprise*.</p>
+                      <Button className="mt-4 rounded-xl font-bold" onClick={() => window.location.href='/billing'}>Buka Akses AI Sekarang</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <AiSettingsForm bot={bot} deviceId={selectedDeviceId} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} />
+              )}
+            </TabsContent>
             <TabsContent value="config"><BotMessagesForm bot={bot} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
             <TabsContent value="hours"><BusinessHoursForm bot={bot} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
             <TabsContent value="faqs">
@@ -252,6 +276,20 @@ export default function CsBot() {
                  </div>
             </TabsContent>
             <TabsContent value="knowledge">
+              {!isPremium ? (
+                <Card className="rounded-[40px] border-none shadow-2xl overflow-hidden relative group">
+                  <CardContent className="p-20 text-center relative z-10 flex flex-col items-center justify-center space-y-6">
+                    <div className="w-24 h-24 bg-primary/10 rounded-[32px] flex items-center justify-center">
+                      <BookText className="w-12 h-12 text-primary" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-3xl font-black tracking-tight">Advanced Knowledge Base</h3>
+                      <p className="text-muted-foreground text-sm max-w-md mx-auto">Unggah dokumen perusahaan dan biarkan AI belajar secara mandiri. Hanya tersedia di paket *Pro* keatas.</p>
+                      <Button className="mt-4 rounded-xl font-bold" onClick={() => window.location.href='/billing'}>Gunakan Knowledge Base</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
                  <div className="space-y-4">
                     <div className="flex justify-between items-center">
                        <h4 className="text-sm font-bold">Basis Pengetahuan AI</h4>
@@ -269,6 +307,7 @@ export default function CsBot() {
                        ))}
                     </div>
                  </div>
+              )}
             </TabsContent>
             <TabsContent value="test">
                 <Card className="h-[500px] flex flex-col">

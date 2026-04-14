@@ -52,6 +52,7 @@ import AdminAnalytics from "@/pages/admin/AdminAnalytics";
 import AdminTransactions from "@/pages/admin/AdminTransactions";
 import AdminWaBotCenter from "@/pages/admin/AdminWaBotCenter";
 import Reseller from "@/pages/Reseller";
+import GatewayCommand from "@/pages/GatewayCommand";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -270,6 +271,9 @@ function AppRouter() {
       </Route>
       <Route path="/bot-products">
         <ProtectedRoute><BotProducts /></ProtectedRoute>
+      </Route>
+      <Route path="/gateway-command">
+        <ProtectedRoute><GatewayCommand /></ProtectedRoute>
       </Route>
       <Route component={NotFound} />
     </Switch>

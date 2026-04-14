@@ -31,6 +31,7 @@ export const plansTable = pgTable("plans", {
   webhookEnabled: boolean("webhook_enabled").notNull().default(false),
   liveChatEnabled: boolean("live_chat_enabled").notNull().default(false),
   apiAccessEnabled: boolean("api_access_enabled").notNull().default(true),
+  commerceEnabled: boolean("commerce_enabled").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

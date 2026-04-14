@@ -960,8 +960,10 @@ export default function LiveChat() {
     !cannedFilter || cr.shortcut.toLowerCase().includes(cannedFilter) || cr.title.toLowerCase().includes(cannedFilter)
   );
 
+  const safeConvs = Array.isArray(conversations) ? conversations : [];
+
   // Filtered conversations
-  const filtered = conversations.filter((c) => {
+  const filtered = safeConvs.filter((c) => {
     if (statusFilter !== "all") {
       const meta = convMetas[c.jid];
       const status = meta?.status ?? "open";
@@ -982,12 +984,12 @@ export default function LiveChat() {
     else last.msgs.push(m);
   }
 
-  const activeConv = conversations.find((c) => c.jid === activeJid);
+  const activeConv = safeConvs.find((c) => c.jid === activeJid);
   const activeName = activeConv?.contactName || (activeJid ? phoneFromJid(activeJid) : "");
   const activeMeta = activeJid ? convMetas[activeJid] ?? null : null;
   const isConnected = devices.find((d) => String(d.id) === deviceId)?.status === "connected";
-  const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
-  const pendingCount = conversations.filter((c) => (convMetas[c.jid]?.status ?? "open") === "pending").length;
+  const totalUnread = safeConvs.reduce((s, c) => s + c.unread, 0);
+  const pendingCount = safeConvs.filter((c) => (convMetas[c.jid]?.status ?? "open") === "pending").length;
   const activeStatus = activeMeta?.status ?? "open";
   const activeSt = CONV_STATUS[activeStatus] ?? CONV_STATUS.open!;
 

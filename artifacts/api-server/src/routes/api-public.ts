@@ -593,6 +593,83 @@ async function checkNumberHandler(req: Request, res: Response): Promise<void> {
 router.post("/check-number", checkNumberHandler);
 router.get("/check-number", checkNumberHandler);
 
+router.post("/check-numbers", async (req: Request, res: Response): Promise<void> => {
+  const auth = await resolveAuth(req, res);
+  if (!auth) return;
+  const { sender, phones } = params(req);
+  if (!phones || !Array.isArray(phones)) { fail(res, "Parameter phones[] diperlukan"); return; }
+  const device = await resolveDevice(auth.userId, sender, res);
+  if (!device) return;
+  const session = getSession(device.id);
+  if (!session?.socket || session.status !== "connected") { fail(res, "Perangkat tidak terhubung", 503); return; }
+  try {
+    const { checkNumbers } = await import("../lib/wa-manager");
+    const results = await checkNumbers(device.id, phones);
+    ok(res, { data: results, total: results.length });
+  } catch (e: any) { fail(res, e.message, 500); }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRUP — Groups
+   ══════════════════════════════════════════════════════════════════════════ */
+
+router.get("/groups", async (req: Request, res: Response): Promise<void> => {
+  const auth = await resolveAuth(req, res);
+  if (!auth) return;
+  const { sender } = params(req);
+  const device = await resolveDevice(auth.userId, sender, res);
+  if (!device) return;
+  try {
+    const { getGroups } = await import("../lib/wa-manager");
+    const groups = await getGroups(device.id);
+    ok(res, { data: groups, total: groups.length });
+  } catch (e: any) { fail(res, e.message, 503); }
+});
+
+router.post("/send-group", async (req: Request, res: Response): Promise<void> => {
+  const auth = await resolveAuth(req, res);
+  if (!auth) return;
+  const { sender, groupId, message } = params(req);
+  if (!groupId || !message) { fail(res, "Parameter groupId dan message diperlukan"); return; }
+  if (!await checkQuota(auth.userId, res)) return;
+  const device = await resolveDevice(auth.userId, sender, res);
+  if (!device) return;
+  const session = getSession(device.id);
+  if (!session?.socket || session.status !== "connected") { fail(res, "Perangkat tidak terhubung", 503); return; }
+  try {
+    const { sendToGroup } = await import("../lib/wa-manager");
+    const externalId = await sendToGroup(device.id, groupId, { text: String(message) });
+    const msg = await recordMessage(auth.userId, device.id, groupId.replace("@g.us", ""), String(message));
+    ok(res, { id: String(msg.id), groupId, status: "sent", externalId });
+  } catch (e: any) { fail(res, e.message, 500); }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMMERCE — Products & Categories
+   ══════════════════════════════════════════════════════════════════════════ */
+
+router.get("/commerce/products", async (req: Request, res: Response): Promise<void> => {
+  const auth = await resolveAuth(req, res);
+  if (!auth) return;
+  const { sender } = params(req);
+  const device = await resolveDevice(auth.userId, sender, res);
+  if (!device) return;
+  const { botProductsTable } = await import("@workspace/db");
+  const products = await db.select().from(botProductsTable).where(eq(botProductsTable.deviceId, device.id));
+  ok(res, { data: products, total: products.length });
+});
+
+router.get("/commerce/categories", async (req: Request, res: Response): Promise<void> => {
+  const auth = await resolveAuth(req, res);
+  if (!auth) return;
+  const { sender } = params(req);
+  const device = await resolveDevice(auth.userId, sender, res);
+  if (!device) return;
+  const { botCategoriesTable } = await import("@workspace/db");
+  const categories = await db.select().from(botCategoriesTable).where(eq(botCategoriesTable.deviceId, device.id));
+  ok(res, { data: categories, total: categories.length });
+});
+
 /* ═══════════════════════════════════════════════════════════════════════════
    PERANGKAT — Device
    ══════════════════════════════════════════════════════════════════════════ */
@@ -793,6 +870,11 @@ router.get("/", (_req, res) => {
       { method: "GET",      path: "/device/qr",       desc: "QR Code perangkat" },
       { method: "POST|GET", path: "/device/disconnect", desc: "Putus koneksi perangkat" },
       { method: "POST",     path: "/device/create",   desc: "Buat perangkat baru" },
+      { method: "POST",     path: "/check-numbers",   desc: "Cek massal nomor WhatsApp" },
+      { method: "GET",      path: "/groups",          desc: "List grup WhatsApp" },
+      { method: "POST",     path: "/send-group",      desc: "Kirim pesan ke grup" },
+      { method: "GET",      path: "/commerce/products", desc: "List produk bot" },
+      { method: "GET",      path: "/commerce/categories", desc: "List kategori bot" },
       { method: "GET",      path: "/user/info",       desc: "Info akun pengguna" },
       { method: "POST",     path: "/user/create",     desc: "Buat pengguna (admin)" },
     ],
