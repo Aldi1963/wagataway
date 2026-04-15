@@ -285,59 +285,75 @@ export async function handleOrderFlow(
 
   if (step === "pick_city") {
     const [settings] = await db.select().from(botOwnerSettingsTable).where(and(eq(botOwnerSettingsTable.userId, userId), eq(botOwnerSettingsTable.deviceId, deviceId)));
-    if (!settings?.rajaongkirApiKey) return "Maaf, terjadi kesalahan konfigurasi ongkir.";
-
-    const service = new RajaOngkirService(settings.rajaongkirApiKey, (settings.rajaongkirAccountType as any) ?? "starter");
-    const cities = await service.getCities();
     
-    // Simple filter
-    const matches = cities.filter(c => c.city_name.toLowerCase().includes(lower) || lower.includes(c.city_name.toLowerCase()));
+    try {
+      if (!settings?.rajaongkirApiKey) throw new Error("API Key missing");
 
-    if (matches.length === 0) return `Kota *${trimmed}* tidak ditemukan. Bisa tulis nama kotanya saja? (contoh: Jakarta Selatan)`;
-    
-    if (matches.length > 5) return `Ditemukan terlalu banyak kota (${matches.length}). Bisa lebih spesifik?`;
+      const service = new RajaOngkirService(settings.rajaongkirApiKey, (settings.rajaongkirAccountType as any) ?? "starter");
+      const cities = await service.getCities();
+      
+      const matches = cities.filter(c => c.city_name.toLowerCase().includes(lower) || lower.includes(c.city_name.toLowerCase()));
 
-    if (matches.length > 1 && !/^\d+$/.test(trimmed)) {
-       return `Ditemukan beberapa kecocokan. Pilih nomornya:\n` + matches.map((m, i) => `${i+1}. ${m.type} ${m.city_name} (${m.province})`).join('\n');
+      if (matches.length === 0) return `Kota *${trimmed}* tidak ditemukan. Bisa tulis nama kotanya saja? (contoh: Jakarta Selatan)`;
+      
+      if (matches.length > 5) return `Ditemukan terlalu banyak kota (${matches.length}). Bisa lebih spesifik?`;
+
+      if (matches.length > 1 && !/^\d+$/.test(trimmed)) {
+        let txt = `Ditemukan beberapa kota. Pilih nomornya:\n\n`;
+        matches.forEach((c, idx) => {
+          txt += `${idx + 1}. ${c.type} ${c.city_name} (${c.province})\n`;
+        });
+        return txt;
+      }
+
+      const selected = /^\d+$/.test(trimmed) ? matches[parseInt(trimmed) - 1] : matches[0];
+      if (!selected) return "Pilihan tidak valid. Pilih nomor yang tertera.";
+
+      // Calculation weight default 1000g and courier 'jne' for starters
+      const costs = await service.calculateCost(settings.rajaongkirOriginId || "152", selected.city_id, 1000, "jne");
+      const fee = costs[0]?.cost[0]?.value ?? Number(settings.defaultShippingFee ?? 0);
+
+      await upsertSession(userId, deviceId, phone, { step: "confirm", shippingFee: fee });
+
+      const s = await getSession(userId, deviceId, phone);
+      const subtotal = Number(s?.productPrice ?? 0) * (s?.qty ?? 1);
+      const total = subtotal + fee;
+
+      return (
+        `📋 *KONFIRMASI PESANAN*\n\n` +
+        `🛍️ Produk: ${s?.productName}${s?.variantOptions ? ` (${s.variantOptions})` : ''}\n` +
+        `📦 Qty: ${s?.qty}\n` +
+        `💰 Subtotal: ${formatRp(subtotal)}\n` +
+        `🚚 Ongkir (JNE): ${formatRp(fee)}\n` +
+        `✨ *Total Bayar: ${formatRp(total)}*\n\n` +
+        `👤 Nama: ${s?.customerName}\n` +
+        `📍 Alamat: ${s?.customerAddress}\n` +
+        `🏘️ Kota: ${selected.type} ${selected.city_name}\n\n` +
+        `Balas *YA* untuk konfirmasi.`
+      );
+    } catch (err) {
+      console.error("[OrderFlow] RajaOngkir Fallback:", err);
+      // Fallback to default shipping fee
+      const fee = Number(settings?.defaultShippingFee ?? 0);
+      await upsertSession(userId, deviceId, phone, { step: "confirm", shippingFee: fee });
+      
+      const s = await getSession(userId, deviceId, phone);
+      const subtotal = Number(s?.productPrice ?? 0) * (s?.qty ?? 1);
+      const total = subtotal + fee;
+
+      return (
+        `⚠️ *Info:* Terjadi kendala hitung ongkir otomatis, kami gunakan tarif standar.\n\n` +
+        `📋 *KONFIRMASI PESANAN*\n\n` +
+        `🛍️ Produk: ${s?.productName}${s?.variantOptions ? ` (${s.variantOptions})` : ''}\n` +
+        `📦 Qty: ${s?.qty}\n` +
+        `💰 Subtotal: ${formatRp(subtotal)}\n` +
+        `🚚 Ongkir Standar: ${formatRp(fee)}\n` +
+        `✨ *Total Bayar: ${formatRp(total)}*\n\n` +
+        `👤 Nama: ${s?.customerName}\n` +
+        `📍 Alamat: ${s?.customerAddress} (${trimmed})\n\n` +
+        `Balas *YA* untuk konfirmasi.`
+      );
     }
-
-    let selected = matches[0];
-    if (/^\d+$/.test(trimmed)) {
-       const idx = parseInt(trimmed, 10) - 1;
-       if (idx >= 0 && idx < matches.length) selected = matches[idx];
-    }
-
-    // Now calculate cost
-    const costs = await service.calculateCost(settings.rajaongkirOriginId!, selected.city_id, 1000, 'jne');
-    if (!costs.length) return "Maaf, tidak ada layanan pengiriman tersedia untuk kota ini.";
-
-    const option = costs[0].cost[0]; // Take first service
-    const shippingFee = option.value;
-
-    await upsertSession(userId, deviceId, phone, { 
-      step: "confirm", 
-      cityId: selected.city_id, 
-      shippingFee,
-      shippingCourier: 'JNE',
-      shippingService: costs[0].service
-    });
-
-    const s = await getSession(userId, deviceId, phone);
-    const subtotal = Number(s?.productPrice ?? 0) * (s?.qty ?? 1);
-    const total = subtotal + shippingFee;
-
-    return (
-      `📋 *KONFIRMASI PESANAN*\n\n` +
-      `🛍️ Produk: ${s?.productName}${s?.variantOptions ? ` (${s.variantOptions})` : ''}\n` +
-      `📦 Qty: ${s?.qty}\n` +
-      `💰 Subtotal: ${formatRp(subtotal)}\n` +
-      `🚚 Ongkir (JNE): ${formatRp(shippingFee)}\n` +
-      `✨ *Total Bayar: ${formatRp(total)}*\n\n` +
-      `👤 Nama: ${s?.customerName}\n` +
-      `📍 Alamat: ${s?.customerAddress}\n` +
-      `🏙️ Kota: ${selected.type} ${selected.city_name}\n\n` +
-      `Balas *YA* untuk konfirmasi.`
-    );
   }
 
   if (step === "confirm") {

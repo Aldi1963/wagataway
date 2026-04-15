@@ -1,5 +1,6 @@
 import "@/lib/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
+import { registerSW } from "virtual:pwa-register";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,50 +10,59 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { DeviceProvider } from "@/contexts/DeviceContext";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Loader2 } from "lucide-react";
 
-import Login from "@/pages/auth/Login";
-import Register from "@/pages/auth/Register";
-import Dashboard from "@/pages/Dashboard";
-import Devices from "@/pages/Devices";
-import SendMessage from "@/pages/SendMessage";
-import BulkMessages from "@/pages/BulkMessages";
-import Schedule from "@/pages/Schedule";
-import AutoReply from "@/pages/AutoReply";
-import Contacts from "@/pages/Contacts";
-import Webhook from "@/pages/Webhook";
-import Plugins from "@/pages/Plugins";
-import ApiDocs from "@/pages/ApiDocs";
-import Billing from "@/pages/Billing";
-import Profile from "@/pages/Profile";
-import AdminSettings from "@/pages/admin/AdminSettings";
-import AdminUsers from "@/pages/admin/AdminUsers";
-import AdminPackages from "@/pages/admin/AdminPackages";
-import AdminVouchers from "@/pages/admin/AdminVouchers";
-import AdminNotifications from "@/pages/admin/AdminNotifications";
-import ApiSettings from "@/pages/ApiSettings";
-import DeviceSettings from "@/pages/DeviceSettings";
-import CsBot from "@/pages/CsBot";
-import AntiBanned from "@/pages/AntiBanned";
-import Laporan from "@/pages/Laporan";
-import LiveChat from "@/pages/LiveChat";
-import Templates from "@/pages/Templates";
-import Analytics from "@/pages/Analytics";
-import ContactGroups from "@/pages/ContactGroups";
-import DripCampaign from "@/pages/DripCampaign";
-import Blacklist from "@/pages/Blacklist";
-import Links from "@/pages/Links";
-import GroupMessage from "@/pages/GroupMessage";
-import NumberChecker from "@/pages/NumberChecker";
-import BotProducts from "@/pages/BotProducts";
-import Unauthorized from "@/pages/Unauthorized";
-import NotFound from "@/pages/not-found";
-import LandingPage from "@/pages/LandingPage";
-import AdminLandingPage from "@/pages/admin/AdminLandingPage";
-import AdminAnalytics from "@/pages/admin/AdminAnalytics";
-import AdminTransactions from "@/pages/admin/AdminTransactions";
-import AdminWaBotCenter from "@/pages/admin/AdminWaBotCenter";
-import Reseller from "@/pages/Reseller";
-import GatewayCommand from "@/pages/GatewayCommand";
+// ── Lazy Loaded Pages ─────────────────────────────────────────────────────────
+
+const Login = lazy(() => import("@/pages/auth/Login"));
+const Register = lazy(() => import("@/pages/auth/Register"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Devices = lazy(() => import("@/pages/Devices"));
+const SendMessage = lazy(() => import("@/pages/SendMessage"));
+const BulkMessages = lazy(() => import("@/pages/BulkMessages"));
+const Schedule = lazy(() => import("@/pages/Schedule"));
+const AutoReply = lazy(() => import("@/pages/AutoReply"));
+const Contacts = lazy(() => import("@/pages/Contacts"));
+const Webhook = lazy(() => import("@/pages/Webhook"));
+const Plugins = lazy(() => import("@/pages/Plugins"));
+const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
+const Billing = lazy(() => import("@/pages/Billing"));
+const Profile = lazy(() => import("@/pages/Profile"));
+const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
+const AdminPackages = lazy(() => import("@/pages/admin/AdminPackages"));
+const AdminVouchers = lazy(() => import("@/pages/admin/AdminVouchers"));
+const AdminNotifications = lazy(() => import("@/pages/admin/AdminNotifications"));
+const ApiSettings = lazy(() => import("@/pages/ApiSettings"));
+const DeviceSettings = lazy(() => import("@/pages/DeviceSettings"));
+const CsBot = lazy(() => import("@/pages/CsBot"));
+const AntiBanned = lazy(() => import("@/pages/AntiBanned"));
+const Laporan = lazy(() => import("@/pages/Laporan"));
+const LiveChat = lazy(() => import("@/pages/LiveChat"));
+const Templates = lazy(() => import("@/pages/Templates"));
+const Analytics = lazy(() => import("@/pages/Analytics"));
+const ContactGroups = lazy(() => import("@/pages/ContactGroups"));
+const DripCampaign = lazy(() => import("@/pages/DripCampaign"));
+const Blacklist = lazy(() => import("@/pages/Blacklist"));
+const Links = lazy(() => import("@/pages/Links"));
+const GroupMessage = lazy(() => import("@/pages/GroupMessage"));
+const NumberChecker = lazy(() => import("@/pages/NumberChecker"));
+const BotProducts = lazy(() => import("@/pages/BotProducts"));
+const Unauthorized = lazy(() => import("@/pages/Unauthorized"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const AdminLandingPage = lazy(() => import("@/pages/admin/AdminLandingPage"));
+const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
+const AdminTransactions = lazy(() => import("@/pages/admin/AdminTransactions"));
+const AdminWaBotCenter = lazy(() => import("@/pages/admin/AdminWaBotCenter"));
+const Reseller = lazy(() => import("@/pages/Reseller"));
+const GatewayCommand = lazy(() => import("@/pages/GatewayCommand"));
+
+const PageLoader = () => (
+  <div className="flex-1 flex items-center justify-center p-8">
+    <Loader2 className="h-8 w-8 animate-spin text-primary opacity-50" />
+  </div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -141,142 +151,144 @@ function HomeRoute() {
 
 function AppRouter() {
   return (
-    <Switch>
-      <Route path="/login">
-        <GuestRoute><Login /></GuestRoute>
-      </Route>
-      <Route path="/register">
-        <GuestRoute><Register /></GuestRoute>
-      </Route>
-      <Route path="/">
-        <HomeRoute />
-      </Route>
-      <Route path="/devices">
-        <ProtectedRoute><Devices /></ProtectedRoute>
-      </Route>
-      <Route path="/send">
-        <ProtectedRoute><SendMessage /></ProtectedRoute>
-      </Route>
-      <Route path="/bulk">
-        <ProtectedRoute><BulkMessages /></ProtectedRoute>
-      </Route>
-      <Route path="/schedule">
-        <ProtectedRoute><Schedule /></ProtectedRoute>
-      </Route>
-      <Route path="/auto-reply">
-        <ProtectedRoute><AutoReply /></ProtectedRoute>
-      </Route>
-      <Route path="/contacts">
-        <ProtectedRoute><Contacts /></ProtectedRoute>
-      </Route>
-      <Route path="/webhook">
-        <ProtectedRoute><Webhook /></ProtectedRoute>
-      </Route>
-      <Route path="/plugins">
-        <ProtectedRoute><Plugins /></ProtectedRoute>
-      </Route>
-      <Route path="/api-docs">
-        <ProtectedRoute><ApiDocs /></ProtectedRoute>
-      </Route>
-      <Route path="/billing">
-        <ProtectedRoute><Billing /></ProtectedRoute>
-      </Route>
-      <Route path="/profile">
-        <ProtectedRoute><Profile /></ProtectedRoute>
-      </Route>
-      <Route path="/api-settings">
-        <ProtectedRoute><ApiSettings /></ProtectedRoute>
-      </Route>
-      <Route path="/admin/settings">
-        <AdminRoute><AdminSettings /></AdminRoute>
-      </Route>
-      <Route path="/admin/users">
-        <AdminRoute><AdminUsers /></AdminRoute>
-      </Route>
-      <Route path="/admin/packages">
-        <AdminRoute><AdminPackages /></AdminRoute>
-      </Route>
-      <Route path="/admin/vouchers">
-        <AdminRoute><AdminVouchers /></AdminRoute>
-      </Route>
-      <Route path="/admin/notifications">
-        <AdminRoute><AdminNotifications /></AdminRoute>
-      </Route>
-      <Route path="/admin/landing">
-        <AdminRoute><AdminLandingPage /></AdminRoute>
-      </Route>
-      <Route path="/admin/analytics">
-        <AdminRoute><AdminAnalytics /></AdminRoute>
-      </Route>
-      <Route path="/admin/transactions">
-        <AdminRoute><AdminTransactions /></AdminRoute>
-      </Route>
-      <Route path="/admin/wa-bot-center">
-        <AdminRoute><AdminWaBotCenter /></AdminRoute>
-      </Route>
-      {/* Legacy redirects */}
-      <Route path="/admin/server-settings">
-        <Redirect to="/admin/settings" />
-      </Route>
-      <Route path="/admin/update">
-        <Redirect to="/admin/settings" />
-      </Route>
-      <Route path="/admin/payment-gateway">
-        <Redirect to="/admin/settings" />
-      </Route>
-      <Route path="/admin/ai-settings">
-        <Redirect to="/admin/settings" />
-      </Route>
-      <Route path="/device-settings">
-        <ProtectedRoute><DeviceSettings /></ProtectedRoute>
-      </Route>
-      <Route path="/anti-banned">
-        <ProtectedRoute><AntiBanned /></ProtectedRoute>
-      </Route>
-      <Route path="/live-chat">
-        <ProtectedRoute><LiveChat /></ProtectedRoute>
-      </Route>
-      <Route path="/cs-bot">
-        <ProtectedRoute><CsBot /></ProtectedRoute>
-      </Route>
-      <Route path="/laporan">
-        <ProtectedRoute><Laporan /></ProtectedRoute>
-      </Route>
-      <Route path="/templates">
-        <ProtectedRoute><Templates /></ProtectedRoute>
-      </Route>
-      <Route path="/analytics">
-        <ProtectedRoute><Analytics /></ProtectedRoute>
-      </Route>
-      <Route path="/contact-groups">
-        <ProtectedRoute><ContactGroups /></ProtectedRoute>
-      </Route>
-      <Route path="/drip">
-        <ProtectedRoute><DripCampaign /></ProtectedRoute>
-      </Route>
-      <Route path="/reseller">
-        <ProtectedRoute><Reseller /></ProtectedRoute>
-      </Route>
-      <Route path="/blacklist">
-        <ProtectedRoute><Blacklist /></ProtectedRoute>
-      </Route>
-      <Route path="/links">
-        <ProtectedRoute><Links /></ProtectedRoute>
-      </Route>
-      <Route path="/number-checker">
-        <ProtectedRoute><NumberChecker /></ProtectedRoute>
-      </Route>
-      <Route path="/group-message">
-        <ProtectedRoute><GroupMessage /></ProtectedRoute>
-      </Route>
-      <Route path="/bot-products">
-        <ProtectedRoute><BotProducts /></ProtectedRoute>
-      </Route>
-      <Route path="/gateway-command">
-        <ProtectedRoute><GatewayCommand /></ProtectedRoute>
-      </Route>
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/login">
+          <GuestRoute><Login /></GuestRoute>
+        </Route>
+        <Route path="/register">
+          <GuestRoute><Register /></GuestRoute>
+        </Route>
+        <Route path="/">
+          <HomeRoute />
+        </Route>
+        <Route path="/devices">
+          <ProtectedRoute><Devices /></ProtectedRoute>
+        </Route>
+        <Route path="/send">
+          <ProtectedRoute><SendMessage /></ProtectedRoute>
+        </Route>
+        <Route path="/bulk">
+          <ProtectedRoute><BulkMessages /></ProtectedRoute>
+        </Route>
+        <Route path="/schedule">
+          <ProtectedRoute><Schedule /></ProtectedRoute>
+        </Route>
+        <Route path="/auto-reply">
+          <ProtectedRoute><AutoReply /></ProtectedRoute>
+        </Route>
+        <Route path="/contacts">
+          <ProtectedRoute><Contacts /></ProtectedRoute>
+        </Route>
+        <Route path="/webhook">
+          <ProtectedRoute><Webhook /></ProtectedRoute>
+        </Route>
+        <Route path="/plugins">
+          <ProtectedRoute><Plugins /></ProtectedRoute>
+        </Route>
+        <Route path="/api-docs">
+          <ProtectedRoute><ApiDocs /></ProtectedRoute>
+        </Route>
+        <Route path="/billing">
+          <ProtectedRoute><Billing /></ProtectedRoute>
+        </Route>
+        <Route path="/profile">
+          <ProtectedRoute><Profile /></ProtectedRoute>
+        </Route>
+        <Route path="/api-settings">
+          <ProtectedRoute><ApiSettings /></ProtectedRoute>
+        </Route>
+        <Route path="/admin/settings">
+          <AdminRoute><AdminSettings /></AdminRoute>
+        </Route>
+        <Route path="/admin/users">
+          <AdminRoute><AdminUsers /></AdminRoute>
+        </Route>
+        <Route path="/admin/packages">
+          <AdminRoute><AdminPackages /></AdminRoute>
+        </Route>
+        <Route path="/admin/vouchers">
+          <AdminRoute><AdminVouchers /></AdminRoute>
+        </Route>
+        <Route path="/admin/notifications">
+          <AdminRoute><AdminNotifications /></AdminRoute>
+        </Route>
+        <Route path="/admin/landing">
+          <AdminRoute><AdminLandingPage /></AdminRoute>
+        </Route>
+        <Route path="/admin/analytics">
+          <AdminRoute><AdminAnalytics /></AdminRoute>
+        </Route>
+        <Route path="/admin/transactions">
+          <AdminRoute><AdminTransactions /></AdminRoute>
+        </Route>
+        <Route path="/admin/wa-bot-center">
+          <AdminRoute><AdminWaBotCenter /></AdminRoute>
+        </Route>
+        {/* Legacy redirects */}
+        <Route path="/admin/server-settings">
+          <Redirect to="/admin/settings" />
+        </Route>
+        <Route path="/admin/update">
+          <Redirect to="/admin/settings" />
+        </Route>
+        <Route path="/admin/payment-gateway">
+          <Redirect to="/admin/settings" />
+        </Route>
+        <Route path="/admin/ai-settings">
+          <Redirect to="/admin/settings" />
+        </Route>
+        <Route path="/device-settings">
+          <ProtectedRoute><DeviceSettings /></ProtectedRoute>
+        </Route>
+        <Route path="/anti-banned">
+          <ProtectedRoute><AntiBanned /></ProtectedRoute>
+        </Route>
+        <Route path="/live-chat">
+          <ProtectedRoute><LiveChat /></ProtectedRoute>
+        </Route>
+        <Route path="/cs-bot">
+          <ProtectedRoute><CsBot /></ProtectedRoute>
+        </Route>
+        <Route path="/laporan">
+          <ProtectedRoute><Laporan /></ProtectedRoute>
+        </Route>
+        <Route path="/templates">
+          <ProtectedRoute><Templates /></ProtectedRoute>
+        </Route>
+        <Route path="/analytics">
+          <ProtectedRoute><Analytics /></ProtectedRoute>
+        </Route>
+        <Route path="/contact-groups">
+          <ProtectedRoute><ContactGroups /></ProtectedRoute>
+        </Route>
+        <Route path="/drip">
+          <ProtectedRoute><DripCampaign /></ProtectedRoute>
+        </Route>
+        <Route path="/reseller">
+          <ProtectedRoute><Reseller /></ProtectedRoute>
+        </Route>
+        <Route path="/blacklist">
+          <ProtectedRoute><Blacklist /></ProtectedRoute>
+        </Route>
+        <Route path="/links">
+          <ProtectedRoute><Links /></ProtectedRoute>
+        </Route>
+        <Route path="/number-checker">
+          <ProtectedRoute><NumberChecker /></ProtectedRoute>
+        </Route>
+        <Route path="/group-message">
+          <ProtectedRoute><GroupMessage /></ProtectedRoute>
+        </Route>
+        <Route path="/bot-products">
+          <ProtectedRoute><BotProducts /></ProtectedRoute>
+        </Route>
+        <Route path="/gateway-command">
+          <ProtectedRoute><GatewayCommand /></ProtectedRoute>
+        </Route>
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -286,6 +298,7 @@ function App() {
   );
 
   useEffect(() => {
+    registerSW({ immediate: true });
     fetch("/api/auth/config")
       .then((r) => r.json())
       .then((d) => { if (d.googleClientId) setGoogleClientId(d.googleClientId); })

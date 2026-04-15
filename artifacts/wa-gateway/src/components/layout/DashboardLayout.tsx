@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useSiteConfig } from "@/hooks/use-site-config";
 import { useDynamicSEO } from "@/hooks/use-dynamic-seo";
+import { mobileBridge } from "@/lib/mobile-bridge";
 import { format, formatDistanceToNow } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 
@@ -463,7 +464,10 @@ function TopBar() {
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          onClick={toggleTheme}
+          onClick={() => {
+            mobileBridge.vibrate("light");
+            toggleTheme();
+          }}
           title={resolvedTheme === "dark" ? "Beralih ke mode terang" : "Beralih ke mode gelap"}
         >
           {resolvedTheme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -516,7 +520,10 @@ function TopBar() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive focus:bg-destructive/10 gap-2"
-              onClick={logout}
+              onClick={() => {
+                mobileBridge.vibrate("medium");
+                logout();
+              }}
             >
               <LogOut className="w-3.5 h-3.5" />
               Keluar

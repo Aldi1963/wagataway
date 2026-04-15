@@ -1,4 +1,4 @@
-import { db, subscriptionsTable, plansTable, devicesTable, messagesTable, contactsTable } from "@workspace/db";
+import { db, subscriptionsTable, plansTable, devicesTable, messagesTable, contactsTable, usersTable, resellerSubUsersTable } from "@workspace/db";
 import { eq, and, gte, count } from "drizzle-orm";
 
 export interface PlanLimits {
@@ -20,9 +20,39 @@ export interface PlanLimits {
 }
 
 export async function getUserPlan(userId: number): Promise<PlanLimits> {
+  const [user] = await db.select({ parentId: usersTable.parentId, planId: usersTable.plan, isSuspended: usersTable.isSuspended })
+    .from(usersTable).where(eq(usersTable.id, userId));
+  
+  // If user has a parentId, they are a sub-user of a reseller
+  if (user?.parentId) {
+    const [quota] = await db.select().from(resellerSubUsersTable)
+      .where(and(eq(resellerSubUsersTable.resellerId, user.parentId), eq(resellerSubUsersTable.subUserId, userId)));
+    
+    if (quota) {
+      return {
+        planId: "reseller-sub",
+        planName: "Reseller Sub-Account",
+        limitDevices: quota.allocatedDevices,
+        limitMessagesPerDay: quota.allocatedMessagesPerDay,
+        limitContacts: quota.allocatedContacts,
+        limitApiCallsPerDay: 5000, // Fixed for sub-users
+        limitBulkRecipients: 500,
+        limitScheduledMessages: 50,
+        limitAutoReplies: 20,
+        aiCsBotEnabled: true,
+        bulkMessagingEnabled: true,
+        webhookEnabled: true,
+        liveChatEnabled: true,
+        apiAccessEnabled: true,
+        commerceEnabled: true,
+      };
+    }
+  }
+
   const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
-  const planId = sub?.planId ?? "free";
+  const planId = sub?.planId ?? user?.planId ?? "free";
   const [plan] = await db.select().from(plansTable).where(eq(plansTable.slug, planId));
+  
   return {
     planId,
     planName: plan?.name ?? planId,

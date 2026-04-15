@@ -50,6 +50,12 @@ router.post("/devices", async (req, res): Promise<void> => {
     name, phone, provider, officialPhoneId, officialBusinessAccountId, officialAccessToken, autoReconnect 
   } = req.body;
 
+  // ── Limit Check ──
+  const plan = await getUserPlan(uid);
+  const currentCount = await countUserDevices(uid);
+  const err = limitError(currentCount, plan.limitDevices, "perangkat");
+  if (err) { res.status(403).json(err); return; }
+
   const [device] = await db
     .insert(devicesTable)
     .values({

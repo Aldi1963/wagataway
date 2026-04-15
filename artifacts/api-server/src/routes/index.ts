@@ -55,7 +55,7 @@ router.use(apiPublicRouter);
 
 // Webhook receive endpoint is public (called by WA server with API key check internally)
 // All other routes require auth
-function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   // Skip auth for public paths
   const PUBLIC_PATHS = [
     "/health",
@@ -75,7 +75,7 @@ function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (!req.headers.authorization && req.query?.token) {
     req.headers.authorization = `Bearer ${req.query.token as string}`;
   }
-  requireAuth(req, res, next);
+  await requireAuth(req, res, next);
 }
 
 router.use(authMiddleware);

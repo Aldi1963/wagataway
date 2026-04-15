@@ -1,11 +1,13 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { getUserFromToken } from "../routes/auth";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 /**
  * Express middleware that requires a valid Bearer token.
  * Sets `res.locals.userId` (number) on success; returns 401 otherwise.
  */
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   if (!token) {
     res.status(401).json({ message: "Unauthorized", code: "UNAUTHORIZED" });
@@ -16,6 +18,27 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).json({ message: "Unauthorized", code: "UNAUTHORIZED" });
     return;
   }
+
+  // ── Suspension Check ──
+  try {
+    const [user] = await db.select({ isSuspended: usersTable.isSuspended })
+      .from(usersTable).where(eq(usersTable.id, userId));
+    
+    if (!user) {
+      res.status(401).json({ message: "User not found", code: "UNAUTHORIZED" });
+      return;
+    }
+
+    if (user.isSuspended) {
+      res.status(403).json({ message: "Akun Anda telah disuspend. Hubungi administrator.", code: "ACCOUNT_SUSPENDED" });
+      return;
+    }
+  } catch (err) {
+    console.error("[Auth] Midleware error:", err);
+    res.status(500).json({ message: "Internal server error" });
+    return;
+  }
+
   res.locals.userId = userId;
   next();
 }
