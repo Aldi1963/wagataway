@@ -20,7 +20,7 @@ import pino from "pino";
 import QRCode from "qrcode";
 import { processBotMessage, type BotReply } from "../routes/cs-bot";
 import { processAdminBotMessage, isAdminBotDevice, startReminderCron } from "./admin-bot-processor";
-import { registerDeviceSender, unregisterDeviceSender, registerDeviceListSender } from "./wa-sender";
+import { registerDeviceSender, unregisterDeviceSender, registerDeviceListSender, registerDeviceCheckNumber } from "./wa-sender";
 
 const SESSIONS_DIR = path.resolve(process.cwd(), "wa-sessions");
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -286,6 +286,11 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             listType: 1,
           },
         } as any);
+      });
+      registerDeviceCheckNumber(deviceId, async (phone) => {
+        const cleaned = phone.replace(/\D/g, "").replace(/^0/, "62");
+        const [result] = await sock.onWhatsApp(`${cleaned}@s.whatsapp.net`);
+        return result || null;
       });
 
       // Fire device.connected webhook + email notification

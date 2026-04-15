@@ -117,28 +117,33 @@ export interface AiBotContext {
 function buildSystemPrompt(ctx: AiBotContext): string {
   const faqBlock =
     ctx.faqs.length > 0
-      ? `\n\nDatabase FAQ yang tersedia:\n${ctx.faqs
-          .map((f) => `Q: ${f.question}\nA: ${f.answer}`)
+      ? `\n\nDatabase FAQ & Jawaban:\n${ctx.faqs
+          .map((f) => `Pertanyaan: ${f.question}\nJawaban: ${f.answer}`)
           .join("\n\n")}`
       : "";
 
   const businessBlock = ctx.businessContext
-    ? `\n\nInformasi bisnis:\n${ctx.businessContext}`
+    ? `\n\nKonteks Bisnis:\n${ctx.businessContext}`
     : "";
 
   const websiteBlock = ctx.websiteContent?.trim()
-    ? `\n\nKonten website bisnis (gunakan sebagai referensi untuk menjawab pertanyaan):\n${ctx.websiteContent.slice(0, 3000)}`
+    ? `\n\nInformasi Tambahan dari Website:\n${ctx.websiteContent.slice(0, 3000)}`
     : "";
 
   const catalogBlock = ctx.catalog
-    ? `\n\nKatalog Produk Aktif (gunakan untuk merekomendasikan produk atau menjawab ketersediaan):\n${ctx.catalog}`
+    ? `\n\nKatalog Produk Aktif:\n${ctx.catalog}\n\nInstruksi Produk: Jika pelanggan bertanya tentang harga atau ketersediaan produk, berikan informasi dari katalog di atas secara akurat. Jika ada kode produk, sebutkan kodenya.`
     : "";
 
   return (
-    `${ctx.systemPrompt}${businessBlock}${websiteBlock}${faqBlock}${catalogBlock}\n\n` +
-    `Nama bot kamu: ${ctx.botName}. ` +
-    `Jawab dalam 1-3 kalimat singkat. ` +
-    `Jika tidak tahu jawabannya, sarankan pelanggan untuk menghubungi agen manusia.`
+    `Kamu adalah ${ctx.botName}. ${ctx.systemPrompt}\n\n` +
+    `Ikuti panduan tambahan berikut:\n` +
+    `1. Gunakan bahasa Indonesia yang santai tapi tetap sopan (semi-formal).\n` +
+    `2. Jawablah secara singkat dan padat (maksimal 3 kalimat).\n` +
+    `3. Gunakan emoji sesekali agar terkesan ramah (seperti 😊, 🙏, ✨).\n` +
+    `4. Utamakan menjawab berdasarkan informasi Bisnis, FAQ, dan Katalog yang disediakan di bawah.\n` +
+    `5. Jika informasi tidak ditemukan atau pertanyaan terlalu teknis/rumit, sampaikan bahwa kamu akan menghubungkan mereka dengan agen manusia kami. JANGAN memberikan informasi palsu.` +
+    `${businessBlock}${websiteBlock}${faqBlock}${catalogBlock}\n\n` +
+    `Ingat, nama kamu adalah ${ctx.botName}. Tetaplah pada persona ini.`
   );
 }
 

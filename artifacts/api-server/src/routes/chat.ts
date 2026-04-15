@@ -177,6 +177,13 @@ router.post("/chat/send", async (req: Request, res: Response): Promise<void> => 
     })
     .returning();
 
+  // ── Auto-pause bot when admin replies manually ──────────────────────────
+  try {
+    await pauseConvBot(uid, devId, jid);
+  } catch (err) {
+    console.error("[chat] Failed to pause bot:", err);
+  }
+
   getChatEmitter(devId).emit("message", saved);
   res.json(saved);
 });

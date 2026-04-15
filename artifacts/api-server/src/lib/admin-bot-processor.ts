@@ -23,6 +23,7 @@ import {
   webhooksTable,
   messagesTable,
   botOrdersTable,
+  botProductsTable,
 } from "@workspace/db";
 import { eq, desc, ilike, and, lte, gte, isNotNull, sql } from "drizzle-orm";
 import { getDeviceSocket } from "./wa-sender";
@@ -997,7 +998,7 @@ async function handleCekNomor(ctx: BotContext, targetPhone?: string): Promise<vo
       return;
     }
 
-    const [result] = await (sock as any).onWhatsApp(`${clean}@s.whatsapp.net`);
+    const result = await sock.checkNumber(clean);
     if (result && result.exists) {
       await send(`✅ Nomor *${targetPhone}*\n\nTERDAFTAR di WhatsApp.\nID: ${result.jid}`);
     } else {

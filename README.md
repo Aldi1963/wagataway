@@ -1,4 +1,4 @@
-# 🚀 SaaS WhatsApp Gateway Pro — v1.5.0 Premium
+# 🚀 SaaS WhatsApp Gateway Pro — v1.6.0 Premium Edition
 
 Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, dan aman untuk mengelola bisnis Anda melalui WhatsApp. Dibangun dengan desain **Zen Mode Premium** dan teknologi mutakhir untuk menangani ribuan pesan setiap harinya dengan kehandalan tinggi.
 
@@ -6,33 +6,41 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
 
 ## ✨ Fitur Unggulan (Premium Edition)
 
-### 🤖 AI Knowledge Base (CS Bot)
-*   **Custom Training**: Latih bot Anda dengan ribuan data pengetahuan (file/teks).
-*   **Prompt Engineering**: Atur kepribadian bot anda agar menjawab layaknya Customer Service profesional.
-*   **Context Aware**: AI yang bisa membaca konteks percakapan untuk jawaban yang akurat.
+### 🤖 AI Knowledge Base & CS Bot
+*   **Multi-Provider AI**: Integrasi OpenAI (GPT-4o) & Anthropic (Claude 3.5) untuk jawaban yang cerdas.
+*   **Custom Training**: Latih bot Anda dengan website scraping, file PDF/Doc, atau FAQ manual.
+*   **Human-in-the-loop**: Fitur unik di mana bot otomatis berhenti (*pause*) jika admin mengambil alih percakapan di Dashboard Live Chat.
+*   **Context Aware**: AI yang mampu memahami alur percakapan panjang untuk jawaban yang lebih akurat.
 
-### 📢 Blast Interaktif & Massal
-*   **Interactive Buttons**: Kirim pesan dengan tombol Quick Reply, Link, atau Panggilan Telepon.
-*   **Single Select Lists**: Menu list yang elegan untuk pilihan produk/layanan.
-*   **Excel/CSV Support**: Import ribuan kontak langsung dari spreadsheet secara instan.
-*   **Smart Personalization**: Gunakan placeholder `{nama}` atau variabel lain untuk kedekatan personal.
+### 💬 Live Chat & Omnichannel Inbox
+*   **Real-time Dashboard**: Kelola semua percakapan dari semua perangkat dalam satu inbox terpusat.
+*   **Agent Management**: Penugasan chat ke agen tertentu, labelisasi chat (Komplain, Sales, dll).
+*   **Internal Notes**: Berkolaborasi dengan tim menggunakan catatan internal yang tidak dapat dilihat pelanggan.
+*   **SLA Tracking**: Pantau waktu respons tim untuk menjaga kualitas layanan pelanggan.
 
-### 🛡️ Anti-Banned & Security
-*   **Typing Simulation**: Simulasi status "Mengetik..." sebelum pesan terkirim.
-*   **Random Delay**: Pengiriman pesan dengan jeda waktu acak yang bisa diatur.
-*   **Rotation Device**: Rotasi otomatis antar banyak nomor WA untuk membagi beban pesan.
-*   **Blacklist Management**: Hindari pengiriman ke nomor-nomor tertentu secara otomatis.
+### 🛒 Commerce & Automated Order Flow
+*   **WhatsApp Catalog**: Tampilkan list produk dengan gambar, detail, dan harga langsung di WA.
+*   **End-to-End Ordering**: Alur pemesanan otomatis dari pemilihan produk hingga pengisian data pengiriman.
+*   **Integrasi RajaOngkir**: Perhitungan ongkos kirim otomatis secara real-time berdasarkan alamat pelanggan.
+*   **Varian Produk**: Mendukung pilihan varian seperti ukuran, warna, atau tipe produk.
+
+### 📢 Blast Interaktif & Anti-Banned
+*   **Interactive Messaging**: Kirim pesan dengan tombol (Quick Reply, Link, Call) dan Single Select Lists Menu.
+*   **Smart Rotation**: Rotasi otomatis antar perangkat untuk membagi beban pesan dan meminimalisir risiko banned.
+*   **Typing Simulation**: Simulasi status "Mengetik..." yang natural sebelum pesan terkirim.
+*   **Excel/CSV Support**: Import ribuan kontak dan variabel personalisasi (seperti `{nama}`) secara instan.
 
 ### 🎨 Zen Design Dashboard
 *   **Premium UI**: Antarmuka modern dengan Glassmorphism, Dark Mode ready, dan Smooth Transitions.
-*   **Mobile Responsive**: Kelola bisnis Anda dari HP maupun Desktop dengan kenyamanan yang sama.
-*   **Live Statistic**: Widget real-time untuk memantau trafik pesan masuk dan keluar.
+*   **Mobile Responsive**: Dashboard yang nyaman diakses melalui smartphone maupun Desktop.
+*   **Live Statistic**: Visualisasi data real-time untuk memantau trafik pesan masuk, keluar, dan performa agen.
 
 ## 🛠️ Tech Stack
 *   **Frontend**: React.js 18, Vite, TailwindCSS, Framer Motion, ShadcnUI.
-*   **Backend**: Node.js, Express.js (TypeScript), Multer.
+*   **Backend**: Node.js, Express.js (TypeScript), Baileys WA Socket.
 *   **Database**: PostgreSQL, Drizzle ORM.
-*   **WA Library**: Baileys (Multi-Device support).
+*   **AI Engine**: OpenAI API, Anthropic API, PDF-Parse for knowledge extraction.
+*   **Shipment**: RajaOngkir API Integration.
 
 ## 🚀 Instalasi Lokal
 1.  **Clone & Install**:
@@ -40,54 +48,23 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
     git clone https://github.com/Aldi1963/wagataway.git
     cd wagataway && pnpm install
     ```
-2.  **Config**: Edit `.env` di `artifacts/api-server/`.
-3.  **Run**: `cd artifacts/api-server && pnpm dev` (Backend) & `cd artifacts/wa-gateway && pnpm dev` (Frontend).
+2.  **Config**: Edit `.env` di direktori `artifacts/api-server/`.
+3.  **Run Dev**: 
+    - UI: `cd artifacts/wa-gateway && npm run dev`
+    - API: `cd artifacts/api-server && npm run dev`
 
-## 🖥️ Deployment via aaPanel (Rekomendasi)
+## 🖥️ Deployment (VPS / Ubuntu)
+1.  **Build Frontend**: `cd artifacts/wa-gateway && pnpm build` (Hasil di `artifacts/wa-gateway/dist`).
+2.  **Start API**: `cd artifacts/api-server && pnpm build && pm2 start dist/index.mjs --name "wa-saas"`
 
-1.  **Akses aaPanel**: Masuk ke dashboard aaPanel Anda.
-2.  **App Store**: Cari dan Install **"Node.js project manager"**.
-3.  **Versi Node**: Gunakan Node.js v18 atau v20 di dalam Manager tersebut.
-4.  **Tambah Proyek**:
-    *   Klik **Website** → **Node.js project** → **Add Node.js Project**.
-    *   **Project directory**: Arahkan ke folder `artifacts/api-server`.
-    *   **Run command**: `pnpm build && pnpm start`.
-    *   **Project port**: `5000`.
-5.  **Setting Domain & SSL**:
-    *   Klik **Website target** (Hubungkan domain Anda).
-    *   Pasang SSL via menu **SSL** Let's Encrypt di aaPanel.
-6.  **Environment**: Edit file `.env` di folder project melalui menu **Files** aaPanel.
-
-## 🌐 Deployment VPS (Manual / Ubuntu)
-
-### 1. Persiapan Environment
-```bash
-sudo apt update && sudo apt upgrade -y
-curl -fsSL https://get.pnpm.io/install.sh | sh -
-npm install -g pm2
-```
-
-### 2. Build & Start
-```bash
-# Build Frontend
-cd artifacts/wa-gateway && pnpm build
-
-# Build & Start Backend
-cd artifacts/api-server
-pnpm build
-pm2 start dist/index.mjs --name "wa-saas"
-pm2 save
-```
-
-### 3. Nginx Proxy
-Arahkan domain ke port `5000`.
-
-## 🖥️ Roadmap Update (v1.5.0+)
+## 🖥️ Roadmap Progress
 - [x] **Interactive Messaging support** (Buttons & Lists).
-- [x] **Excel/CSV bulk import contact**.
 - [x] **Advanced AI Knowledge Base system**.
-- [ ] Integration with Webview for Custom App.
+- [x] **Live Chat & Omnichannel Dashboard**.
+- [x] **Automated Order Flow with RajaOngkir**.
+- [x] **AI Human-in-the-loop handoff**.
 - [ ] Multi-Admin Agency support.
+- [ ] Integration with Mobile WebView Wrapper.
 
 ---
 Developed with ❤️ by **Aldi1963**

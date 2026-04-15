@@ -149,7 +149,7 @@ export async function handleOrderFlow(
     if (catalogTriggers.some((t) => lower.includes(t))) {
       // ── FEATURE GATING CHECK ──────────────────────────────────────────────
       const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, sub?.planId || "free"));
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.slug, sub?.planId || "free"));
       
       if (!plan || !plan.commerceEnabled) {
          return "⚠️ *Fitur Commerce Premium*\n\nMaaf, sistem pemesanan otomatis dan cek ongkir hanya tersedia untuk pengguna *Enterprise*.\n\nSilakan upgrade paket Anda di dashboard billing untuk mengaktifkan fitur ini! 🚀";
