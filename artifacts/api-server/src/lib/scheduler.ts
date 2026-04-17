@@ -92,6 +92,7 @@ async function processScheduledMessages(): Promise<void> {
             phone: msg.phone,
             message: msg.message,
             status: "sent",
+            messageType: "text",
           });
 
           await db

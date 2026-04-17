@@ -261,10 +261,15 @@ export async function processBulkJob({
 
 
         await db.insert(messagesTable).values({
-          userId, deviceId, phone: recipient.phone,
-          message: personalizedMsg, status: "sent",
-          mediaUrl: mediaUrl ?? null, bulkJobId: jobId,
-          messageType, extra: extra ? JSON.parse(JSON.stringify(extra)) : null,
+          userId,
+          deviceId: deviceId!,
+          phone: recipient.phone,
+          message: personalizedMsg,
+          mediaUrl: mediaUrl ?? null,
+          messageType: mediaUrl ? (mediaType ?? "image") : "text",
+          status: "sent",
+          bulkJobId: jobId,
+          extra: extra ? JSON.parse(JSON.stringify(extra)) : null,
         });
 
         await db.update(devicesTable)
