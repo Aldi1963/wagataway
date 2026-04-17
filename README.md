@@ -7,19 +7,22 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
 ## ✨ Fitur Unggulan (Premium Edition)
 
 ### 🤖 AI Knowledge Base & CS Bot
+*   **AI Voice-to-Text (New!)**: Transkripsi otomatis pesan suara (voice notes) pelanggan secara real-time menggunakan OpenAI Whisper.
+*   **AI Conversation Summary (New!)**: Rangkuman isi percakapan panjang secara otomatis untuk membantu agen memahami konteks masalah dengan cepat.
 *   **Multi-Provider AI**: Integrasi OpenAI (GPT-4o) & Anthropic (Claude 3.5) untuk jawaban yang cerdas.
 *   **Custom Training**: Latih bot Anda dengan website scraping, file PDF/Doc, atau FAQ manual.
+*   **Automatic API Billing**: Penggunaan API Key admin secara otomatis untuk user dengan paket tertentu tanpa perlu input key mandiri.
 *   **Human-in-the-loop**: Fitur unik di mana bot otomatis berhenti (*pause*) jika admin mengambil alih percakapan di Dashboard Live Chat.
-*   **Context Aware**: AI yang mampu memahami alur percakapan panjang untuk jawaban yang lebih akurat.
 
 ### 💬 Live Chat & Omnichannel Inbox
 *   **Real-time Dashboard**: Kelola semua percakapan dari semua perangkat dalam satu inbox terpusat.
+*   **Media Transcription Display**: Hasil transkripsi pesan suara muncul langsung di bawah bubble chat audio.
 *   **Agent Management**: Penugasan chat ke agen tertentu, labelisasi chat (Komplain, Sales, dll).
 *   **Internal Notes**: Berkolaborasi dengan tim menggunakan catatan internal yang tidak dapat dilihat pelanggan.
 *   **SLA Tracking**: Pantau waktu respons tim untuk menjaga kualitas layanan pelanggan.
 
 ### 🚀 Features & Capabilities
-*   **AI Smart Agent**: Chatbot berbasis OpenAI yang mampu berinteraksi secara natural, memahami konteks produk, dan didukung fitur *Human-in-the-Loop* (Admin bisa mengambil alih chat kapan saja).
+*   **AI Smart Agent**: Chatbot berbasis OpenAI yang mampu berinteraksi secara natural, memahami konteks produk, dan didukung fitur *Human-in-the-loop* (Admin bisa mengambil alih chat kapan saja).
 *   **Omni-Device Management**: Hubungkan banyak nomor WhatsApp sekaligus dengan sistem rotasi cerdas (*Smart Load Balancing*) untuk keamanan akun.
 *   **PWA Ready**: Dashboard progresif yang bisa diinstal di ponsel (Android/iOS) dengan performa loading instan berkat *lazy loading* dan *code splitting*.
 *   **Sistem Keagenan (Reseller)**: Fitur manajemen reseller lengkap dengan limitasi kuota (perangkat, pesan, kontak) dan kontrol status akun (*real-time suspension*).
@@ -33,7 +36,7 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
 *   **Backend**: Node.js, Express.js (TypeScript), Baileys WA Socket.
 *   **Database**: PostgreSQL, Drizzle ORM.
 *   **Caching & Optimization**: Vite PWA, Service Workers, Manual Chunking.
-*   **AI Engine**: OpenAI API (GPT-4o/o1).
+*   **AI Engine**: OpenAI API (GPT-4o/o1), Whisper API for Audio.
 
 ---
 
@@ -112,9 +115,9 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
 - [x] **Live Chat & Omnichannel Dashboard**.
 - [x] **Automated Order Flow with RajaOngkir**.
 - [x] **AI Human-in-the-loop handoff**.
+- [x] **AI Voice-to-Text Transcription**.
+- [x] **AI Conversation Summarization**.
 - [x] **PWA & Mobile Ready Dashboard**.
-- [x] **Multi-Admin / Reseller Quota Support**.
-- [x] **Mobile WebView Bridge (Haptics & Notify)**.
 
 ---
 
