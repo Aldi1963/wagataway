@@ -108,6 +108,7 @@ export type AiProvider =
   | "mistral";
 
 const PROVIDER_BASE_URLS: Partial<Record<AiProvider, string>> = {
+  openai: undefined, // uses default
   groq: "https://api.groq.com/openai/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai/",
   openrouter: "https://openrouter.ai/api/v1",
@@ -279,7 +280,7 @@ export async function generateAiReply(
     if (provider === "anthropic") {
       return await callAnthropic(apiKey, model, maxTokens, systemPrompt, incomingMsg);
     }
-    const baseURL = (provider === "platform") ? await getAiBaseUrl() : PROVIDER_BASE_URLS[provider === "platform" ? "openai" : provider];
+    const baseURL = (provider === "platform") ? await getAiBaseUrl() : PROVIDER_BASE_URLS[provider];
     return await callOpenAICompat(apiKey, model, maxTokens, systemPrompt, incomingMsg, baseURL);
   } catch (err) {
     console.error(`[cs-bot-ai] Error calling ${provider}:`, err);

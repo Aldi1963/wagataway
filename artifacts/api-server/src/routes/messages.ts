@@ -671,7 +671,7 @@ router.post("/messages/retry-failed", async (req, res): Promise<void> => {
       if (!sess?.socket) { errors++; continue; }
 
       const jid = `${msg.phone}@s.whatsapp.net`;
-      await sendWithAntiBanned(sess.socket, jid, msg.message, msg.deviceId);
+      await sendWithAntiBanned({ socket: sess.socket, jid, message: msg.message });
 
       await db.update(messagesTable)
         .set({ status: "sent" })

@@ -115,6 +115,8 @@ export interface SendOptions {
   jid: string;
   message: string;
   recipientName?: string;
+  mediaUrl?: string | null;
+  mediaType?: "image" | "video" | "audio" | "document" | null;
   minDelay?: number;
   maxDelay?: number;
   typingSimulation?: boolean;
@@ -127,6 +129,8 @@ export async function sendWithAntiBanned({
   jid,
   message,
   recipientName,
+  mediaUrl,
+  mediaType = "image",
   minDelay = 3,
   maxDelay = 10,
   typingSimulation = true,
@@ -139,7 +143,21 @@ export async function sendWithAntiBanned({
     await simulateTyping(socket, jid, typingDuration);
   }
 
-  await socket.sendMessage(jid, { text: spun });
+  if (mediaUrl) {
+    const type = mediaType ?? "image";
+    const waContent: any = { caption: spun };
+    if (type === "video") waContent.video = { url: mediaUrl };
+    else if (type === "audio") {
+      delete waContent.caption;
+      waContent.audio = { url: mediaUrl };
+      waContent.mimetype = "audio/mp4";
+    } else if (type === "document") waContent.document = { url: mediaUrl };
+    else waContent.image = { url: mediaUrl };
+
+    await socket.sendMessage(jid, waContent);
+  } else {
+    await socket.sendMessage(jid, { text: spun });
+  }
 
   if (applyDelay) {
     await randomDelay(minDelay, maxDelay);
