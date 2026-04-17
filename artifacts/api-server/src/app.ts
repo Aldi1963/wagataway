@@ -5,12 +5,27 @@ import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { rateLimit } from "express-rate-limit";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app: Express = express();
+
+// ── Rate Limiting ────────────────────────────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Limit each IP to 1000 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Terlalu banyak permintaan dari IP ini, silakan coba lagi nanti.",
+    code: "TOO_MANY_REQUESTS"
+  }
+});
+
+app.use(limiter);
 
 // ── Security Hardening ───────────────────────────────────────────────────────
 app.use(helmet({
@@ -68,11 +83,13 @@ if (frontendExists) {
   app.use(express.static(frontendDist));
 }
 
+import { maintenanceGuard } from "./middlewares/maintenance";
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-app.use("/api", router);
+app.use("/api", maintenanceGuard, router);
 
 // SPA fallback (catch-all for frontend)
 if (frontendExists) {

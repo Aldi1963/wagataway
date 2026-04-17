@@ -7,7 +7,8 @@ Panduan ini mencakup dua metode instalasi: **VPS** (direkomendasikan) dan **cPan
 ## Daftar Isi
 
 - [Persyaratan Sistem](#persyaratan-sistem)
-- [Instalasi di VPS (Ubuntu/Debian)](#instalasi-di-vps-ubuntudebian)
+- [**Auto Installer VPS (Sangat Direkomendasikan)**](#auto-installer-vps-sangat-direkomendasikan)
+- [Instalasi Manual di VPS (Ubuntu/Debian)](#instalasi-manual-di-vps-ubuntudebian)
 - [Instalasi di cPanel](#instalasi-di-cpanel)
 - [Pengaturan Cron Job di cPanel](#pengaturan-cron-job-di-cpanel)
 - [Konfigurasi Environment](#konfigurasi-environment)
@@ -31,7 +32,25 @@ Panduan ini mencakup dua metode instalasi: **VPS** (direkomendasikan) dan **cPan
 
 ---
 
-## Instalasi di VPS (Ubuntu/Debian)
+## Auto Installer VPS (Sangat Direkomendasikan)
+
+Jika Anda menggunakan VPS Linux (Ubuntu), gunakan script auto-installer untuk setup otomatis dalam satu perintah. Script ini akan menginstall Node.js, pnpm, PM2, PostgreSQL, Nginx, dan melakukan konfigurasi awal.
+
+### Langkah 1: Clone Repository
+```bash
+sudo git clone https://github.com/username/wa-gateway.git /var/www/wagateway
+cd /var/www/wagateway
+```
+
+### Langkah 2: Jalankan Script Installer
+```bash
+sudo bash scripts/vps-setup.sh
+```
+Ikuti instruksi di layar. Script akan membuat file `.env` otomatis dan memberikan informasi login & database di akhir proses.
+
+---
+
+## Instalasi Manual di VPS (Ubuntu/Debian)
 
 ### Langkah 1: Update Sistem & Install Dependencies
 
@@ -83,21 +102,23 @@ pnpm install --frozen-lockfile
 
 ### Langkah 4: Konfigurasi Environment Variables
 
+Aplikasi menggunakan satu file `.env` di root direktori untuk kemudahan manajemen.
+
 ```bash
-# Buat file .env untuk API server
-cat > artifacts/api-server/.env << 'EOF'
+# Copy file contoh ke .env
+cp .env.example .env
+
+# Edit file .env
+nano .env
+```
+
+Isi `.env` dengan kredensial Anda:
+```env
 NODE_ENV=production
 PORT=8080
-DATABASE_URL=postgresql://wagateway:password_anda_yang_kuat@localhost:5432/wagateway
-SESSION_SECRET=ganti_dengan_string_random_64_karakter
-EOF
-
-# Buat file .env untuk Frontend
-cat > artifacts/wa-gateway/.env << 'EOF'
-NODE_ENV=production
-PORT=3000
-BASE_PATH=/
-EOF
+DATABASE_URL=postgresql://wagateway:password_anda@localhost:5432/wagateway
+SESSION_SECRET=string_random_anda_64_karakter
+SESSIONS_DIR=./wa-sessions
 ```
 
 > **Tips:** Generate SESSION_SECRET dengan perintah:
@@ -129,41 +150,13 @@ BASE_PATH=/ pnpm --filter @workspace/wa-gateway run build
 ### Langkah 7: Konfigurasi PM2 (Process Manager)
 
 ```bash
-# Buat konfigurasi PM2
-cat > /var/www/wagateway/ecosystem.config.cjs << 'EOF'
-module.exports = {
-  apps: [
-    {
-      name: "wa-gateway-api",
-      script: "artifacts/api-server/dist/index.mjs",
-      cwd: "/var/www/wagateway",
-      instances: 1,
-      exec_mode: "fork",
-      env: {
-        NODE_ENV: "production",
-        PORT: 8080,
-        DATABASE_URL: "postgresql://wagateway:password_anda_yang_kuat@localhost:5432/wagateway",
-        SESSION_SECRET: "ganti_dengan_string_random_64_karakter"
-      },
-      error_file: "/var/log/pm2/wa-gateway-api-error.log",
-      out_file: "/var/log/pm2/wa-gateway-api-out.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-      max_restarts: 10,
-      restart_delay: 3000
-    }
-  ]
-};
-EOF
-
-# Buat direktori log
-sudo mkdir -p /var/log/pm2
-sudo chown -R $USER:$USER /var/log/pm2
-
-# Jalankan dengan PM2
+# Jalankan dengan PM2 menggunakan ecosystem config yang sudah tersedia
 pm2 start ecosystem.config.cjs
 pm2 save
-pm2 startup  # ikuti instruksi yang muncul untuk auto-start saat reboot
+pm2 startup  # Ikuti instruksi perintah yang muncul untuk auto-start saat reboot
 ```
+
+> **Note:** Direktori log akan dibuat otomatis di `logs/`
 
 ### Langkah 8: Konfigurasi Nginx
 

@@ -15,10 +15,11 @@ PANDUAN PEMASANGAN CPANEL - WA GATEWAY SAAS PRO
 5.  Catat URL koneksinya: postgresql://user:pass@localhost:5432/user_wagateway
 
 ### 3. Konfigurasi Environment (.env)
-1.  Di File Manager, buka folder wagateway/artifacts/api-server/.
+1.  Di File Manager, buka folder utama "wagateway".
 2.  Edit file ".env". Sesuaikan detail database Anda:
     DATABASE_URL=postgresql://user:pass@localhost:5432/user_wagateway
     SESSION_SECRET=buat_random_string_panjang
+    SESSIONS_DIR=./wa-sessions
 3.  Simpan (Save).
 
 ### 4. Setup Node.js App di cPanel
@@ -36,6 +37,7 @@ PANDUAN PEMASANGAN CPANEL - WA GATEWAY SAAS PRO
     cd ~/wagateway
     npm install -g pnpm
     pnpm install
+    pnpm run build
     pnpm --filter @workspace/db run push
 
 ### 6. Jalankan API Server (PM2)

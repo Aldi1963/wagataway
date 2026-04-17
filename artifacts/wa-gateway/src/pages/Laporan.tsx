@@ -14,15 +14,24 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 
-// ── CSV Helper ────────────────────────────────────────────────────────────────
+import * as XLSX from "xlsx";
 
-function downloadCSV(rows: string[][], filename: string) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
+// ── Export Helpers ────────────────────────────────────────────────────────────
+
+function downloadFile(data: any[][], filename: string, type: "csv" | "xlsx" = "xlsx") {
+  if (type === "csv") {
+    const csv = data.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+    a.click();
+  } else {
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan");
+    XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
+  }
 }
 
 // ── Stat Card ────────────────────────────────────────────────────────────────
@@ -99,8 +108,8 @@ export default function Laporan() {
           t.createdAt ? format(new Date(t.createdAt), "dd MMMM yyyy HH:mm", { locale: localeId }) : "",
         ]),
       ];
-      downloadCSV(rows, `transaksi-${format(new Date(), "yyyyMMdd")}.csv`);
-      toast({ title: "CSV transaksi berhasil diunduh" });
+      downloadFile(rows, `transaksi-${format(new Date(), "yyyyMMdd")}.xlsx`);
+      toast({ title: "Excel transaksi berhasil diunduh" });
     } finally {
       setExportingTransactions(false);
     }
@@ -125,8 +134,8 @@ export default function Laporan() {
           u.createdAt ? format(new Date(u.createdAt), "dd MMMM yyyy", { locale: localeId }) : "",
         ]),
       ];
-      downloadCSV(rows, `pengguna-${format(new Date(), "yyyyMMdd")}.csv`);
-      toast({ title: "CSV pengguna berhasil diunduh" });
+      downloadFile(rows, `pengguna-${format(new Date(), "yyyyMMdd")}.xlsx`);
+      toast({ title: "Excel pengguna berhasil diunduh" });
     } catch {
       toast({ title: "Gagal mengunduh data pengguna", variant: "destructive" });
     } finally {
@@ -150,8 +159,8 @@ export default function Laporan() {
           d.createdAt ? format(new Date(d.createdAt), "dd MMMM yyyy HH:mm", { locale: localeId }) : "",
         ]),
       ];
-      downloadCSV(rows, `perangkat-${format(new Date(), "yyyyMMdd")}.csv`);
-      toast({ title: "CSV perangkat berhasil diunduh" });
+      downloadFile(rows, `perangkat-${format(new Date(), "yyyyMMdd")}.xlsx`);
+      toast({ title: "Excel perangkat berhasil diunduh" });
     } catch {
       toast({ title: "Gagal mengunduh data perangkat", variant: "destructive" });
     } finally {
@@ -176,8 +185,8 @@ export default function Laporan() {
           m.createdAt ? format(new Date(m.createdAt), "dd MMMM yyyy HH:mm", { locale: localeId }) : "",
         ]),
       ];
-      downloadCSV(rows, `pesan-${format(new Date(), "yyyyMMdd")}.csv`);
-      toast({ title: `CSV pesan berhasil diunduh (${msgs.length} pesan)` });
+      downloadFile(rows, `pesan-${format(new Date(), "yyyyMMdd")}.xlsx`);
+      toast({ title: `Excel pesan berhasil diunduh (${msgs.length} pesan)` });
     } catch {
       toast({ title: "Gagal mengunduh data pesan", variant: "destructive" });
     } finally {
@@ -273,7 +282,7 @@ export default function Laporan() {
               disabled={exportingTransactions || transactions.length === 0}
             >
               {exportingTransactions ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Unduh CSV
+              Unduh Excel (.xlsx)
             </Button>
           </CardContent>
         </Card>
@@ -307,7 +316,7 @@ export default function Laporan() {
               disabled={exportingMessages || totalMessages === 0}
             >
               {exportingMessages ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Unduh CSV
+              Unduh Excel (.xlsx)
             </Button>
           </CardContent>
         </Card>
@@ -335,7 +344,7 @@ export default function Laporan() {
               disabled={exportingUsers}
             >
               {exportingUsers ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Unduh CSV
+              Unduh Excel (.xlsx)
             </Button>
           </CardContent>
         </Card>
@@ -360,7 +369,7 @@ export default function Laporan() {
               disabled={exportingDevices}
             >
               {exportingDevices ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Unduh CSV
+              Unduh Excel (.xlsx)
             </Button>
           </CardContent>
         </Card>
@@ -435,7 +444,7 @@ export default function Laporan() {
                   </table>
                   {totalMessages > 50 && (
                     <p className="text-xs text-center text-muted-foreground py-3 border-t">
-                      Menampilkan 50 dari {totalMessages} pesan. Gunakan tombol "Unduh CSV" untuk semua data.
+                      Menampilkan 50 dari {totalMessages} pesan. Gunakan tombol "Unduh Excel" untuk semua data.
                     </p>
                   )}
                 </div>
@@ -511,7 +520,7 @@ export default function Laporan() {
           <div className="flex gap-3 items-start">
             <Calendar className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Data diperbarui secara real-time. File CSV menggunakan encoding UTF-8 BOM agar kompatibel dengan Microsoft Excel.
+              Data diperbarui secara real-time. File Excel (.xlsx) menggunakan format standar agar kompatibel dengan Microsoft Office & Google Sheets.
               Laporan dihasilkan pada: <strong>{format(new Date(), "d MMMM yyyy, HH:mm", { locale: localeId })}</strong>
             </p>
           </div>

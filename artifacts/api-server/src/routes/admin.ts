@@ -77,6 +77,8 @@ function maskSmtpPassword(pwd: string): string {
 
 router.get("/admin/server-settings", async (req, res): Promise<void> => {
   const uptimeSec = Math.floor((Date.now() - startTime) / 1000);
+  const maintenanceVal = await getSetting("maintenance_mode").catch(() => "false");
+  
   const [[{ userCount }], [{ deviceCount }], smtpPwd] = await Promise.all([
     db.select({ userCount: count() }).from(usersTable),
     db.select({ deviceCount: count() }).from(devicesTable),
@@ -85,6 +87,7 @@ router.get("/admin/server-settings", async (req, res): Promise<void> => {
 
   res.json({
     ...serverConfig,
+    maintenanceMode: maintenanceVal === "true",
     smtpPassword: maskSmtpPassword(smtpPwd),
     smtpConfigured: !!(serverConfig.smtpHost && serverConfig.smtpUser && smtpPwd),
     version: APP_VERSION,
@@ -98,6 +101,8 @@ router.get("/admin/server-settings", async (req, res): Promise<void> => {
 
 router.put("/admin/server-settings", async (req, res): Promise<void> => {
   const b = req.body as Record<string, unknown>;
+  const saves: Promise<void>[] = [];
+
   if (typeof b.appName === "string") serverConfig.appName = b.appName;
   if (typeof b.baseUrl === "string") serverConfig.baseUrl = b.baseUrl;
   if (typeof b.maxDevicesPerUser === "number") serverConfig.maxDevicesPerUser = b.maxDevicesPerUser;
@@ -106,13 +111,20 @@ router.put("/admin/server-settings", async (req, res): Promise<void> => {
   if (typeof b.smtpPort === "number") serverConfig.smtpPort = b.smtpPort;
   if (typeof b.smtpUser === "string") serverConfig.smtpUser = b.smtpUser;
   if (typeof b.smtpFrom === "string") serverConfig.smtpFrom = b.smtpFrom;
-  if (typeof b.maintenanceMode === "boolean") serverConfig.maintenanceMode = b.maintenanceMode;
+  
+  if (typeof b.maintenanceMode === "boolean") {
+    saves.push(setSetting("maintenance_mode", String(b.maintenanceMode)));
+  }
+  
   if (typeof b.registrationOpen === "boolean") serverConfig.registrationOpen = b.registrationOpen;
+  
   // Save SMTP password to DB if provided (non-empty and not the masked placeholder)
   if (typeof b.smtpPassword === "string" && b.smtpPassword && !b.smtpPassword.includes("••")) {
-    await setSetting("smtp_password", b.smtpPassword);
+    saves.push(setSetting("smtp_password", b.smtpPassword));
   }
-  res.json({ success: true, config: serverConfig });
+  
+  await Promise.all(saves);
+  res.json({ success: true, config: { ...serverConfig, maintenanceMode: b.maintenanceMode } });
 });
 
 // ── Admin: SMTP Test ────────────────────────────────────────────────────────
