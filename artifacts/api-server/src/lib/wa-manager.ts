@@ -291,8 +291,8 @@ export async function startSession(deviceId: number): Promise<SessionState> {
       });
       registerDeviceCheckNumber(deviceId, async (phone) => {
         const cleaned = phone.replace(/\D/g, "").replace(/^0/, "62");
-        const [result] = await sock.onWhatsApp(`${cleaned}@s.whatsapp.net`);
-        return result || null;
+        const results = await sock.onWhatsApp(`${cleaned}@s.whatsapp.net`);
+        return (results && results.length > 0) ? results[0] : null;
       });
 
       // Fire device.connected webhook + email notification

@@ -114,10 +114,17 @@ async function checkQuota(userId: number, res: Response): Promise<boolean> {
 }
 
 /** Record sent message to DB */
-async function recordMessage(userId: number, deviceId: number, phone: string, message: string, mediaUrl?: string) {
-  const [msg] = await db
-    .insert(messagesTable)
-    .values({ userId, deviceId, phone, message: message ?? "[media]", status: "sent", mediaUrl: mediaUrl ?? null })
+async function recordMessage(userId: number, deviceId: number, phone: string, message: string, mediaUrl?: string, messageType?: string, jobId?: number) {
+  const [msg] = await db.insert(messagesTable).values({
+    userId,
+    deviceId: deviceId!,
+    phone: phone,
+    message,
+    mediaUrl: mediaUrl ?? null,
+    messageType: mediaUrl ? (messageType ?? "image") : "text",
+    status: "sent",
+    bulkJobId: jobId,
+  })
     .returning();
   return msg;
 }

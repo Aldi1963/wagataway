@@ -633,7 +633,7 @@ router.post("/messages/send-group", async (req, res): Promise<void> => {
       deviceId: parseInt(deviceId, 10),
       phone: groupId,
       message,
-      type: "text",
+      messageType: "text",
       status: "sent",
     }).returning();
 

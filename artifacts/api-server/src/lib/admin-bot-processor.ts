@@ -188,8 +188,7 @@ async function handlePaket(ctx: BotContext): Promise<void> {
   }
 
   const lines = plans.map((p, i) => {
-    const priceIdr = (p as any).priceIdr ?? p.price;
-    const priceStr = priceIdr > 0 ? fmtRp(priceIdr) + "/bulan" : "GRATIS";
+    const priceStr = p.priceIdr > 0 ? fmtRp(p.priceIdr) + "/bulan" : "GRATIS";
     return `${i + 1}. *${p.name}* — ${priceStr}\n   ${p.description ?? ""}`;
   });
   await send(
