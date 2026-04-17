@@ -33,8 +33,9 @@ interface Conversation {
 }
 interface ChatMessage {
   id: number; jid: string; fromMe: boolean; text: string | null;
-  mediaType: string | null; mediaUrl: string | null; status: string; isRead: boolean;
-  isInternal: boolean; timestamp: string; contactName: string | null; messageId: string | null;
+  mediaType: string | null; mediaUrl: string | null; transcription: string | null;
+  status: string; isRead: boolean; isInternal: boolean; timestamp: string;
+  contactName: string | null; messageId: string | null;
 }
 interface MessagesResponse { messages: ChatMessage[]; total: number; hasMore: boolean; }
 interface ConvMeta {
@@ -42,6 +43,7 @@ interface ConvMeta {
   status: string; assignedAgent: string | null; tags: string | null;
   slaDeadline: string | null; botPaused: boolean; resolvedAt: string | null;
   createdAt: string; updatedAt: string;
+  summary: string | null; summaryUpdatedAt: string | null;
 }
 interface CannedResponse { id: number; shortcut: string; title: string; body: string; }
 interface Report {
@@ -226,6 +228,18 @@ function Bubble({ msg, onReply, onCopy }: { msg: ChatMessage; onReply: (m: ChatM
           : msg.text
           ? <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.text}</p>
           : <span className="italic text-[11px] opacity-60">Pesan kosong</span>}
+        
+        {msg.mediaType === "audio" && msg.transcription && (
+          <div className={cn("mt-2 pt-2 border-t", isMe ? "border-emerald-400/30" : "border-border/60")}>
+            <div className={cn("flex items-center gap-1.5 text-[10px] font-bold mb-1 uppercase tracking-wider", isMe ? "text-emerald-100" : "text-emerald-600 dark:text-emerald-400")}>
+              <Zap size={10} className="fill-current" /> AI Transcription
+            </div>
+            <p className={cn("text-[12px] leading-relaxed italic", isMe ? "text-white/90" : "text-foreground/90")}>
+              "{msg.transcription}"
+            </p>
+          </div>
+        )}
+
         <div className={cn("flex items-center gap-1 mt-1 justify-end", isMe ? "text-white/70" : "text-muted-foreground")}>
           <span className="text-[10px]">{fmt(msg.timestamp)}</span>
           {isMe && (msg.status === "sending" ? <Clock size={11} /> : msg.isRead ? <CheckCheck size={11} className="text-blue-300" /> : <Check size={11} />)}
@@ -337,6 +351,7 @@ function InfoPanel({
   const [agentInput, setAgentInput] = useState(meta?.assignedAgent ?? "");
   const [slaHours, setSlaHours] = useState(4);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
 
   const phone = phoneFromJid(jid);
   const name = conv?.contactName || phone;
@@ -379,6 +394,23 @@ function InfoPanel({
     toast({ title: meta?.botPaused ? "CS Bot diaktifkan kembali" : "CS Bot dijeda — Anda mengambil alih" });
   }
 
+  async function generateSummary() {
+    if (summarizing) return;
+    setSummarizing(true);
+    try {
+      const r = await apiFetch(`/chat/conversation/${encodeURIComponent(jid)}/summarize?deviceId=${deviceId}`, {
+        method: "POST",
+      });
+      const data = await r.json();
+      onMetaChange(data);
+      toast({ title: "Rangkuman AI berhasil dibuat" });
+    } catch (err) {
+      toast({ title: "Gagal membuat rangkuman", variant: "destructive" });
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
   function submitNote() {
     if (!noteText.trim()) return;
     onSendNote(noteText.trim(), noteAuthor.trim() || "Agen");
@@ -418,9 +450,32 @@ function InfoPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* ── Info Tab ── */}
         {activeTab === "info" && (
           <div className="p-4 space-y-4">
+
+            {/* AI Summary */}
+            <div className="space-y-1.5 p-3 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30">
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-[10px] font-bold flex items-center gap-1.5 text-violet-700 dark:text-violet-400 uppercase tracking-wider">
+                  <Zap size={11} className="fill-current" /> AI Summary
+                </Label>
+                <button onClick={generateSummary} disabled={summarizing || messages.length === 0}
+                  className="text-[10px] font-semibold text-violet-600 hover:text-violet-800 disabled:opacity-50 flex items-center gap-1">
+                  {summarizing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+                  Update
+                </button>
+              </div>
+              {meta?.summary ? (
+                <div className="space-y-1">
+                  <p className="text-[12px] text-violet-900 dark:text-violet-200 leading-relaxed whitespace-pre-line italic">
+                    {meta.summary}
+                  </p>
+                  <p className="text-[9px] text-violet-500 text-right">Diperbarui: {meta.summaryUpdatedAt ? fmt(meta.summaryUpdatedAt) : "-"}</p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-violet-500/80 italic">Belum ada rangkuman. Klik update untuk membuat.</p>
+              )}
+            </div>
 
             {/* Status */}
             <div className="space-y-1.5">

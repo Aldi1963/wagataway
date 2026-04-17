@@ -70,9 +70,29 @@ export async function checkAiAccess(userId: number): Promise<AiAccessInfo> {
   }
   const planAllows = await checkUserPlanAllowsAi(userId);
   if (planAllows) {
-    return { allowed: true, source: "plan", hasOwnKey: false, keyPrefix: null };
+    const adminKey = await getAdminApiKey();
+    if (adminKey) {
+      return { allowed: true, source: "plan", hasOwnKey: false, keyPrefix: "Platform Key (Admin)" };
+    }
   }
   return { allowed: false, source: "none", hasOwnKey: false, keyPrefix: null };
+}
+
+export async function getEffectiveAiKey(userId: number, provider: AiProvider = "openai"): Promise<string | null> {
+  // 1. Check User's own key
+  const userKey = await getUserAiKey(userId, provider);
+  if (userKey) return userKey;
+
+  // 2. Check Plan Eligibility
+  const planAllows = await checkUserPlanAllowsAi(userId);
+  if (planAllows) {
+    // Return Admin Key
+    if (provider === "openai" || provider === "platform") {
+      return await getAdminApiKey();
+    }
+  }
+
+  return null;
 }
 
 // ── Provider config ────────────────────────────────────────────────────────────
@@ -190,6 +210,33 @@ async function callOpenAICompat(
   return resp.choices[0]?.message?.content?.trim() ?? null;
 }
 
+export async function generateConversationSummary(
+  userId: number,
+  messages: { fromMe: boolean; text: string | null; contactName: string | null }[]
+): Promise<string | null> {
+  const apiKey = await getEffectiveAiKey(userId, "openai");
+  if (!apiKey) return null;
+
+  const history = messages
+    .map((m) => `${m.fromMe ? "Agen" : (m.contactName || "Pelanggan")}: ${m.text || "[Media/Pesan Kosong]"}`)
+    .join("\n");
+
+  const systemPrompt = `Kamu adalah asisten profesional. Tugasmu adalah merangkum percakapan WhatsApp antara pelanggan dan agen CS.
+Rangkuman harus sangat singkat (maksimal 3-5 poin), bahasa Indonesia yang sopan, dan fokus pada:
+1. Masalah utama pelanggan.
+2. Status terakhir (apakah sudah selesai atau masih perlu bantuan).
+3. Informasi penting lainnya (nomor order, alamat, dll jika ada).`;
+
+  const userMessage = `Berikut adalah transkrip percakapan:\n\n${history}\n\nBerikan rangkuman poin-poin.`;
+
+  try {
+    return await callOpenAICompat(apiKey, "gpt-4o-mini", 300, systemPrompt, userMessage);
+  } catch (err) {
+    console.error("[cs-bot-ai] Failed to generate summary:", err);
+    return null;
+  }
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 export async function generateAiReply(
@@ -213,45 +260,12 @@ export async function generateAiReply(
   const systemPrompt = buildSystemPrompt(ctx);
   const maxTokens = ctx.maxTokens;
 
-  // ── Per-bot custom API key ────────────────────────────────────────────────
-  if (provider !== "platform" && ctx.providerApiKey?.trim()) {
-    const apiKey = ctx.providerApiKey.trim();
-    const model = ctx.model;
-
-    try {
-      if (provider === "anthropic") {
-        return await callAnthropic(apiKey, model, maxTokens, systemPrompt, incomingMsg);
-      }
-      const baseURL = PROVIDER_BASE_URLS[provider];
-      const extraHeaders =
-        provider === "openrouter"
-          ? { "HTTP-Referer": "https://wagateway.app", "X-Title": "WA Gateway CS Bot" }
-          : undefined;
-      return await callOpenAICompat(apiKey, model, maxTokens, systemPrompt, incomingMsg, baseURL, extraHeaders);
-    } catch (err) {
-      console.error(`[cs-bot-ai] Error calling ${provider}:`, err);
-      return null;
-    }
-  }
-
-  // ── Platform / user-level AI key fallback ─────────────────────────────
+  // ── Key Resolution ────────────────────────────────────────────────────────
   let apiKey: string | null = null;
-  if (userId) {
-    apiKey = await getUserAiKey(userId, provider === "platform" ? undefined : provider);
-  }
-
-  // If we still don't have a key and provider is platform, use admin settings
-  if (!apiKey && provider === "platform") {
-    apiKey = await getAdminApiKey();
-    const defaultModel = await getDefaultModel();
-    const model = ctx.model || defaultModel;
-    const baseURL = await getAiBaseUrl();
-    try {
-      return await callOpenAICompat(apiKey!, model, maxTokens, systemPrompt, incomingMsg, baseURL);
-    } catch (err) {
-      console.error("[cs-bot-ai] Error calling platform AI:", err);
-      return null;
-    }
+  if (provider !== "platform" && ctx.providerApiKey?.trim()) {
+    apiKey = ctx.providerApiKey.trim();
+  } else if (userId) {
+    apiKey = await getEffectiveAiKey(userId, provider === "platform" ? "openai" : provider);
   }
 
   if (!apiKey) {
@@ -259,13 +273,13 @@ export async function generateAiReply(
     return null;
   }
 
-  const model = ctx.model;
+  const model = ctx.model || (provider === "platform" ? await getDefaultModel() : "gpt-4o-mini");
 
   try {
     if (provider === "anthropic") {
       return await callAnthropic(apiKey, model, maxTokens, systemPrompt, incomingMsg);
     }
-    const baseURL = PROVIDER_BASE_URLS[provider === "platform" ? "openai" : provider];
+    const baseURL = (provider === "platform") ? await getAiBaseUrl() : PROVIDER_BASE_URLS[provider === "platform" ? "openai" : provider];
     return await callOpenAICompat(apiKey, model, maxTokens, systemPrompt, incomingMsg, baseURL);
   } catch (err) {
     console.error(`[cs-bot-ai] Error calling ${provider}:`, err);

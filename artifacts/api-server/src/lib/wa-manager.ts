@@ -21,8 +21,10 @@ import QRCode from "qrcode";
 import { processBotMessage, type BotReply } from "../routes/cs-bot";
 import { processAdminBotMessage, isAdminBotDevice, startReminderCron } from "./admin-bot-processor";
 import { registerDeviceSender, unregisterDeviceSender, registerDeviceListSender, registerDeviceCheckNumber } from "./wa-sender";
+import { transcribeAudio } from "./audio-processor";
 
-const SESSIONS_DIR = path.resolve(process.cwd(), "wa-sessions");
+
+const SESSIONS_DIR = path.resolve(process.cwd(), process.env.SESSIONS_DIR || "wa-sessions");
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 // ── Auto-online timers (per device) ─────────────────────────────────────────
@@ -444,6 +446,15 @@ export async function startSession(deviceId: number): Promise<SessionState> {
       // ── Save incoming message to chat_inbox (individual chats only) ──────
       if (!isGroup) {
         try {
+          let transcription: string | null = null;
+          if (mediaType === "audio" && mediaPayload?.stream) {
+            const buffer = Buffer.from(mediaPayload.stream.data);
+            transcription = await transcribeAudio(buffer, device.userId, mediaPayload.mimetype);
+            if (transcription) {
+              logger.info({ transcription }, "[WA] Audio transcribed");
+            }
+          }
+
           const [saved] = await db.insert(chatInboxTable).values({
             userId: device.userId,
             deviceId,
@@ -453,6 +464,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             messageId: msg.key.id ?? null,
             text: text || null,
             mediaType,
+            transcription,
             status: "received",
             isRead: false,
           }).returning();

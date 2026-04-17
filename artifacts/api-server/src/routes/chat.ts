@@ -4,6 +4,7 @@ import { eq, and, desc, sql, or, asc, count, gte } from "drizzle-orm";
 import { getUserFromToken } from "./auth";
 import { getSession } from "../lib/wa-manager";
 import { EventEmitter } from "events";
+import { generateConversationSummary } from "../lib/cs-bot-ai";
 
 const router: IRouter = Router();
 
@@ -350,6 +351,44 @@ router.put("/chat/conversation/:jid/sla", async (req: Request, res: Response): P
     .set({ slaDeadline: slaDeadline ? new Date(slaDeadline) : null, updatedAt: new Date() })
     .where(eq(chatConversationsTable.id, conv.id))
     .returning();
+  res.json(updated);
+});
+
+// POST /chat/conversation/:jid/summarize?deviceId=X
+router.post("/chat/conversation/:jid/summarize", async (req: Request, res: Response): Promise<void> => {
+  const uid = getUser(req);
+  const jid = decodeURIComponent(req.params.jid);
+  const deviceId = parseInt(req.query.deviceId as string, 10);
+  if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
+
+  const conv = await getOrCreateConv(uid, deviceId, jid);
+  
+  // Get last 40 messages for context
+  const messages = await db
+    .select({ fromMe: chatInboxTable.fromMe, text: chatInboxTable.text, contactName: chatInboxTable.contactName })
+    .from(chatInboxTable)
+    .where(and(eq(chatInboxTable.userId, uid), eq(chatInboxTable.deviceId, deviceId), eq(chatInboxTable.jid, jid)))
+    .orderBy(desc(chatInboxTable.timestamp))
+    .limit(40);
+
+  if (messages.length === 0) {
+    res.status(400).json({ message: "No messages to summarize" });
+    return;
+  }
+
+  const summary = await generateConversationSummary(uid, messages.reverse());
+  
+  if (!summary) {
+    res.status(500).json({ message: "Failed to generate summary" });
+    return;
+  }
+
+  const [updated] = await db.update(chatConversationsTable)
+    .set({ summary, summaryUpdatedAt: new Date(), updatedAt: new Date() })
+    .where(eq(chatConversationsTable.id, conv.id))
+    .returning();
+
+  getChatEmitter(deviceId).emit("conv_update", updated);
   res.json(updated);
 });
 

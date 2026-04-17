@@ -14,6 +14,8 @@ export const chatConversationsTable = pgTable("chat_conversations", {
   slaDeadline: timestamp("sla_deadline", { withTimezone: true }),
   botPaused: boolean("bot_paused").notNull().default(false),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  summary: text("summary"),
+  summaryUpdatedAt: timestamp("summary_updated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

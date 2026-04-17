@@ -16,6 +16,7 @@ export const chatInboxTable = pgTable("chat_inbox", {
   status: text("status").notNull().default("received"),
   isRead: boolean("is_read").notNull().default(false),
   isInternal: boolean("is_internal").notNull().default(false),
+  transcription: text("transcription"),
   timestamp: timestamp("timestamp", { withTimezone: true }).notNull().defaultNow(),
 });
 
