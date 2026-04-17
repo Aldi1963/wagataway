@@ -94,7 +94,7 @@ else
 fi
 
 echo -e "${YELLOW}[4/8] Installing project dependencies...${NC}"
-pnpm install --frozen-lockfile
+pnpm install --no-frozen-lockfile
 
 echo -e "${YELLOW}[5/8] Building project...${NC}"
 # Build everything
