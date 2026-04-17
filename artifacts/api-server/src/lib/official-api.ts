@@ -18,13 +18,13 @@ export async function sendOfficialMessage(config: OfficialConfig, jid: string, m
     };
   }
 
-  const url = `https://graph.facebook.com/v21.0/${config.phoneId}/messages`;
+  const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
 
   try {
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${config.accessToken}`,
+        "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -41,25 +41,34 @@ export async function sendOfficialMessage(config: OfficialConfig, jid: string, m
 
     return data;
   } catch (error) {
-    logger.error({ error, phone, config: config.phoneId }, "Error sending official message");
+    logger.error({ error, phone, phoneId: config.phoneId }, "Error sending official message");
     throw error;
   }
 }
 
-export function formatOfficialInteractive(text: string, footer: string, buttons: any[]) {
+export interface OfficialInteractiveOptions {
+  type: "button" | "list";
+  body: string;
+  footer?: string;
+  header?: any;
+  buttons?: any[];
+}
+
+export function formatOfficialInteractive({
+  type,
+  body,
+  footer,
+  header,
+  buttons = [],
+}: OfficialInteractiveOptions) {
   return {
     type: "interactive",
     interactive: {
-      type: "button",
-      body: { text },
+      type: type || "button",
+      ...(header ? { header } : {}),
+      body: { text: body },
       footer: { text: footer || "" },
       action: {
-        buttons: buttons.map((b, i) => {
-          if (b.type === "url") {
-            // Official Cloud API Buttons are limited for 'button' type
-            // Usually we use 'template' for URLs or another interactive type
-            // But for simple 'button' type, it's usually just quick_reply
-            // For URL/Call, we should ideally use 'template' or 'cta'
             return {
               type: "reply",
               reply: {
