@@ -135,7 +135,7 @@ server {
     }
 
     location / {
-        try_files \$uri \$uri/ /index.html;
+        try_files $uri $uri/ /index.html;
     }
 }
 EOF
@@ -150,6 +150,26 @@ if [ -f "/etc/nginx/sites-enabled/default" ]; then
 fi
 
 nginx -t && systemctl reload nginx
+
+# --- AUTOMATED SSL WITH CERTBOT ---
+if [ "$DOMAIN_NAME" != "localhost" ]; then
+    echo -e "${YELLOW}Konfigurasi SSL (HTTPS) untuk $DOMAIN_NAME...${NC}"
+    read -p "Masukkan email untuk notifikasi SSL (penting): " USER_EMAIL
+    
+    if [ ! -z "$USER_EMAIL" ]; then
+        apt install -y certbot python3-certbot-nginx
+        
+        # Check if domain points to this IP before trying certbot
+        # This is a basic check. Certbot will do its own.
+        echo -e "${YELLOW}Menghubungi Let's Encrypt...${NC}"
+        certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m $USER_EMAIL --redirect || {
+            echo -e "${RED}Gagal memasang SSL. Pastikan domain $DOMAIN_NAME sudah diarahkan ke IP VPS ini.${NC}"
+            echo -e "Anda bisa mencoba lagi nanti dengan perintah: sudo certbot --nginx -d $DOMAIN_NAME"
+        }
+    else
+        echo -e "${YELLOW}Email kosong. Melewati instalasi SSL otomatis.${NC}"
+    fi
+fi
 
 echo -e "${GREEN}===============================================${NC}"
 echo -e "${GREEN}   INSTALASI SELESAI!                        ${NC}"
