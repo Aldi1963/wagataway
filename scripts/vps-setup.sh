@@ -22,7 +22,16 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Get the directory of the script
-APP_DIR=$(pwd)
+REPO_URL="https://github.com/Aldi1963/wagataway.git"
+APP_DIR="/home/wagateway/app"
+
+echo -e "${YELLOW}[0/8] Preparing Project Directory...${NC}"
+mkdir -p /home/wagateway
+if [ ! -d "$APP_DIR" ]; then
+    git clone $REPO_URL $APP_DIR
+fi
+cd $APP_DIR
+
 LOG_FILE="$APP_DIR/install.log"
 
 echo -e "${YELLOW}[1/8] Update system & dependencies...${NC}"
@@ -185,5 +194,6 @@ echo -e "Pass: $DB_PASS"
 echo -e "DB: $DB_NAME"
 echo -e ""
 echo -e "${RED}PENTING: Segera ganti password admin setelah login!${NC}"
-echo -e "Password DB anda disimpan di file ${YELLOW}.env${NC}"
+echo -e "Password DB anda disimpan di file ${YELLOW}$APP_DIR/.env${NC}"
+echo -e "Folder aplikasi: ${YELLOW}$APP_DIR${NC}"
 echo -e "==============================================="
