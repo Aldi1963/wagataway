@@ -1,15 +1,22 @@
 import { logger } from "./logger";
 
-export interface OfficialConfig {
+export interface OfficialSendOptions {
   phoneId: string;
   accessToken: string;
+  to: string;
+  message: any;
 }
 
-export async function sendOfficialMessage(config: OfficialConfig, jid: string, message: any) {
-  const phone = jid.split("@")[0];
+export async function sendOfficialMessage({
+  phoneId,
+  accessToken,
+  to,
+  message,
+}: OfficialSendOptions) {
+  const phone = to.replace(/\D/g, "");
 
   // ── Simulation Mode ────────────────────────────────────────────────────────
-  if (config.accessToken === "SIMULATE") {
+  if (accessToken === "SIMULATE") {
     logger.info({ phone, message }, "[OFFICIAL-SIM] Simulating API call to Meta");
     return {
       messaging_product: "whatsapp",
@@ -41,7 +48,7 @@ export async function sendOfficialMessage(config: OfficialConfig, jid: string, m
 
     return data;
   } catch (error) {
-    logger.error({ error, phone, phoneId: config.phoneId }, "Error sending official message");
+    logger.error({ error, phone, phoneId }, "Error sending official message");
     throw error;
   }
 }
@@ -69,19 +76,12 @@ export function formatOfficialInteractive({
       body: { text: body },
       footer: { text: footer || "" },
       action: {
-            return {
-              type: "reply",
-              reply: {
-                id: b.id || `btn_${i}`,
-                title: (b.displayText || b.title).substring(0, 20),
-              }
-            };
-          }
+        buttons: (buttons || []).map((b, i) => {
           return {
             type: "reply",
             reply: {
               id: b.id || `btn_${i}`,
-              title: (b.displayText || b.title).substring(0, 20),
+              title: (b.displayText || b.title || "Button").substring(0, 20),
             }
           };
         })
