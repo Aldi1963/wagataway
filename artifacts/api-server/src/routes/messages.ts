@@ -110,7 +110,7 @@ router.post("/messages/send", async (req, res): Promise<void> => {
         payload = { type: "text", text: { body: message } };
       }
 
-      const response = await sendOfficialMessage({
+      const response: any = await sendOfficialMessage({
         accessToken: device.officialAccessToken!,
         phoneId: device.officialPhoneId!,
         to: phone.replace(/\D/g, ""),

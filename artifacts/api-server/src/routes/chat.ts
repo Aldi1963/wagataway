@@ -193,7 +193,7 @@ router.post("/chat/send", async (req: Request, res: Response): Promise<void> => 
 router.delete("/chat/conversations/:jid", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
   const { deviceId } = req.query;
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
 
   await db
@@ -212,7 +212,7 @@ router.delete("/chat/conversations/:jid", async (req: Request, res: Response): P
 router.patch("/chat/conversations/:jid/unread", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
   const { deviceId } = req.query;
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
 
   // Mark the last incoming message as unread
@@ -311,7 +311,7 @@ router.put("/chat/conversation/:jid/assign", async (req: Request, res: Response)
 // PUT /chat/conversation/:jid/tags?deviceId=X
 router.put("/chat/conversation/:jid/tags", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   const { tags } = req.body;
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
@@ -326,7 +326,7 @@ router.put("/chat/conversation/:jid/tags", async (req: Request, res: Response): 
 // PUT /chat/conversation/:jid/bot-pause?deviceId=X
 router.put("/chat/conversation/:jid/bot-pause", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   const { botPaused } = req.body;
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
@@ -342,7 +342,7 @@ router.put("/chat/conversation/:jid/bot-pause", async (req: Request, res: Respon
 // PUT /chat/conversation/:jid/sla?deviceId=X
 router.put("/chat/conversation/:jid/sla", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   const { slaDeadline } = req.body;
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
@@ -357,7 +357,7 @@ router.put("/chat/conversation/:jid/sla", async (req: Request, res: Response): P
 // POST /chat/conversation/:jid/summarize?deviceId=X
 router.post("/chat/conversation/:jid/summarize", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
 
@@ -395,7 +395,7 @@ router.post("/chat/conversation/:jid/summarize", async (req: Request, res: Respo
 // POST /chat/conversation/:jid/note?deviceId=X — add internal note
 router.post("/chat/conversation/:jid/note", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   const { text, author } = req.body;
   if (!deviceId || !text?.trim()) { res.status(400).json({ message: "deviceId and text required" }); return; }
