@@ -71,8 +71,16 @@ Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, da
 
 ---
 
-### 🌐 2. Deployment ke Hosting (cPanel / VPS)
+### 🌐 2. Deployment ke Hosting (VPS)
 
+#### ⚡ Cara Tercepat: Auto-Installer (Rekomendasi)
+Jika Anda menggunakan **Ubuntu 22.04/24.04**, Anda bisa menginstal seluruh sistem (Database, Backend, Frontend, Nginx, SSL) hanya dengan satu baris perintah:
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Aldi1963/wagataway/main/scripts/vps-setup.sh)"
+```
+
+#### 🛠️ Cara Manual (Step-by-Step)
 #### Step A: Persiapan File
 1.  Compress folder `artifacts/` dan file di root ke dalam satu ZIP (kecuali `node_modules`).
 2.  Upload ke File Manager cPanel (rekomendasi: di luar `public_html`, misal di folder `/home/user/wagateway`).
