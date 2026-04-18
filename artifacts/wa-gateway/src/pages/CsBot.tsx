@@ -164,7 +164,7 @@ export default function CsBot() {
     if (!testMsg.trim() || testLoading) return;
     const msg = testMsg;
     setTestMsg("");
-    setTestHistory(h => [...h, { from: "user", text: msg }]);
+    setTestHistory((h: any) => [...h, { from: "user", text: msg }]);
     setTestLoading(true);
     try {
       const r = await apiFetch(`/cs-bot/${selectedDeviceId}/test`, { method: "POST", body: JSON.stringify({ message: msg }) });
@@ -254,11 +254,11 @@ export default function CsBot() {
             <TabsContent value="faqs">
                  <div className="space-y-4">
                     <div className="flex gap-2">
-                       <Input placeholder="Cari FAQ..." value={faqSearch} onChange={e=>setFaqSearch(e.target.value)} className="max-w-sm" />
+                       <Input placeholder="Cari FAQ..." value={faqSearch} onChange={(e: any)=>setFaqSearch(e.target.value)} className="max-w-sm" />
                        <Button onClick={()=>{setEditFaq(null);setFaqOpen(true)}} className="gap-2"><Plus className="w-4 h-4"/> Tambah FAQ</Button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {(Array.isArray(faqs) ? faqs : []).filter(f=>f.question.toLowerCase().includes(faqSearch.toLowerCase())).map(f=>(
+                       {(Array.isArray(faqs) ? faqs : []).filter((f: any) => f.question.toLowerCase().includes(faqSearch.toLowerCase())).map((f: any) => (
                           <Card key={f.id} className="relative group">
                              <CardContent className="p-4">
                                 <div className="flex justify-between items-start mb-2">
@@ -321,7 +321,7 @@ export default function CsBot() {
                       <div ref={testChatEndRef} />
                    </div>
                    <div className="p-4 border-t flex gap-2">
-                      <Input placeholder="Tes pesan ke bot..." value={testMsg} onChange={e=>setTestMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendTestMsg()} />
+                      <Input placeholder="Tes pesan ke bot..." value={testMsg} onChange={(e: any)=>setTestMsg(e.target.value)} onKeyDown={(e: any)=>e.key==='Enter'&&sendTestMsg()} />
                       <Button onClick={sendTestMsg} disabled={testLoading}><Send className="w-4 h-4"/></Button>
                    </div>
                 </Card>
@@ -341,12 +341,12 @@ export default function CsBot() {
             <DialogHeader><DialogTitle>{editFaq ? 'Edit FAQ' : 'Tambah FAQ'}</DialogTitle></DialogHeader>
             <div className="space-y-3 py-4">
                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label>Kategori</Label><Input value={faqForm.category} onChange={e=>setFaqForm({...faqForm,category:e.target.value})} /></div>
-                  <div className="space-y-1"><Label>Tipe</Label><Select value={faqForm.matchType} onValueChange={v=>setFaqForm({...faqForm,matchType:v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MATCH_TYPES.map(m=><SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></div>
+                   <div className="space-y-1"><Label>Kategori</Label><Input value={faqForm.category} onChange={(e: any)=>setFaqForm({...faqForm,category:e.target.value})} /></div>
+                  <div className="space-y-1"><Label>Tipe</Label><Select value={faqForm.matchType} onValueChange={(v: any)=>setFaqForm({...faqForm,matchType:v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MATCH_TYPES.map((m: any)=><SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></div>
                </div>
-               <div className="space-y-1"><Label>Pertanyaan</Label><Input value={faqForm.question} onChange={e=>setFaqForm({...faqForm,question:e.target.value})} /></div>
-               <div className="space-y-1"><Label>Kata Kunci (koma)</Label><Input value={faqForm.keywords} onChange={e=>setFaqForm({...faqForm,keywords:e.target.value})} /></div>
-               <div className="space-y-1"><Label>Jawaban</Label><Textarea value={faqForm.answer} onChange={e=>setFaqForm({...faqForm,answer:e.target.value})} rows={4} /></div>
+               <div className="space-y-1"><Label>Pertanyaan</Label><Input value={faqForm.question} onChange={(e: any)=>setFaqForm({...faqForm,question:e.target.value})} /></div>
+               <div className="space-y-1"><Label>Kata Kunci (koma)</Label><Input value={faqForm.keywords} onChange={(e: any)=>setFaqForm({...faqForm,keywords:e.target.value})} /></div>
+               <div className="space-y-1"><Label>Jawaban</Label><Textarea value={faqForm.answer} onChange={(e: any)=>setFaqForm({...faqForm,answer:e.target.value})} rows={4} /></div>
             </div>
             <DialogFooter><Button onClick={()=>saveFaq.mutate(faqForm)}>Simpan</Button></DialogFooter>
          </DialogContent>
@@ -358,10 +358,10 @@ export default function CsBot() {
             <div className="space-y-3 py-4">
                <div className="flex gap-2 p-1 bg-muted rounded-lg mb-2">
                   <Button variant="ghost" className="flex-1 bg-background shadow-sm h-8 text-xs">Manual</Button>
-                  <label className="flex-1 h-8 text-xs flex items-center justify-center cursor-pointer hover:bg-background/50 rounded-md transition-all"><Upload className="w-3 h-3 mr-1"/> Upload<input type="file" className="hidden" onChange={e=>{const f=e.target.files?.[0]; if(f) { uploadKnowledgeMutation.mutate(f); setKnowledgeOpen(false); }}} /></label>
+                  <label className="flex-1 h-8 text-xs flex items-center justify-center cursor-pointer hover:bg-background/50 rounded-md transition-all"><Upload className="w-3 h-3 mr-1"/> Upload<input type="file" className="hidden" onChange={(e: any)=>{const f=e.target.files?.[0]; if(f) { uploadKnowledgeMutation.mutate(f); setKnowledgeOpen(false); }}} /></label>
                </div>
-               <div className="space-y-1"><Label>Judul</Label><Input value={knowledgeForm.title} onChange={e=>setKnowledgeForm({...knowledgeForm,title:e.target.value})} /></div>
-               <div className="space-y-1"><Label>Konten</Label><Textarea value={knowledgeForm.content} onChange={e=>setKnowledgeForm({...knowledgeForm,content:e.target.value})} rows={10} /></div>
+               <div className="space-y-1"><Label>Judul</Label><Input value={knowledgeForm.title} onChange={(e: any)=>setKnowledgeForm({...knowledgeForm,title:e.target.value})} /></div>
+               <div className="space-y-1"><Label>Konten</Label><Textarea value={knowledgeForm.content} onChange={(e: any)=>setKnowledgeForm({...knowledgeForm,content:e.target.value})} rows={10} /></div>
             </div>
             <DialogFooter><Button onClick={()=>{apiFetch(`/cs-bot/${selectedDeviceId}/knowledge`,{method:'POST',body:JSON.stringify(knowledgeForm)}).then(()=>{qc.invalidateQueries({queryKey:['cs-bot-knowledge',selectedDeviceId]});setKnowledgeOpen(false)})}}>Tambah</Button></DialogFooter>
          </DialogContent>

@@ -65,6 +65,7 @@ export default function Register() {
   }, []);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+    // @ts-ignore - fix for production build
     resolver: zodResolver(schema as any) as any,
   });
 

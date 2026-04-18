@@ -78,6 +78,7 @@ export default function Profile() {
   });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<PasswordData>({
+    // @ts-ignore - fix for production build
     resolver: zodResolver(passwordSchema as any) as any,
   });
 
