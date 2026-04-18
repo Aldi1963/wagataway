@@ -298,9 +298,8 @@ async function handlePerpanjang(ctx: BotContext): Promise<void> {
       amount: String(priceNum),
       currency: "IDR",
       status: "pending",
-      planName,
-      description: `${renewPlanId2}|${orderId}`,
-    });
+      description: `${planName}|${renewPlanId2}|${orderId}`,
+    } as any);
     await updateSession(session.id, { pendingPlanSlug: orderId });
 
     const invoiceTextPerpanjang =
@@ -355,7 +354,7 @@ async function handleRiwayat(ctx: BotContext): Promise<void> {
     return;
   }
 
-  const lines = txs.map((t) => {
+  const lines = (txs as any[]).map((t: any) => {
     const statusEmoji = t.status === "paid" ? "✅" : t.status === "pending" ? "⏳" : "❌";
     return `${statusEmoji} ${t.planName ?? t.description ?? "—"} — ${fmtRp(t.amount)}\n   📅 ${fmtDate(t.createdAt)}`;
   });
@@ -499,7 +498,7 @@ async function handleLangganan(ctx: BotContext, planQuery: string): Promise<void
     return;
   }
 
-  const priceIdr = Number((matched as any).priceIdr ?? matched.price ?? 0);
+  const priceIdr = Number((matched as any).priceIdr ?? (matched as any).price ?? 0);
   const planId = matched.slug ?? String(matched.id);
 
   // Free plan — activate directly
@@ -551,9 +550,8 @@ async function handleLangganan(ctx: BotContext, planQuery: string): Promise<void
       amount: String(priceIdr),
       currency: "IDR",
       status: "paid",
-      planName: matched.name,
-      description: `${planId}|${orderId}`,
-    });
+      description: `${matched.name}|${planId}|${orderId}`,
+    } as any);
     await activatePlan(session.userId!, { id: planId, name: matched.name });
     await updateSession(session.id, { userPlan: planId, pendingPlanSlug: null });
     const newBalance = walletBalance - priceIdr;
@@ -601,9 +599,8 @@ async function handleLangganan(ctx: BotContext, planQuery: string): Promise<void
       amount: String(priceIdr),
       currency: "IDR",
       status: "pending",
-      planName: matched.name,
-      description: `${planId}|${orderId}`,
-    });
+      description: `${matched.name}|${planId}|${orderId}`,
+    } as any);
     await updateSession(session.id, { pendingPlanSlug: orderId });
 
     const invoiceTextLangganan =

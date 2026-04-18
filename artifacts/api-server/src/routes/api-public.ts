@@ -841,8 +841,9 @@ router.post("/user/create", async (req: Request, res: Response): Promise<void> =
   const { name, email, password } = params(req);
   if (!name || !email || !password) { fail(res, "Parameter name, email, dan password diperlukan"); return; }
 
-  const bcrypt = await import("bcrypt") as any;
-  const hashedPassword = await bcrypt.hash(String(password), 10);
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derivedKey = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  const hashedPassword = `scrypt:${salt}:${derivedKey}`;
 
   try {
     const [user] = await db
