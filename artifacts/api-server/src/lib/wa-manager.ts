@@ -568,6 +568,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             break;
           }
         }
+      }
       // ── 3. Send reply ───────────────────────────────────────────────────
       if (botReply && sock && state.status === "connected") {
         try {
