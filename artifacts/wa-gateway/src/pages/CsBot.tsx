@@ -717,7 +717,15 @@ function BusinessHoursForm({ bot, onSave, saving }: any) {
     businessHoursEnd: bot?.businessHoursEnd ?? "18:00",
     businessDays: bot?.businessDays ?? "1,2,3,4,5"
   });
-     setForm({...form, businessDays: newDays.join(',')});
+  const toggleDay = (idx: number) => {
+    const days = form.businessDays
+      .split(",")
+      .filter((d: string) => d !== "")
+      .map(Number);
+    const newDays = days.includes(idx)
+      ? days.filter((d: number) => d !== idx)
+      : [...days, idx].sort((a, b) => a - b);
+    setForm({ ...form, businessDays: newDays.join(",") });
   };
   return (
     <Card>
