@@ -5,12 +5,21 @@ import { apiFetch, getToken } from "@/lib/api";
 export interface Device {
   id: string;
   name: string;
-  phone: string;
+  phone?: string;
   status: "connected" | "connecting" | "disconnected";
+  provider?: "baileys" | "official";
+  officialPhoneId?: string;
+  officialBusinessAccountId?: string;
+  officialAccessToken?: string;
   battery?: number;
   lastSeen?: string;
   autoReconnect?: boolean;
   messagesSent?: number;
+  notifyOnDisconnect?: boolean;
+  notifyOnConnect?: boolean;
+  rotationEnabled?: boolean;
+  rotationWeight?: number;
+  rotationGroup?: string | null;
 }
 
 interface DeviceContextValue {

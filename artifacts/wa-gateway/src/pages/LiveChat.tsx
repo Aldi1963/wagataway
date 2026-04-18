@@ -947,7 +947,7 @@ export default function LiveChat() {
     setInput(""); setReplyTo(null); setShowEmoji(false); setShowCanned(false); setSending(true);
     const optimistic: ChatMessage = {
       id: Date.now(), jid: activeJid, fromMe: true, text,
-      mediaType: null, mediaUrl: null, status: "sending", isRead: false,
+      mediaType: null, mediaUrl: null, transcription: null, status: "sending", isRead: false,
       isInternal: false, timestamp: new Date().toISOString(), contactName: null, messageId: null,
     };
     setAllMessages((prev) => [...prev, optimistic]);

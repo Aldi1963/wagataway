@@ -65,7 +65,7 @@ export default function Register() {
   }, []);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
   });
 
   function startCooldown() {

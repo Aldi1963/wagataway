@@ -78,7 +78,7 @@ export default function Profile() {
   });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<PasswordData>({
-    resolver: zodResolver(passwordSchema),
+    resolver: zodResolver(passwordSchema) as any,
   });
 
   return (

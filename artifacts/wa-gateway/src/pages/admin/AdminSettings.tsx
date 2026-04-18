@@ -92,7 +92,7 @@ function PasswordInput({ value, onChange, placeholder, className }: {
   );
 }
 
-function SectionHeader({ title, desc, icon: Icon }: { title: string; desc: string; icon?: React.FC<{ className?: string }> }) {
+function SectionHeader({ title, desc, icon: Icon }: { title: string; desc: string; icon?: React.ComponentType<any> }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-3 mb-1">
