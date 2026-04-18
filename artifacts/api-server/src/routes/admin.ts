@@ -245,7 +245,7 @@ router.get("/admin/update", async (_req, res): Promise<void> => {
         signal: AbortSignal.timeout(4000),
       }),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4500)),
-    ]) as Response;
+    ]) as any;
 
     if (ghRes.ok) {
       const data = await ghRes.json() as any;

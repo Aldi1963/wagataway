@@ -112,7 +112,11 @@ export async function processBulkJob({
             let officialPayload: any = {};
 
             if (messageType === "button") {
-              officialPayload = formatOfficialInteractive(personalizedMsg, extra?.footer, extra?.buttons || []);
+              officialPayload = formatOfficialInteractive({
+                text: personalizedMsg,
+                footer: extra?.footer,
+                buttons: extra?.buttons || []
+              });
             } else if (mediaUrl) {
               const typeMap: any = { image: "image", video: "video", audio: "audio", document: "document" };
               const type = typeMap[mediaType!] || "image";

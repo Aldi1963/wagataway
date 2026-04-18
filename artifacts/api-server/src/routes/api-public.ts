@@ -158,7 +158,7 @@ async function sendMessageHandler(req: Request, res: Response): Promise<void> {
   // ── Official API Branch ──────────────────────────────────────────────────
   if (device.provider === "official") {
     try {
-      const response = await sendOfficialMessage({
+      const response: any = await sendOfficialMessage({
         accessToken: device.officialAccessToken!,
         phoneId: device.officialPhoneId!,
         to: phone,
@@ -166,7 +166,7 @@ async function sendMessageHandler(req: Request, res: Response): Promise<void> {
       });
       const msg = await recordMessage(auth.userId, device.id, phone, String(message));
       await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
-      ok(res, { id: String(msg.id), number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Message sent via Official API");
+      ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Message sent via Official API");
       return;
     } catch (e: any) {
       fail(res, `Official API Error: ${e.message}`, 500);

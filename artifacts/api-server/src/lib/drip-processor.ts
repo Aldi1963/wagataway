@@ -81,7 +81,9 @@ export async function processDripCampaigns(): Promise<void> {
                 ? { audio: { url: step.mediaUrl }, mimetype: "audio/mpeg" }
                 : { document: { url: step.mediaUrl }, caption: personalizedMsg };
 
-              await session!.socket.sendMessage(jid, mediaMsg);
+              if (session?.socket) {
+                await session.socket.sendMessage(jid, mediaMsg);
+              }
             } else if (device?.antiBannedEnabled) {
               await sendWithAntiBanned({
                 socket: session!.socket, jid,

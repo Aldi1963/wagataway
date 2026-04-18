@@ -5,9 +5,9 @@
 import nodemailer from "nodemailer";
 
 // Injected from admin.ts to avoid circular imports
-let getSmtpConfig: () => Promise<{
+let getSmtpConfig: (() => Promise<{
   host: string; port: number; user: string; from: string; password: string; appName: string;
-}> | null = null;
+}>) | null = null;
 
 export function registerSmtpConfigProvider(fn: typeof getSmtpConfig) {
   getSmtpConfig = fn;
