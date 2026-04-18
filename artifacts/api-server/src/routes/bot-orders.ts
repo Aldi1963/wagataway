@@ -199,7 +199,7 @@ router.post("/bot-commerce/payment-methods", async (req, res) => {
     return res.json(updated);
   }
   const [created] = await db.insert(botPaymentMethodsTable).values({ ...data, userId: uid }).returning();
-  res.json(created);
+  return res.json(created);
 });
 
 router.delete("/bot-commerce/payment-methods/:id", async (req, res) => {
@@ -237,20 +237,19 @@ router.post("/bot-commerce/settings", async (req, res) => {
     return res.json(updated);
   }
   const [created] = await db.insert(botOwnerSettingsTable).values({ ...payload, userId: uid, deviceId: dId }).returning();
-  res.json(created);
+  return res.json(created);
 });
 
 router.get("/bot-commerce/rajaongkir/cities", async (req, res) => {
-  const uid = getUser(req);
   const { apiKey, accountType } = req.query as { apiKey: string, accountType: string };
   if (!apiKey) return res.status(400).json({ error: "apiKey wajib diisi" });
 
   try {
     const service = new RajaOngkirService(apiKey, (accountType as any) || "starter");
     const cities = await service.getCities();
-    res.json(cities);
+    return res.json(cities);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 

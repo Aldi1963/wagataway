@@ -35,7 +35,7 @@ router.post("/canned-responses", async (req: Request, res: Response): Promise<vo
 // PUT /canned-responses/:id
 router.put("/canned-responses/:id", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   const { shortcut, title, body } = req.body;
   if (!shortcut?.trim() || !title?.trim() || !body?.trim()) {
     res.status(400).json({ message: "shortcut, title, dan body wajib diisi" }); return;
@@ -51,7 +51,7 @@ router.put("/canned-responses/:id", async (req: Request, res: Response): Promise
 // DELETE /canned-responses/:id
 router.delete("/canned-responses/:id", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   await db.delete(cannedResponsesTable)
     .where(and(eq(cannedResponsesTable.id, id), eq(cannedResponsesTable.userId, uid)));
   res.json({ success: true });
