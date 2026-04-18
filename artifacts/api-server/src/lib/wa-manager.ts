@@ -23,6 +23,7 @@ import { processAdminBotMessage, isAdminBotDevice, startReminderCron } from "./a
 import { registerDeviceSender, unregisterDeviceSender, registerDeviceListSender, registerDeviceCheckNumber } from "./wa-sender";
 import { transcribeAudio } from "./audio-processor";
 
+const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
 const SESSIONS_DIR = path.resolve(process.cwd(), process.env.SESSIONS_DIR || "wa-sessions");
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });

@@ -1040,7 +1040,7 @@ const LANDING_KEYS = [
 ];
 
 router.get("/admin/landing-settings", async (_req, res): Promise<void> => {
-  const entries = await Promise.all(LANDING_KEYS.map(async (k) => [k, await getSetting(k, "")]));
+  const entries = await Promise.all(LANDING_KEYS.map(async (k) => [k, await getSetting(k)]));
   res.json(Object.fromEntries(entries));
 });
 

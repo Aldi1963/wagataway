@@ -22,7 +22,7 @@ const router = Router();
 function ok(res: Response, data: object | null = null, message = "Success") {
   return res.json({ status: true, message, ...(data ? { data } : {}) });
 }
-
+const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 function fail(res: Response, message: string, code = 400) {
   return res.status(code).json({ status: false, message });
 }
@@ -196,7 +196,8 @@ async function sendMessageHandler(req: Request, res: Response): Promise<void> {
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, String(message));
-  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", createdAt: msg?.createdAt?.toISOString() }, "Message sent successfully");
+  ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", createdAt: msg?.createdAt?.toISOString() }, "Message sent successfully");
+  return;
 }
 
 router.post("/send-message", sendMessageHandler);
@@ -238,7 +239,8 @@ async function sendMediaHandler(req: Request, res: Response): Promise<void> {
       });
       const msg = await recordMessage(auth.userId, device.id, phone, caption ? String(caption) : "[media]", String(url));
       await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
-      return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Media sent via Official API");
+      ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Media sent via Official API");
+      return;
       return;
     } catch (e: any) {
       fail(res, `Official API Error: ${e.message}`, 500);
@@ -265,7 +267,8 @@ async function sendMediaHandler(req: Request, res: Response): Promise<void> {
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, caption ? String(caption) : "[media]", String(url));
-  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, type, status: "sent", createdAt: msg?.createdAt?.toISOString() }, "Media sent successfully");
+  ok(res, { id: msg ? String(msg.id) : "0", number: phone, type, status: "sent", createdAt: msg?.createdAt?.toISOString() }, "Media sent successfully");
+  return;
 }
 
 router.post("/send-media", sendMediaHandler);
@@ -301,7 +304,8 @@ router.post("/send-poll", async (req: Request, res: Response): Promise<void> => 
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, `[POLL] ${question}`);
-  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "Poll sent successfully");
+  ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "Poll sent successfully");
+  return;
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -343,7 +347,8 @@ router.post("/send-button", async (req: Request, res: Response): Promise<void> =
       });
       const msg = await recordMessage(auth.userId, device.id, phone, String(message));
       await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
-      return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Button message sent via Official API");
+      ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Button message sent via Official API");
+      return;
       return;
     } catch (e: any) {
       fail(res, `Official API Error: ${e.message}`, 500);
@@ -381,7 +386,8 @@ router.post("/send-button", async (req: Request, res: Response): Promise<void> =
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, String(message));
-  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "Button message sent successfully");
+  ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "Button message sent successfully");
+  return;
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -439,7 +445,8 @@ router.post("/send-list", async (req: Request, res: Response): Promise<void> => 
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, String(message));
-  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "List message sent successfully");
+  ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "List message sent successfully");
+  return;
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
