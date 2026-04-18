@@ -93,7 +93,7 @@ export default function Login() {
   }, []);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema as any) as any,
   });
 
   function startCooldown() {

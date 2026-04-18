@@ -435,7 +435,7 @@ export default function BotProducts() {
                 <Input placeholder="Cari nama atau kode produk..." className="pl-11 h-12 bg-muted/40 border-none rounded-2xl" value={search} onChange={e=>setSearch(e.target.value)} />
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                <Button onClick={openCreate} className="rounded-2xl h-12 px-8 font-bold gap-2" size="sm shadow-lg shadow-primary/20"><Plus className="w-4 h-4" /> Produk Baru</Button>
+                <Button onClick={openCreate} className="rounded-2xl h-12 px-8 font-bold gap-2 shadow-lg shadow-primary/20" size="sm"><Plus className="w-4 h-4" /> Produk Baru</Button>
               </div>
             </div>
 

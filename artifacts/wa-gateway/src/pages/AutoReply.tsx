@@ -196,11 +196,11 @@ export default function AutoReply() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Kata Kunci</Label>
-                <Input placeholder="halo, order, info" value={form.keyword} onChange={(e) => setForm((f) => ({ ...f, keyword: e.target.value }))} />
+                <Input placeholder="halo, order, info" value={form.keyword} onChange={(e) => setForm((f: any) => ({ ...f, keyword: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Tipe Pencocokan</Label>
-                <Select value={form.matchType} onValueChange={(v) => setForm((f) => ({ ...f, matchType: v }))}>
+                <Select value={form.matchType} onValueChange={(v) => setForm((f: any) => ({ ...f, matchType: v }))}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(matchTypeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -223,7 +223,7 @@ export default function AutoReply() {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Perangkat (opsional)</Label>
-                <Select value={form.deviceId} onValueChange={(v) => setForm((f) => ({ ...f, deviceId: v }))}>
+                <Select value={form.deviceId} onValueChange={(v) => setForm((f: any) => ({ ...f, deviceId: v }))}>
                   <SelectTrigger className="h-10"><SelectValue placeholder="Semua" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua perangkat</SelectItem>
@@ -239,7 +239,7 @@ export default function AutoReply() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Isi Pesan / Body</Label>
-                <Textarea placeholder="Ketik pesan balasan di sini..." rows={3} value={form.reply} onChange={(e) => setForm((f) => ({ ...f, reply: e.target.value }))} className="resize-none" />
+                <Textarea placeholder="Ketik pesan balasan di sini..." rows={3} value={form.reply} onChange={(e) => setForm((f: any) => ({ ...f, reply: e.target.value }))} className="resize-none" />
               </div>
 
               {form.messageType === "button" && (
@@ -323,7 +323,7 @@ export default function AutoReply() {
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Media Attachment <span className="text-muted-foreground font-normal">(Opsional)</span></Label>
                 <div className="relative">
-                  <Input placeholder="https://example.com/image.jpg atau header URL" value={form.mediaUrl} onChange={(e) => setForm((f) => ({ ...f, mediaUrl: e.target.value }))} className="h-10 pr-10" />
+                  <Input placeholder="https://example.com/image.jpg atau header URL" value={form.mediaUrl} onChange={(e) => setForm((f: any) => ({ ...f, mediaUrl: e.target.value }))} className="h-10 pr-10" />
                   {form.mediaUrl && (
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded flex items-center justify-center bg-green-500/10">
                       <img src={form.mediaUrl} className="w-4 h-4 object-cover rounded" onError={(e) => (e.currentTarget.style.display = "none")} />
@@ -354,15 +354,15 @@ export default function AutoReply() {
                 <div className="grid grid-cols-3 gap-3 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase text-muted-foreground ml-1">Dari Jam</Label>
-                    <Input type="time" value={form.scheduleFrom} onChange={(e) => setForm((f) => ({ ...f, scheduleFrom: e.target.value }))} className="h-9 text-sm" />
+                    <Input type="time" value={form.scheduleFrom} onChange={(e) => setForm((f: any) => ({ ...f, scheduleFrom: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase text-muted-foreground ml-1">Sampai Jam</Label>
-                    <Input type="time" value={form.scheduleTo} onChange={(e) => setForm((f) => ({ ...f, scheduleTo: e.target.value }))} className="h-9 text-sm" />
+                    <Input type="time" value={form.scheduleTo} onChange={(e) => setForm((f: any) => ({ ...f, scheduleTo: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase text-muted-foreground ml-1">Zona Waktu</Label>
-                    <Select value={form.timezone} onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}>
+                    <Select value={form.timezone} onValueChange={(v) => setForm((f: any) => ({ ...f, timezone: v }))}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {TIMEZONES.map((tz) => <SelectItem key={tz} value={tz} className="text-xs">{tz.replace("Asia/", "").replace("_", " ")}</SelectItem>)}

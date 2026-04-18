@@ -691,7 +691,7 @@ export default function BulkMessages() {
                     size="sm"
                     variant="outline"
                     className="gap-1.5 text-orange-600 border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                    onClick={() => retryJobFailed.mutate(detailJob!.id)}
+                    onClick={() => retryJobFailed.mutate(Number(detailJob!.id))}
                     disabled={retryJobFailed.isPending}
                   >
                     {retryJobFailed.isPending

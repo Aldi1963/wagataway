@@ -246,11 +246,11 @@ export default function CsBot() {
                   </CardContent>
                 </Card>
               ) : (
-                <AiSettingsForm bot={bot} deviceId={selectedDeviceId} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} />
+                <AiSettingsForm bot={bot} deviceId={selectedDeviceId} onSave={(d: any) => updateBot.mutate(d)} saving={updateBot.isPending} />
               )}
             </TabsContent>
-            <TabsContent value="config"><BotMessagesForm bot={bot} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
-            <TabsContent value="hours"><BusinessHoursForm bot={bot} onSave={(d) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
+            <TabsContent value="config"><BotMessagesForm bot={bot} onSave={(d: any) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
+            <TabsContent value="hours"><BusinessHoursForm bot={bot} onSave={(d: any) => updateBot.mutate(d)} saving={updateBot.isPending} /></TabsContent>
             <TabsContent value="faqs">
                  <div className="space-y-4">
                     <div className="flex gap-2">
@@ -718,8 +718,8 @@ function BusinessHoursForm({ bot, onSave, saving }: any) {
     businessDays: bot?.businessDays ?? "1,2,3,4,5"
   });
   const toggleDay = (idx: number) => {
-     const days = form.businessDays.split(',').filter(d=>d!=='').map(Number);
-     const newDays = days.includes(idx) ? days.filter(d=>d!==idx) : [...days, idx].sort();
+     const days = form.businessDays.split(',').filter((d: string)=>d!=='').map(Number);
+     const newDays = days.includes(idx) ? days.filter((d: number)=>d!==idx) : [...days, idx].sort();
      setForm({...form, businessDays: newDays.join(',')});
   };
   return (
