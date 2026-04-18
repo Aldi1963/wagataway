@@ -490,22 +490,59 @@ router.post("/billing/simulate-pay/:orderId", async (req, res): Promise<void> =>
 
 router.post("/billing/webhook", async (req, res): Promise<void> => {
   const body = req.body as Record<string, unknown>;
+  const { logger } = await import("../lib/logger");
+  logger.info(`[Billing] Webhook received: ${JSON.stringify(body)}`);
 
   // Try to find orderId from various gateway formats
-  // Xendit uses external_id, Midtrans/Pakasir use order_id, Tripay uses merchant_ref, Tokopay uses ref_id
-  const orderId = (body.external_id ?? body.order_id ?? body.merchant_ref ?? body.ref_id ?? body.orderId) as string;
-  if (!orderId) { res.sendStatus(200); return; }
+  const orderId = (body.external_id ?? body.order_id ?? body.merchant_ref ?? body.ref_id ?? body.orderId ?? body.orderId) as string;
+  if (!orderId) { 
+    logger.warn("[Billing] Webhook received without orderId");
+    res.sendStatus(200); 
+    return; 
+  }
 
-  const order = pendingOrders.get(orderId);
-  if (!order || order.status !== "pending") { res.sendStatus(200); return; }
-
-  // Check payment status from gateway-specific payload
-  const status = String(body.status ?? body.transaction_status ?? body.status_code ?? "");
+  let order = pendingOrders.get(orderId);
+  
+  // STATUS CHECK
+  const status = String(body.status ?? body.transaction_status ?? body.status_code ?? body.payment_status ?? "");
   const isPaid = ["PAID", "paid", "settlement", "capture", "success", "Success", "completed"].includes(status);
+  
+  if (!order) {
+    logger.info(`[Billing] Order ${orderId} not in memory, searching DB...`);
+    // Fallback: Search in transactionsTable
+    const [dbTx] = await db.select().from(transactionsTable)
+      .where(sql`${transactionsTable.description} LIKE ${"%" + orderId + "%"}`)
+      .limit(1);
+
+    if (dbTx) {
+      // Reconstruct order object from DB description (Name|Id|OrderId)
+      const parts = (dbTx.description ?? "").split("|");
+      order = {
+        orderId,
+        gateway: "unknown",
+        plan: parts[1] ?? "basic",
+        amount: Number(dbTx.amount),
+        userId: dbTx.userId,
+        paymentUrl: "",
+        status: dbTx.status as any,
+        expiredAt: new Date(Date.now() + 86400000).toISOString(),
+        createdAt: dbTx.createdAt?.toISOString() ?? new Date().toISOString(),
+        type: (dbTx.description ?? "").includes("Top-up") || (dbTx.description ?? "").includes("topup") ? "topup" : "plan"
+      };
+      logger.info(`[Billing] Order ${orderId} recovered from DB for user ${order.userId}`);
+    }
+  }
+
+  if (!order || order.status !== "pending") { 
+    logger.warn(`[Billing] Order ${orderId} not found or not pending (Status: ${order?.status})`);
+    res.sendStatus(200); 
+    return; 
+  }
 
   if (isPaid) {
     order.status = "paid";
     pendingOrders.set(orderId, order);
+    logger.info(`[Billing] Order ${orderId} marked as PAID`);
 
     if (order.type === "topup") {
       await db.update(usersTable)
@@ -525,7 +562,15 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
       );
     } else {
       const allPlansWh = (await getPlansFromDb()) ?? PLANS_FALLBACK;
-      const planData = allPlansWh.find((p) => p.id === order.plan);
+      // Try to find by slug/id
+      let planData = allPlansWh.find((p) => p.id === order!.plan);
+      
+      if (!planData) {
+        // Backup: find by name if the ID/Slug didn't match (happens if reconstructed from DB Name part)
+        const parts = (order.plan ?? "").split("|"); // If it was reconstructed
+        planData = allPlansWh.find((p) => p.name === parts[0] || p.id === parts[1]);
+      }
+
       if (planData) {
         await activatePlan(order.userId, planData);
         await db.update(transactionsTable)
@@ -538,6 +583,8 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
           `📅 Aktif selama 1 bulan ke depan.\n\n` +
           `Ketik *cek* untuk lihat status langganan.\nKetik *menu* untuk kembali.`
         );
+      } else {
+        logger.error(`[Billing] Plan data not found for plan: ${order.plan}`);
       }
     }
   }
