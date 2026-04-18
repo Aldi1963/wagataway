@@ -1,6 +1,5 @@
 import "@/lib/api";
 import { useState, useEffect, lazy, Suspense } from "react";
-import { registerSW } from "virtual:pwa-register";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -298,7 +297,6 @@ function App() {
   );
 
   useEffect(() => {
-    registerSW({ immediate: true });
     fetch("/api/auth/config")
       .then((r) => r.json())
       .then((d) => { if (d.googleClientId) setGoogleClientId(d.googleClientId); })
