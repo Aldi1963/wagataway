@@ -223,7 +223,7 @@ async function handlePerpanjang(ctx: BotContext): Promise<void> {
     ilike(plansTable.name, sub.planName ?? "")
   ).limit(1).then(r => r[0]);
 
-  const priceIdr = plan ? ((plan as any).priceIdr ?? plan.price) : 0;
+  const priceIdr = plan ? plan.priceIdr : 0;
   const priceNum = Number(priceIdr);
 
   // Sufficient wallet → debit & renew directly

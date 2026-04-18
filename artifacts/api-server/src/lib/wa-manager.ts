@@ -406,11 +406,12 @@ export async function startSession(deviceId: number): Promise<SessionState> {
       // ── from: group JID number or sender phone ──────────────────────────
       const from = jid.split("@")[0];
 
-      // ── Fetch sender profile picture URL (non-blocking) ─────────────────
       let ppUrl: string | null = null;
       try {
         const ppJid = isGroup ? (participantRaw ?? jid) : jid;
-        ppUrl = await sock.profilePictureUrl(ppJid, "image").catch(() => null);
+        if (ppJid) {
+          ppUrl = await sock.profilePictureUrl(ppJid as string, "image").catch(() => null);
+        }
       } catch { /* ignore */ }
 
       // ── Download media as Buffer if present ──────────────────────────────
@@ -424,10 +425,10 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             { logger: silentLogger as any, reuploadRequest: sock.updateMediaMessage }
           ) as Buffer;
 
-          const msgInner = m?.imageMessage ?? m?.videoMessage ?? m?.audioMessage
+          const msgInner: any = m?.imageMessage ?? m?.videoMessage ?? m?.audioMessage
             ?? m?.documentMessage ?? null;
-          const mimetype: string = (msgInner as any)?.mimetype ?? `${mediaType}/octet-stream`;
-          const caption: string | null = (msgInner as any)?.caption ?? text ?? null;
+          const mimetype: string = msgInner?.mimetype ?? `${mediaType}/octet-stream`;
+          const caption: string | null = msgInner?.caption ?? text ?? null;
           const fileName: string =
             (msgInner as any)?.fileName
             ?? `${mediaType}_${Date.now()}.${mimetype.split("/")[1]?.split(";")[0] ?? "bin"}`;
