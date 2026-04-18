@@ -247,7 +247,6 @@ async function handlePerpanjang(ctx: BotContext): Promise<void> {
       amount: String(priceNum),
       currency: "IDR",
       status: "paid",
-      planName,
       description: `${renewPlanId}|${orderId}`,
     });
     await activatePlan(session.userId!, { id: renewPlanId, name: planName });

@@ -96,6 +96,7 @@ export const botOrderSessionsTable = pgTable("bot_order_sessions", {
   shippingFee: numeric("shipping_fee", { precision: 14, scale: 0 }),
   cityId: text("city_id"), // Dest city ID for RajaOngkir
   weight: integer("weight").default(1000), // Default 1kg
+  orderId: integer("order_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

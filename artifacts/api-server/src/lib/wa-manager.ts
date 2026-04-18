@@ -155,9 +155,10 @@ async function fireWebhooks(
 
 const silentLogger = pino({ level: "silent" });
 
-interface SessionState {
+export interface SessionState {
   socket: WASocket | null;
   qr: string | null;
+  qrDataUrl?: string | null;
   qrExpiresAt: Date | null;
   pairingCode: string | null;
   pairingExpiresAt: Date | null;
@@ -410,7 +411,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
       try {
         const ppJid = isGroup ? (participantRaw ?? jid) : jid;
         if (ppJid) {
-          ppUrl = await sock.profilePictureUrl(ppJid as string, "image").catch(() => null);
+          ppUrl = await (sock as any).profilePictureUrl(ppJid as string, "image").catch(() => null);
         }
       } catch { /* ignore */ }
 
@@ -422,7 +423,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             msg,
             "buffer",
             {},
-            { logger: silentLogger as any, reuploadRequest: sock.updateMediaMessage }
+            { logger: silentLogger as any, reuploadRequest: (sock as any).updateMediaMessage }
           ) as Buffer;
 
           const msgInner: any = m?.imageMessage ?? m?.videoMessage ?? m?.audioMessage

@@ -196,7 +196,7 @@ async function sendMessageHandler(req: Request, res: Response): Promise<void> {
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, String(message));
-  ok(res, { id: String(msg.id), number: phone, status: "sent", createdAt: msg.createdAt?.toISOString() }, "Message sent successfully");
+  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", createdAt: msg?.createdAt?.toISOString() }, "Message sent successfully");
 }
 
 router.post("/send-message", sendMessageHandler);
@@ -230,7 +230,7 @@ async function sendMediaHandler(req: Request, res: Response): Promise<void> {
   if (device.provider === "official") {
     try {
       const mediaType = (String(type) || "image").toLowerCase() as any;
-      const response = await sendOfficialMessage({
+      const response: any = await sendOfficialMessage({
         accessToken: device.officialAccessToken!,
         phoneId: device.officialPhoneId!,
         to: phone,
@@ -238,7 +238,7 @@ async function sendMediaHandler(req: Request, res: Response): Promise<void> {
       });
       const msg = await recordMessage(auth.userId, device.id, phone, caption ? String(caption) : "[media]", String(url));
       await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
-      ok(res, { id: String(msg.id), number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Media sent via Official API");
+      return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Media sent via Official API");
       return;
     } catch (e: any) {
       fail(res, `Official API Error: ${e.message}`, 500);
@@ -265,7 +265,7 @@ async function sendMediaHandler(req: Request, res: Response): Promise<void> {
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, caption ? String(caption) : "[media]", String(url));
-  ok(res, { id: String(msg.id), number: phone, type, status: "sent", createdAt: msg.createdAt?.toISOString() }, "Media sent successfully");
+  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, type, status: "sent", createdAt: msg?.createdAt?.toISOString() }, "Media sent successfully");
 }
 
 router.post("/send-media", sendMediaHandler);
@@ -301,7 +301,7 @@ router.post("/send-poll", async (req: Request, res: Response): Promise<void> => 
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, `[POLL] ${question}`);
-  ok(res, { id: String(msg.id), number: phone, status: "sent" }, "Poll sent successfully");
+  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "Poll sent successfully");
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ router.post("/send-button", async (req: Request, res: Response): Promise<void> =
           id: b.id || `btn_${i + 1}`
         }))
       });
-      const response = await sendOfficialMessage({
+      const response: any = await sendOfficialMessage({
         accessToken: device.officialAccessToken!,
         phoneId: device.officialPhoneId!,
         to: phone,
@@ -343,7 +343,7 @@ router.post("/send-button", async (req: Request, res: Response): Promise<void> =
       });
       const msg = await recordMessage(auth.userId, device.id, phone, String(message));
       await db.update(devicesTable).set({ messagesSent: sql`${devicesTable.messagesSent} + 1` }).where(eq(devicesTable.id, device.id));
-      ok(res, { id: String(msg.id), number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Button message sent via Official API");
+      return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent", externalId: response.messages?.[0]?.id }, "Button message sent via Official API");
       return;
     } catch (e: any) {
       fail(res, `Official API Error: ${e.message}`, 500);
@@ -381,7 +381,7 @@ router.post("/send-button", async (req: Request, res: Response): Promise<void> =
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, String(message));
-  ok(res, { id: String(msg.id), number: phone, status: "sent" }, "Button message sent successfully");
+  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "Button message sent successfully");
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -439,7 +439,7 @@ router.post("/send-list", async (req: Request, res: Response): Promise<void> => 
   }
 
   const msg = await recordMessage(auth.userId, device.id, phone, String(message));
-  ok(res, { id: String(msg.id), number: phone, status: "sent" }, "List message sent successfully");
+  return ok(res, { id: msg ? String(msg.id) : "0", number: phone, status: "sent" }, "List message sent successfully");
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -584,10 +584,10 @@ async function checkNumberHandler(req: Request, res: Response): Promise<void> {
 
   if (session?.socket && session.status === "connected") {
     try {
-      const [result] = await session.socket.onWhatsApp(`${phone}@s.whatsapp.net`);
-      if (result) {
-        registered = result.exists;
-        wa_id = result.jid;
+      const results: any = await session.socket.onWhatsApp(`${phone}@s.whatsapp.net`);
+      if (Array.isArray(results) && results.length > 0) {
+        registered = results[0].exists;
+        wa_id = results[0].jid;
       }
     } catch {
       registered = false;
@@ -833,7 +833,7 @@ router.post("/user/create", async (req: Request, res: Response): Promise<void> =
   const { name, email, password } = params(req);
   if (!name || !email || !password) { fail(res, "Parameter name, email, dan password diperlukan"); return; }
 
-  const bcrypt = await import("bcrypt");
+  const bcrypt = await import("bcrypt") as any;
   const hashedPassword = await bcrypt.hash(String(password), 10);
 
   try {

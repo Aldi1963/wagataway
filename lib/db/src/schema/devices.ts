@@ -47,6 +47,7 @@ export const devicesTable = pgTable("devices", {
   rotationEnabled: boolean("rotation_enabled").notNull().default(false),
   rotationWeight: integer("rotation_weight").notNull().default(1),
   rotationGroup: text("rotation_group").default("default"),
+  webhookUrl: text("webhook_url"),
 });
 
 export const insertDeviceSchema = createInsertSchema(devicesTable).omit({ id: true, createdAt: true, updatedAt: true });
