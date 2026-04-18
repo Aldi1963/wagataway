@@ -25,7 +25,7 @@ import {
   botOrdersTable,
   botProductsTable,
 } from "@workspace/db";
-import { eq, desc, ilike, and, lte, gte, isNotNull, sql } from "drizzle-orm";
+import { eq, desc, ilike, and, or, lte, gte, isNotNull, sql } from "drizzle-orm";
 import { getDeviceSocket } from "./wa-sender";
 import { createCheckout, pendingOrders, gatewayConfig } from "../routes/payment-gateway";
 import { activatePlan } from "../routes/billing";
@@ -220,11 +220,22 @@ async function handlePerpanjang(ctx: BotContext): Promise<void> {
   const balance = fmtRp(walletNum);
 
   const plan = await db.select().from(plansTable).where(
-    ilike(plansTable.name, sub.planName ?? "")
+    or(
+      eq(plansTable.slug, sub.planId),
+      ilike(plansTable.name, sub.planName ?? "")
+    )
   ).limit(1).then(r => r[0]);
 
   const priceIdr = plan ? plan.priceIdr : 0;
   const priceNum = Number(priceIdr);
+
+  if (!plan) {
+    await send(
+      `❌ Gagal menemukan informasi harga untuk paket *${planName}*.\n\n` +
+      `Silakan hubungi admin atau gunakan perintah *paket* untuk berlangganan ulang.\n\nKetik *menu* untuk kembali.`
+    );
+    return;
+  }
 
   // Sufficient wallet → debit & renew directly
   if (walletNum >= priceNum) {
