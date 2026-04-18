@@ -6,6 +6,8 @@ import makeWASocket, {
   Browsers,
   WASocket,
   downloadMediaMessage,
+  proto,
+  generateMessageIDV2,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import { EventEmitter } from "events";
@@ -648,7 +650,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             // Default: Send text message
             await sock.sendMessage(jid, { text: botReply.text });
             // Send media if present (for backward compatibility / simple media rules)
-            if (botReply.mediaUrl && !botReply.messageType) {
+            if (botReply.mediaUrl) {
               const url = botReply.mediaUrl;
               const caption = botReply.mediaCaption ?? "";
               const lower = url.toLowerCase();

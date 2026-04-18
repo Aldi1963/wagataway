@@ -6,6 +6,7 @@
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { db, apiKeysTable, devicesTable, messagesTable } from "@workspace/db";
+import pino from "pino";
 import { eq, and, sql } from "drizzle-orm";
 import { getSession } from "../lib/wa-manager";
 import { getUserPlan, countTodayMessages } from "../lib/plan-limits";
