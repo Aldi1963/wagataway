@@ -530,7 +530,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
 
       // ── 1. CS Bot (priority) ────────────────────────────────────────────
       try {
-        botReply = await processBotMessage(deviceId, device.userId, jid.split("@")[0], text, contactName);
+        botReply = await processBotMessage(deviceId, device.userId, jid.split("@")[0], text, contactName ?? undefined);
       } catch (err) {
         console.error("[WA] CS Bot error:", err);
       }
@@ -568,13 +568,11 @@ export async function startSession(deviceId: number): Promise<SessionState> {
             break;
           }
         }
-      }
-
       // ── 3. Send reply ───────────────────────────────────────────────────
       if (botReply && sock && state.status === "connected") {
         try {
-          const replyType = botReply.messageType || "text";
-          const extra = botReply.extra || {};
+          const replyType = (botReply as any).messageType || "text";
+          const extra = (botReply as any).extra || {};
 
           if (replyType === "button") {
             const btns = (extra.buttons ?? [])

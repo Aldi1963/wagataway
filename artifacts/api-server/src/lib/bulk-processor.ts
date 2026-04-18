@@ -273,7 +273,6 @@ export async function processBulkJob({
           messageType: mediaUrl ? (mediaType ?? "image") : "text",
           status: "sent",
           bulkJobId: jobId,
-          extra: extra ? JSON.parse(JSON.stringify(extra)) : null,
         });
 
         await db.update(devicesTable)

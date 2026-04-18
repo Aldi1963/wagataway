@@ -94,7 +94,9 @@ export async function processDripCampaigns(): Promise<void> {
                 applyDelay: false,
               });
             } else {
-              await session!.socket.sendMessage(jid, { text: personalizedMsg });
+              if (session?.socket) {
+                await session.socket.sendMessage(jid, { text: personalizedMsg });
+              }
             }
 
             await db.update(devicesTable)
