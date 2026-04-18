@@ -169,9 +169,9 @@ export default function CsBot() {
     try {
       const r = await apiFetch(`/cs-bot/${selectedDeviceId}/test`, { method: "POST", body: JSON.stringify({ message: msg }) });
       const { reply } = await r.json();
-      setTestHistory(h => [...h, { from: "bot", text: reply }]);
+      setTestHistory((h: any) => [...h, { from: "bot", text: reply }]);
     } catch {
-      setTestHistory(h => [...h, { from: "bot", text: "(Gagal mendapat respons)" }]);
+      setTestHistory((h: any) => [...h, { from: "bot", text: "(Gagal mendapat respons)" }]);
     } finally {
       setTestLoading(false);
     }
@@ -312,7 +312,7 @@ export default function CsBot() {
             <TabsContent value="test">
                 <Card className="h-[500px] flex flex-col">
                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
-                      {testHistory.map((h,i)=>(
+                      {testHistory.map((h: any, i: number)=>(
                         <div key={i} className={`flex ${h.from==='user'?'justify-end':'justify-start'}`}>
                            <div className={`max-w-[80%] p-3 rounded-xl text-sm ${h.from==='user'?'bg-primary text-primary-foreground':'bg-card border'}`}>{h.text}</div>
                         </div>
@@ -441,7 +441,7 @@ function AiSettingsForm({ bot, deviceId, onSave, saving }: any) {
       });
       const res = await r.json();
       if (res.success) {
-        toast({ title: "Koneksi API Berhasil!", description: `Provider ${form.aiProvider} merespons dengan model ${res.model}.` });
+        toast({ title: "Koneksi API Berhasil!", description: `Provider ${form.aiProvider} merespons dengan model ${res.model || 'Unknown'}.` });
       } else {
         toast({ title: "Koneksi API Gagal", description: res.message, variant: "destructive" });
       }
@@ -717,9 +717,6 @@ function BusinessHoursForm({ bot, onSave, saving }: any) {
     businessHoursEnd: bot?.businessHoursEnd ?? "18:00",
     businessDays: bot?.businessDays ?? "1,2,3,4,5"
   });
-  const toggleDay = (idx: number) => {
-     const days = form.businessDays.split(',').filter((d: string)=>d!=='').map(Number);
-     const newDays = days.includes(idx) ? days.filter((d: number)=>d!==idx) : [...days, idx].sort();
      setForm({...form, businessDays: newDays.join(',')});
   };
   return (
