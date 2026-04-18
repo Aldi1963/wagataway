@@ -113,10 +113,10 @@ export async function processBulkJob({
 
             if (messageType === "button") {
               officialPayload = formatOfficialInteractive({
-                text: personalizedMsg,
+                body: personalizedMsg,
                 footer: extra?.footer,
                 buttons: extra?.buttons || []
-              });
+              }, { type: "button" });
             } else if (mediaUrl) {
               const typeMap: any = { image: "image", video: "video", audio: "audio", document: "document" };
               const type = typeMap[mediaType!] || "image";
@@ -135,10 +135,16 @@ export async function processBulkJob({
               };
             }
 
-            await sendOfficialMessage(config, jid, officialPayload);
+            await sendOfficialMessage({
+              accessToken: config.accessToken,
+              phoneId: config.phoneId,
+              to: jid,
+              message: officialPayload
+            });
           } else {
             // ── Baileys Logic ─────────────────────────────────────────────────
-            const sock = session!.socket;
+            const sock = session?.socket;
+            if (sock) {
             if (messageType === "button") {
               const btns = (extra?.buttons ?? [])
                 .filter((b: any) => b?.displayText || b?.title)

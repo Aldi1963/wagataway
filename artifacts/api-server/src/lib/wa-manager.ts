@@ -560,7 +560,7 @@ export async function startSession(deviceId: number): Promise<SessionState> {
               mediaCaption: rule.mediaCaption ?? null,
               messageType: (rule as any).messageType || "text",
               extra: (rule as any).extra || {},
-            };
+            } as any;
             await db
               .update(autoRepliesTable)
               .set({ triggerCount: sql`${autoRepliesTable.triggerCount} + 1` })
