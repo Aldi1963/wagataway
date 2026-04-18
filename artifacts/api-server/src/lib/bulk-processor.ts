@@ -269,7 +269,6 @@ export async function processBulkJob({
           }
         }
 
-
         await db.insert(messagesTable).values({
           userId,
           deviceId: deviceId!,
