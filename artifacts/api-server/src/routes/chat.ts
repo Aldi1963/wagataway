@@ -269,7 +269,7 @@ export async function pauseConvBot(userId: number, deviceId: number, jid: string
 // GET /chat/conversation/:jid?deviceId=X — get conv metadata
 router.get("/chat/conversation/:jid", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
   const conv = await getOrCreateConv(uid, deviceId, jid);
@@ -279,7 +279,7 @@ router.get("/chat/conversation/:jid", async (req: Request, res: Response): Promi
 // PUT /chat/conversation/:jid/status?deviceId=X
 router.put("/chat/conversation/:jid/status", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   const { status } = req.body;
   if (!deviceId || !status) { res.status(400).json({ message: "deviceId and status required" }); return; }
@@ -295,7 +295,7 @@ router.put("/chat/conversation/:jid/status", async (req: Request, res: Response)
 // PUT /chat/conversation/:jid/assign?deviceId=X
 router.put("/chat/conversation/:jid/assign", async (req: Request, res: Response): Promise<void> => {
   const uid = getUser(req);
-  const jid = decodeURIComponent(req.params.jid);
+  const jid = decodeURIComponent(req.params.jid as string);
   const deviceId = parseInt(req.query.deviceId as string, 10);
   const { assignedAgent } = req.body;
   if (!deviceId) { res.status(400).json({ message: "deviceId required" }); return; }
