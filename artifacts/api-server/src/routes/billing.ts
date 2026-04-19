@@ -489,7 +489,7 @@ router.post("/billing/simulate-pay/:orderId", async (req, res): Promise<void> =>
 // ── Payment webhook (from gateway callback) ─────────────────────────────────
 
 router.post("/billing/webhook", async (req, res): Promise<void> => {
-  const body = req.body as Record<string, unknown>;
+  const body = (req.body ?? {}) as Record<string, unknown>;
   const { logger } = await import("../lib/logger");
   logger.info(`[Billing] Webhook received: ${JSON.stringify(body)}`);
 
