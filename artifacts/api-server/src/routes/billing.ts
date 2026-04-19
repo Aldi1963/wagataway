@@ -19,6 +19,28 @@ function fmtRpBilling(n: number): string {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
+function readWebhookString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readWebhookAmount(body: Record<string, unknown>): number | null {
+  const raw =
+    body.amount ??
+    body.jumlah ??
+    body.gross_amount ??
+    body.total_amount ??
+    body.total;
+
+  if (raw === undefined || raw === null || raw === "") return null;
+
+  const normalized =
+    typeof raw === "string"
+      ? Number(raw.replace(/[^\d.-]/g, ""))
+      : Number(raw);
+
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : null;
+}
+
 async function sendBotNotification(userId: number, message: string): Promise<void> {
   try {
     const [settings] = await db.select().from(adminWaBotSettingsTable).limit(1);
@@ -550,6 +572,60 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
           type: "topup"
         };
         logger.info(`[Billing] Order ${orderId} recovered from walletTransactionsTable`);
+      }
+    }
+  }
+
+  const payloadProject = readWebhookString(body.project);
+  const payloadAmount = readWebhookAmount(body);
+  const payloadIsSandbox = typeof body.is_sandbox === "boolean" ? body.is_sandbox : null;
+  const shouldValidatePakasir =
+    order?.gateway === "pakasir" ||
+    gatewayConfig.activeGateway === "pakasir" ||
+    payloadProject !== null;
+
+  if (shouldValidatePakasir) {
+    const expectedProject = gatewayConfig.pakasir.merchantId.trim();
+
+    if (!payloadProject) {
+      logger.warn({ orderId }, "[Billing] Pakasir webhook ignored: missing project");
+      res.sendStatus(200);
+      return;
+    }
+
+    if (expectedProject && payloadProject !== expectedProject) {
+      logger.warn(
+        { orderId, payloadProject, expectedProject },
+        "[Billing] Pakasir webhook ignored: project mismatch",
+      );
+      res.sendStatus(200);
+      return;
+    }
+
+    if (!payloadAmount) {
+      logger.warn({ orderId, payloadProject }, "[Billing] Pakasir webhook ignored: missing amount");
+      res.sendStatus(200);
+      return;
+    }
+
+    if (order && payloadAmount !== order.amount) {
+      logger.warn(
+        { orderId, payloadAmount, expectedAmount: order.amount },
+        "[Billing] Pakasir webhook ignored: amount mismatch",
+      );
+      res.sendStatus(200);
+      return;
+    }
+
+    if (payloadIsSandbox !== null) {
+      const expectedSandbox = gatewayConfig.pakasir.mode === "sandbox";
+      if (payloadIsSandbox !== expectedSandbox) {
+        logger.warn(
+          { orderId, payloadIsSandbox, expectedSandbox },
+          "[Billing] Pakasir webhook ignored: mode mismatch",
+        );
+        res.sendStatus(200);
+        return;
       }
     }
   }
