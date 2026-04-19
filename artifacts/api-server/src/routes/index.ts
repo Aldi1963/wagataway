@@ -66,6 +66,7 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction): 
     "/auth/password/forgot",
     "/auth/2fa/check",
     "/cs-bot/receive",
+    "/billing/webhook",
   ];
   if (PUBLIC_PATHS.some((p) => req.path.startsWith(p))) {
     next();
