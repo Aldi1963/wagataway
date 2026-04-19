@@ -7,13 +7,24 @@ export async function extractTextFromFile(filePath: string, mimetype: string): P
   const buffer = fs.readFileSync(filePath);
 
   if (mimetype === "application/pdf") {
-    // pdf-parse needs DOMMatrix polyfill in some environments
+    // pdf-parse/pdfjs-dist needs DOMMatrix polyfill at load time in many environments
     if (typeof global !== "undefined" && !(global as any).DOMMatrix) {
       try {
+        // Try real canvas first
         const canvas = require("@napi-rs/canvas");
         (global as any).DOMMatrix = canvas.DOMMatrix;
       } catch (e) {
-        // Fallback or ignore
+        // Minimal dummy polyfill to prevent top-level ReferenceError in pdfjs-dist
+        (global as any).DOMMatrix = class DOMMatrix {
+          constructor() {}
+          static fromFloat32Array() { return new DOMMatrix(); }
+          static fromFloat64Array() { return new DOMMatrix(); }
+          multiply() { return this; }
+          translate() { return this; }
+          scale() { return this; }
+          rotate() { return this; }
+          inverse() { return this; }
+        };
       }
     }
     const pdf = require("pdf-parse");

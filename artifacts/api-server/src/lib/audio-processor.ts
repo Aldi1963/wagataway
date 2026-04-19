@@ -12,9 +12,9 @@ export async function transcribeAudio(
 ): Promise<string | null> {
   try {
     // 1. Get Effective API Key (User key OR Admin key if plan allows)
-    const apiKey = await getEffectiveAiKey(userId, "openai");
+    const effectiveAiKey = await getEffectiveAiKey(userId, "openai");
 
-    if (!apiKey) {
+    if (!effectiveAiKey) {
       logger.warn("[Audio] Transcription skipped: No API key found");
       return null;
     }
@@ -26,7 +26,7 @@ export async function transcribeAudio(
     fs.writeFileSync(tempPath, buffer);
 
     // 3. Call OpenAI Whisper
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ apiKey: effectiveAiKey.key });
     
     logger.info({ tempPath }, "[Audio] Sending to Whisper");
     

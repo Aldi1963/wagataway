@@ -505,31 +505,52 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
   
   // STATUS CHECK
   const status = String(body.status ?? body.transaction_status ?? body.status_code ?? body.payment_status ?? "");
-  const isPaid = ["PAID", "paid", "settlement", "capture", "success", "Success", "completed"].includes(status);
+  const isPaid = ["PAID", "paid", "settlement", "capture", "success", "Success", "completed", "1"].includes(status);
   
   if (!order) {
     logger.info(`[Billing] Order ${orderId} not in memory, searching DB...`);
-    // Fallback: Search in transactionsTable
+    
+    // 1. Search in transactionsTable (for plan subscriptions)
     const [dbTx] = await db.select().from(transactionsTable)
       .where(sql`${transactionsTable.description} LIKE ${"%" + orderId + "%"}`)
       .limit(1);
 
     if (dbTx) {
-      // Reconstruct order object from DB description (Name|Id|OrderId)
       const parts = (dbTx.description ?? "").split("|");
       order = {
         orderId,
         gateway: "unknown",
-        plan: parts[1] ?? "basic",
+        plan: parts[0] ?? "basic", // parts[0] is planId
         amount: Number(dbTx.amount),
         userId: dbTx.userId,
         paymentUrl: "",
         status: dbTx.status as any,
         expiredAt: new Date(Date.now() + 86400000).toISOString(),
         createdAt: dbTx.createdAt?.toISOString() ?? new Date().toISOString(),
-        type: (dbTx.description ?? "").includes("Top-up") || (dbTx.description ?? "").includes("topup") ? "topup" : "plan"
+        type: "plan"
       };
-      logger.info(`[Billing] Order ${orderId} recovered from DB for user ${order.userId}`);
+      logger.info(`[Billing] Order ${orderId} recovered from transactionsTable`);
+    } else {
+      // 2. Search in walletTransactionsTable (for top-ups)
+      const [walletTx] = await db.select().from(walletTransactionsTable)
+        .where(eq(walletTransactionsTable.orderId, orderId))
+        .limit(1);
+      
+      if (walletTx) {
+        order = {
+          orderId,
+          gateway: "unknown",
+          plan: "topup",
+          amount: Number(walletTx.amount),
+          userId: walletTx.userId,
+          paymentUrl: "",
+          status: walletTx.status as any,
+          expiredAt: new Date(Date.now() + 86400000).toISOString(),
+          createdAt: walletTx.createdAt?.toISOString() ?? new Date().toISOString(),
+          type: "topup"
+        };
+        logger.info(`[Billing] Order ${orderId} recovered from walletTransactionsTable`);
+      }
     }
   }
 

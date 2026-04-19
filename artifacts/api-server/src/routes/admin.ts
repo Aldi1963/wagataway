@@ -152,9 +152,12 @@ router.post("/admin/smtp/test", async (req, res): Promise<void> => {
   try {
     const transporter = nodemailer.createTransport({
       host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
+      port: Number(smtpPort),
+      secure: Number(smtpPort) === 465,
       auth: { user: smtpUser, pass: smtpPassword },
+      tls: {
+        rejectUnauthorized: false,
+      },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 15000,
@@ -653,7 +656,7 @@ async function setSetting(key: string, value: string): Promise<void> {
 }
 
 router.get("/admin/ai-settings", async (_req, res): Promise<void> => {
-  const [apiKey, model, loginMethod, accountEmail, accountPassword, accountType, orgId, aiProvider, aiBaseUrl] = await Promise.all([
+  const [apiKey, model, loginMethod, accountEmail, accountPassword, accountType, orgId, aiProvider, aiBaseUrl, geminiKey, groqKey, anthropicKey, deepseekKey, mistralKey, openrouterKey] = await Promise.all([
     getSetting("openai_api_key"),
     getSetting("openai_default_model"),
     getSetting("openai_login_method"),
@@ -663,6 +666,12 @@ router.get("/admin/ai-settings", async (_req, res): Promise<void> => {
     getSetting("openai_org_id"),
     getSetting("ai_provider"),
     getSetting("ai_base_url"),
+    getSetting("gemini_api_key"),
+    getSetting("groq_api_key"),
+    getSetting("anthropic_api_key"),
+    getSetting("deepseek_api_key"),
+    getSetting("mistral_api_key"),
+    getSetting("openrouter_api_key"),
   ]);
   res.json({
     openaiApiKey: apiKey ? `sk-...${apiKey.slice(-4)}` : "",
@@ -676,6 +685,12 @@ router.get("/admin/ai-settings", async (_req, res): Promise<void> => {
     orgId: orgId || "",
     aiProvider: aiProvider || "openai",
     aiBaseUrl: aiBaseUrl || "",
+    geminiApiKey: geminiKey ? `sk-...${geminiKey.slice(-4)}` : "",
+    groqApiKey: groqKey ? `sk-...${groqKey.slice(-4)}` : "",
+    anthropicApiKey: anthropicKey ? `sk-...${anthropicKey.slice(-4)}` : "",
+    deepseekApiKey: deepseekKey ? `sk-...${deepseekKey.slice(-4)}` : "",
+    mistralApiKey: mistralKey ? `sk-...${mistralKey.slice(-4)}` : "",
+    openrouterApiKey: openrouterKey ? `sk-...${openrouterKey.slice(-4)}` : "",
   });
 });
 
@@ -690,6 +705,14 @@ router.put("/admin/ai-settings", async (req, res): Promise<void> => {
   if (openaiApiKey !== undefined && !openaiApiKey.startsWith("sk-...")) {
     saves.push(setSetting("openai_api_key", openaiApiKey));
   }
+  // Support other provider keys
+  const otherKeys = ["gemini_api_key", "groq_api_key", "anthropic_api_key", "deepseek_api_key", "mistral_api_key", "openrouter_api_key"];
+  for (const k of otherKeys) {
+    if (req.body[k] !== undefined && !req.body[k].startsWith("sk-...")) {
+      saves.push(setSetting(k, req.body[k]));
+    }
+  }
+
   if (openaiDefaultModel) {
     saves.push(setSetting("openai_default_model", openaiDefaultModel));
   }

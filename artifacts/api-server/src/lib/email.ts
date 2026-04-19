@@ -20,9 +20,12 @@ async function createTransporter() {
   return {
     transport: nodemailer.createTransport({
       host: cfg.host,
-      port: cfg.port,
-      secure: cfg.port === 465,
+      port: Number(cfg.port),
+      secure: Number(cfg.port) === 465,
       auth: { user: cfg.user, pass: cfg.password },
+      tls: {
+        rejectUnauthorized: false,
+      },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 15000,

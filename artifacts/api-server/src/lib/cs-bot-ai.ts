@@ -5,9 +5,24 @@ import { eq, and } from "drizzle-orm";
 
 // ── Platform config helpers ───────────────────────────────────────────────────
 
-async function getAdminApiKey(): Promise<string | null> {
-  const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, "openai_api_key"));
+async function getAdminApiKey(provider: string = "openai"): Promise<string | null> {
+  const keyMap: Record<string, string> = {
+    openai: "openai_api_key",
+    gemini: "gemini_api_key",
+    groq: "groq_api_key",
+    anthropic: "anthropic_api_key",
+    deepseek: "deepseek_api_key",
+    mistral: "mistral_api_key",
+    openrouter: "openrouter_api_key",
+  };
+  const key = keyMap[provider] || "openai_api_key";
+  const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, key));
   return row?.value || null;
+}
+
+async function getAdminProvider(): Promise<string> {
+  const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, "ai_provider"));
+  return row?.value || "openai";
 }
 
 async function getDefaultModel(): Promise<string> {
@@ -78,18 +93,22 @@ export async function checkAiAccess(userId: number): Promise<AiAccessInfo> {
   return { allowed: false, source: "none", hasOwnKey: false, keyPrefix: null };
 }
 
-export async function getEffectiveAiKey(userId: number, provider: AiProvider = "openai"): Promise<string | null> {
+export async function getEffectiveAiKey(userId: number, provider: AiProvider = "openai"): Promise<{ key: string; provider: AiProvider } | null> {
   // 1. Check User's own key first (highest priority)
   const userKey = await getUserAiKey(userId, provider);
-  if (userKey) return userKey;
+  if (userKey) return { key: userKey, provider };
 
   // 2. Check Plan Eligibility & Platform Fallback
-  // If the user's plan allows AI, they can use the Admin/Platform key
   const planAllows = await checkUserPlanAllowsAi(userId);
   if (planAllows) {
-    // Return Admin Key regardless of provider name, as admin settings 
-    // consolidate the platform key into a single global key.
-    return await getAdminApiKey();
+    if (provider === "platform") {
+       const adminProv = await getAdminProvider() as AiProvider;
+       const adminKey = await getAdminApiKey(adminProv);
+       if (adminKey) return { key: adminKey, provider: adminProv };
+    } else {
+       const adminKey = await getAdminApiKey(provider);
+       if (adminKey) return { key: adminKey, provider };
+    }
   }
 
   return null;
@@ -215,8 +234,8 @@ export async function generateConversationSummary(
   userId: number,
   messages: { fromMe: boolean; text: string | null; contactName: string | null }[]
 ): Promise<string | null> {
-  const apiKey = await getEffectiveAiKey(userId, "openai");
-  if (!apiKey) return null;
+  const effectiveAiKey = await getEffectiveAiKey(userId, "openai");
+  if (!effectiveAiKey) return null;
 
   const history = messages
     .map((m) => `${m.fromMe ? "Agen" : (m.contactName || "Pelanggan")}: ${m.text || "[Media/Pesan Kosong]"}`)
@@ -231,7 +250,7 @@ Rangkuman harus sangat singkat (maksimal 3-5 poin), bahasa Indonesia yang sopan,
   const userMessage = `Berikut adalah transkrip percakapan:\n\n${history}\n\nBerikan rangkuman poin-poin.`;
 
   try {
-    return await callOpenAICompat(apiKey, "gpt-4o-mini", 300, systemPrompt, userMessage);
+    return await callOpenAICompat(effectiveAiKey.key, "gpt-4o-mini", 300, systemPrompt, userMessage);
   } catch (err) {
     console.error("[cs-bot-ai] Failed to generate summary:", err);
     return null;
@@ -261,12 +280,19 @@ export async function generateAiReply(
   const systemPrompt = buildSystemPrompt(ctx);
   const maxTokens = ctx.maxTokens;
 
-  // ── Key Resolution ────────────────────────────────────────────────────────
+  // ── Key & Provider Resolution ─────────────────────────────────────────────
   let apiKey: string | null = null;
+  let activeProvider: AiProvider = provider;
+
   if (provider !== "platform" && ctx.providerApiKey?.trim()) {
     apiKey = ctx.providerApiKey.trim();
+    activeProvider = provider;
   } else if (userId) {
-    apiKey = await getEffectiveAiKey(userId, provider === "platform" ? "openai" : provider);
+    const effective = await getEffectiveAiKey(userId, provider);
+    if (effective) {
+      apiKey = effective.key;
+      activeProvider = effective.provider;
+    }
   }
 
   if (!apiKey) {
@@ -277,13 +303,13 @@ export async function generateAiReply(
   const model = ctx.model || (provider === "platform" ? await getDefaultModel() : "gpt-4o-mini");
 
   try {
-    if (provider === "anthropic") {
+    if (activeProvider === "anthropic") {
       return await callAnthropic(apiKey, model, maxTokens, systemPrompt, incomingMsg);
     }
-    const baseURL = (provider === "platform") ? await getAiBaseUrl() : PROVIDER_BASE_URLS[provider];
+    const baseURL = (provider === "platform") ? await getAiBaseUrl() : PROVIDER_BASE_URLS[activeProvider];
     return await callOpenAICompat(apiKey, model, maxTokens, systemPrompt, incomingMsg, baseURL);
-  } catch (err) {
-    console.error(`[cs-bot-ai] Error calling ${provider}:`, err);
-    return null;
+  } catch (err: any) {
+    console.error(`[cs-bot-ai] Error calling ${activeProvider}:`, err);
+    throw err;
   }
 }

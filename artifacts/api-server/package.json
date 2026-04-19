@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@hapi/boom": "^10.0.1",
+    "@napi-rs/canvas": "^0.1.99",
     "@types/multer": "^2.1.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "@workspace/api-zod": "workspace:*",
