@@ -131,22 +131,40 @@ export default function Profile() {
             Konfigurasi API key AI default untuk seluruh akun Anda. CS Bot akan menggunakan pengaturan ini jika tidak ada konfigurasi khusus per-perangkat.
           </p>
           
-          <div className="space-y-3">
-            <Label className="text-xs">Provider Default</Label>
-            <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
+              <Brain className="w-3 h-3" /> Provider AI
+            </p>
+            {user?.plan !== "free" && (
+              <Badge variant="outline" className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 gap-1 px-1.5 font-medium">
+                <Zap className="w-2.5 h-2.5 fill-current" /> Platform AI Aktif
+              </Badge>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-4">
+            {user?.plan === "free" 
+              ? "Masukkan API Key Anda sendiri untuk mengaktifkan fitur AI CS Bot." 
+              : "Paket Anda mendukung AI Platform. Anda bisa menggunakan kunci platform atau masukkan kunci Anda sendiri di bawah."}
+          </p>
+
+          <div className="space-y-4">
+            <div className="flex gap-2 p-1 bg-muted/40 rounded-xl">
               {[
-                { id: "openai", label: "OpenAI", icon: "🟢" },
-                { id: "gemini", label: "Gemini", icon: "🔵" },
-                { id: "anthropic", label: "Anthropic", icon: "🔷" },
-                { id: "groq", label: "Groq", icon: "⚡" },
+                { id: "platform", label: "Platform", icon: "🚀" },
+                { id: "openai", label: "OpenAI", icon: "🤖" },
+                { id: "gemini", label: "Gemini", icon: "✨" },
               ].map((p) => {
                 const settings = typeof user?.aiSettings === "string" ? JSON.parse(user.aiSettings) : user?.aiSettings;
-                const active = (settings?.provider ?? "openai") === p.id;
+                const active = (settings?.provider || "platform") === p.id;
                 return (
                   <Button
                     key={p.id}
-                    variant={active ? "default" : "outline"}
-                    className="justify-start gap-2 h-9 text-xs"
+                    variant={active ? "secondary" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "flex-1 h-8 rounded-lg text-xs gap-1.5 transition-all",
+                      active && "bg-background shadow-sm border border-border/50 text-foreground"
+                    )}
                     onClick={() => {
                       const newSettings = { ...(settings ?? {}), provider: p.id };
                       updateProfile.mutate({ aiSettings: JSON.stringify(newSettings) });

@@ -79,17 +79,17 @@ export async function checkAiAccess(userId: number): Promise<AiAccessInfo> {
 }
 
 export async function getEffectiveAiKey(userId: number, provider: AiProvider = "openai"): Promise<string | null> {
-  // 1. Check User's own key
+  // 1. Check User's own key first (highest priority)
   const userKey = await getUserAiKey(userId, provider);
   if (userKey) return userKey;
 
-  // 2. Check Plan Eligibility
+  // 2. Check Plan Eligibility & Platform Fallback
+  // If the user's plan allows AI, they can use the Admin/Platform key
   const planAllows = await checkUserPlanAllowsAi(userId);
   if (planAllows) {
-    // Return Admin Key
-    if (provider === "openai" || provider === "platform") {
-      return await getAdminApiKey();
-    }
+    // Return Admin Key regardless of provider name, as admin settings 
+    // consolidate the platform key into a single global key.
+    return await getAdminApiKey();
   }
 
   return null;
