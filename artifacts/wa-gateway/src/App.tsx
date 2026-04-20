@@ -1,7 +1,6 @@
 import "@/lib/api";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { GoogleOAuthProvider } from "@react-oauth/google";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -292,17 +291,6 @@ function AppRouter() {
 }
 
 function App() {
-  const [googleClientId, setGoogleClientId] = useState(
-    import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ""
-  );
-
-  useEffect(() => {
-    fetch("/api/auth/config")
-      .then((r) => r.json())
-      .then((d) => { if (d.googleClientId) setGoogleClientId(d.googleClientId); })
-      .catch(() => {});
-  }, []);
-
   const inner = (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -320,13 +308,7 @@ function App() {
 
   return (
     <ThemeProvider>
-      {googleClientId ? (
-        <GoogleOAuthProvider clientId={googleClientId}>
-          {inner}
-        </GoogleOAuthProvider>
-      ) : (
-        inner
-      )}
+      {inner}
     </ThemeProvider>
   );
 }

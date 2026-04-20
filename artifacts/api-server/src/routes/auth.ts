@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { db, usersTable, subscriptionsTable, settingsTable } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
 import {
@@ -10,6 +10,7 @@ import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import { OAuth2Client } from "google-auth-library";
 import { sendWelcomeEmail } from "../lib/email";
+import { sendOnboardingMessage } from "../lib/admin-bot-processor";
 
 const router: IRouter = Router();
 
@@ -112,19 +113,56 @@ export function getUserFromToken(token: string): number | null {
 async function getGoogleClientId(): Promise<string> {
   try {
     const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key as any, "google_client_id"));
-    const fromDb = (row as any)?.value ?? "";
-    return fromDb || (process.env.GOOGLE_CLIENT_ID ?? "");
+    const fromDb = String((row as any)?.value ?? "").trim();
+    return fromDb || String(process.env.GOOGLE_CLIENT_ID ?? "").trim();
   } catch {
-    return process.env.GOOGLE_CLIENT_ID ?? "";
+    return String(process.env.GOOGLE_CLIENT_ID ?? "").trim();
   }
+}
+
+function getRequestOrigin(req: Request): string {
+  const origin = req.get("origin");
+  if (origin) return origin.replace(/\/$/, "");
+
+  const proto = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || req.protocol || "https";
+  const host = req.get("x-forwarded-host")?.split(",")[0]?.trim() || req.get("host") || "";
+  return host ? `${proto}://${host}`.replace(/\/$/, "") : "";
+}
+
+async function getTrialConfig(): Promise<{
+  enabled: boolean;
+  durationDays: number;
+  planSlug: string;
+  planName: string;
+}> {
+  const [trialEnabledRow, trialDaysRow, trialPlanSlugRow, trialPlanNameRow] = await Promise.all([
+    db.select({ value: settingsTable.value }).from(settingsTable).where(eq(settingsTable.key, "trial_enabled")),
+    db.select({ value: settingsTable.value }).from(settingsTable).where(eq(settingsTable.key, "trial_duration_days")),
+    db.select({ value: settingsTable.value }).from(settingsTable).where(eq(settingsTable.key, "trial_plan_slug")),
+    db.select({ value: settingsTable.value }).from(settingsTable).where(eq(settingsTable.key, "trial_plan_name")),
+  ]);
+
+  return {
+    enabled: (trialEnabledRow[0]?.value ?? "true") !== "false",
+    durationDays: Number(trialDaysRow[0]?.value ?? "7") || 7,
+    planSlug: trialPlanSlugRow[0]?.value || "basic",
+    planName: trialPlanNameRow[0]?.value || "Basic",
+  };
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // Public: Google OAuth config — returns clientId needed by frontend
-router.get("/auth/config", async (_req, res): Promise<void> => {
+router.get("/auth/config", async (req, res): Promise<void> => {
   const googleClientId = await getGoogleClientId();
-  res.json({ googleClientId, googleEnabled: !!googleClientId });
+  const origin = getRequestOrigin(req);
+  res.json({
+    googleClientId,
+    googleEnabled: !!googleClientId,
+    googleMode: "identity_token",
+    googleAuthorizedOrigin: origin,
+    googleLoginEndpoint: origin ? `${origin}/api/auth/google` : "/api/auth/google",
+  });
 });
 
 // Google OAuth login / register
@@ -134,6 +172,11 @@ router.post("/auth/google", authRateLimit, async (req, res): Promise<void> => {
     res.status(400).json({ message: "Missing credential", code: "INVALID_REQUEST" });
     return;
   }
+  const idToken = credential.trim();
+  if (!idToken) {
+    res.status(400).json({ message: "Credential kosong", code: "INVALID_REQUEST" });
+    return;
+  }
   const GOOGLE_CLIENT_ID = await getGoogleClientId();
   if (!GOOGLE_CLIENT_ID) {
     res.status(503).json({ message: "Google login belum dikonfigurasi oleh admin", code: "NOT_CONFIGURED" });
@@ -141,59 +184,98 @@ router.post("/auth/google", authRateLimit, async (req, res): Promise<void> => {
   }
   const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
   try {
-    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
     const payload = ticket.getPayload();
-    if (!payload?.email) {
+    if (!payload?.email || !payload.sub) {
       res.status(400).json({ message: "Token tidak valid", code: "INVALID_TOKEN" });
       return;
     }
-    const { email, name, sub: googleId, picture } = payload;
+
+    if (payload.email_verified !== true) {
+      res.status(403).json({ message: "Email Google belum terverifikasi", code: "EMAIL_NOT_VERIFIED" });
+      return;
+    }
+
+    const { name, sub: googleId, picture } = payload;
+    const email = payload.email.toLowerCase().trim();
+
     // Find by googleId or email
     const [existing] = await db
       .select()
       .from(usersTable)
-      .where(or(eq(usersTable.googleId, googleId), eq(usersTable.email, email.toLowerCase())));
+      .where(or(eq(usersTable.googleId, googleId), eq(usersTable.email, email)));
 
     let userId: number;
     if (existing) {
-      // Link googleId if not already set
-      if (!existing.googleId) {
-        await db.update(usersTable).set({ googleId, avatar: existing.avatar ?? picture ?? null }).where(eq(usersTable.id, existing.id));
+      if (existing.isSuspended) {
+        res.status(403).json({ message: "Akun Anda telah disuspend. Hubungi administrator.", code: "ACCOUNT_SUSPENDED" });
+        return;
+      }
+
+      if (existing.googleId && existing.googleId !== googleId) {
+        res.status(409).json({
+          message: "Email ini sudah terhubung ke akun Google lain. Login dengan email/password atau hubungi administrator.",
+          code: "GOOGLE_ACCOUNT_MISMATCH",
+        });
+        return;
+      }
+
+      const updates: Record<string, string | null> = {};
+      if (!existing.googleId) updates.googleId = googleId;
+      if (!existing.avatar && picture) updates.avatar = picture;
+      if ((!existing.name || existing.name === existing.email.split("@")[0]) && name) updates.name = name;
+
+      if (Object.keys(updates).length > 0) {
+        await db.update(usersTable).set(updates).where(eq(usersTable.id, existing.id));
       }
       userId = existing.id;
     } else {
       // Create new account from Google
       const randomPassword = crypto.randomBytes(32).toString("hex");
+      const trial = await getTrialConfig();
       const [created] = await db
         .insert(usersTable)
         .values({
           name: name ?? email.split("@")[0],
-          email: email.toLowerCase(),
+          email,
           password: hashPasswordScrypt(randomPassword),
           avatar: picture ?? null,
-          plan: "free",
+          plan: trial.enabled ? trial.planSlug : "free",
           googleId,
         })
         .returning();
       userId = created.id;
 
-      const periodEnd = new Date();
-      periodEnd.setMonth(periodEnd.getMonth() + 1);
-      await db.insert(subscriptionsTable).values({
-        userId,
-        planId: "free",
-        planName: "Free",
-        status: "active",
-        currentPeriodEnd: periodEnd,
-        cancelAtPeriodEnd: false,
-      });
+      if (trial.enabled) {
+        const trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + trial.durationDays);
+        await db.insert(subscriptionsTable).values({
+          userId,
+          planId: trial.planSlug,
+          planName: trial.planName,
+          status: "trial",
+          currentPeriodEnd: trialEnd,
+          cancelAtPeriodEnd: false,
+        });
+      }
+
+      sendWelcomeEmail(created.email, created.name, trial.enabled ? trial.planName : "Free").catch(() => {});
+      sendOnboardingMessage(created.name, created.email).catch(() => {});
     }
 
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
     const token = generateToken(userId);
     res.json({
       token,
-      user: { id: String(user.id), name: user.name, email: user.email, avatar: user.avatar, plan: user.plan, role: user.role ?? "user" },
+      user: {
+        id: String(user.id),
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        plan: user.plan,
+        role: user.role ?? "user",
+        createdAt: user.createdAt?.toISOString(),
+      },
     });
   } catch (err) {
     console.error("Google auth error:", err);

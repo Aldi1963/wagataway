@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteConfig } from "@/hooks/use-site-config";
 import { API_BASE } from "@/lib/api";
-import { GoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
 
 const schema = z.object({
   email: z.string().email("Email tidak valid"),
@@ -45,6 +45,11 @@ const testimonial = {
 
 type PageStep = "login" | "2fa" | "forgot-email" | "forgot-otp";
 
+interface GoogleAuthConfig {
+  googleClientId: string;
+  googleEnabled: boolean;
+}
+
 function SiteLogo({ logo, size = 20 }: { logo: string; size?: number }) {
   const isUrl = logo.startsWith("http://") || logo.startsWith("https://") || (logo.startsWith("/") && logo.length > 1);
   if (isUrl) {
@@ -62,6 +67,8 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const [googleConfigLoading, setGoogleConfigLoading] = useState(true);
+  const [googleConfigError, setGoogleConfigError] = useState(false);
 
   // Step state
   const [step, setStep] = useState<PageStep>("login");
@@ -81,15 +88,27 @@ export default function Login() {
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const forgotOtpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  const [googleClientId, setGoogleClientId] = useState(
-    import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ""
-  );
+  const [googleClientId, setGoogleClientId] = useState((import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "").trim());
 
   useEffect(() => {
-    fetch("/api/auth/config")
-      .then((r) => r.json())
-      .then((d) => { if (d.googleClientId) setGoogleClientId(d.googleClientId); })
-      .catch(() => {});
+    let cancelled = false;
+    setGoogleConfigLoading(true);
+    fetch(`${API_BASE}/auth/config`)
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error("Google config failed")))
+      .then((d: GoogleAuthConfig) => {
+        if (cancelled) return;
+        const clientId = typeof d.googleClientId === "string" ? d.googleClientId.trim() : "";
+        setGoogleClientId(clientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "").trim());
+        setGoogleConfigError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleConfigError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setGoogleConfigLoading(false);
+      });
+
+    return () => { cancelled = true; };
   }, []);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -247,7 +266,14 @@ export default function Login() {
   }
 
   async function handleGoogleSuccess(credentialResponse: { credential?: string }) {
-    if (!credentialResponse.credential) return;
+    if (!credentialResponse.credential) {
+      toast({
+        title: "Login Google gagal",
+        description: "Google tidak mengirim credential. Coba ulangi beberapa saat lagi.",
+        variant: "destructive",
+      });
+      return;
+    }
     setGoogleLoading(true);
     try {
       const res = await fetch(`${API_BASE}/auth/google`, {
@@ -257,7 +283,13 @@ export default function Login() {
       });
       const json = await res.json();
       if (!res.ok) {
-        toast({ title: "Login Google gagal", description: json.message ?? "Terjadi kesalahan", variant: "destructive" });
+        const fallback =
+          json.code === "ACCOUNT_SUSPENDED"
+            ? "Akun Anda sedang disuspend. Hubungi administrator."
+            : json.code === "EMAIL_NOT_VERIFIED"
+              ? "Email Google belum terverifikasi."
+              : "Terjadi kesalahan saat verifikasi Google.";
+        toast({ title: "Login Google gagal", description: json.message ?? fallback, variant: "destructive" });
         return;
       }
       login(json.token, json.user);
@@ -268,6 +300,8 @@ export default function Login() {
       setGoogleLoading(false);
     }
   }
+
+  const showGoogleArea = googleConfigLoading || googleConfigError || !!googleClientId;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
@@ -356,7 +390,7 @@ export default function Login() {
                   </Button>
                 </form>
 
-                {googleClientId && (
+                {showGoogleArea && (
                   <>
                     <div className="relative my-5">
                       <div className="absolute inset-0 flex items-center">
@@ -368,16 +402,46 @@ export default function Login() {
                     </div>
 
                     <div>
-                      {googleLoading ? (
+                      {googleConfigLoading ? (
+                        <div className="flex items-center justify-center gap-2 h-12 border border-border rounded-xl text-sm text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Menyiapkan Google Login...
+                        </div>
+                      ) : googleConfigError && !googleClientId ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                          Google Login belum bisa dimuat. Login dengan email/password tetap tersedia.
+                        </div>
+                      ) : googleLoading ? (
                         <div className="flex items-center justify-center h-12 border border-border rounded-xl">
                           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                         </div>
                       ) : (
-                        <div className="[&>div]:w-full [&>div>div]:w-full [&>div>div>iframe]:w-full">
-                          <GoogleLogin onSuccess={handleGoogleSuccess}
-                            onError={() => toast({ title: "Login Google gagal", variant: "destructive" })}
-                            width={400} text="signin_with" shape="rectangular" theme="outline" size="large" logo_alignment="left" />
-                        </div>
+                        <GoogleOAuthProvider clientId={googleClientId}>
+                          <div className="[&>div]:w-full [&>div>div]:w-full [&>div>div>iframe]:w-full">
+                            <GoogleLogin
+                              onSuccess={handleGoogleSuccess}
+                              onError={() => {
+                                setGoogleLoading(false);
+                                toast({
+                                  title: "Login Google gagal",
+                                  description: "Popup Google ditutup atau gagal dimuat. Coba ulangi.",
+                                  variant: "destructive",
+                                });
+                              }}
+                              width={400}
+                              text="signin_with"
+                              shape="rectangular"
+                              theme="outline"
+                              size="large"
+                              logo_alignment="left"
+                            />
+                          </div>
+                        </GoogleOAuthProvider>
+                      )}
+                      {googleClientId && (
+                        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                          Login Google akan menghubungkan akun berdasarkan email Google yang sudah terverifikasi.
+                        </p>
                       )}
                     </div>
                   </>

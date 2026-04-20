@@ -1466,6 +1466,8 @@ function GoogleAuthSection() {
   });
 
   const isConfigured = data?.configured ?? false;
+  const googleAuthorizedOrigin = window.location.origin;
+  const googleLoginEndpoint = `${window.location.origin}/api/auth/google`;
 
   return (
     <div className="space-y-5">
@@ -1512,8 +1514,25 @@ function GoogleAuthSection() {
               <li>Buka <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded font-mono">console.cloud.google.com</code></li>
               <li>Buat project → API & Services → Credentials</li>
               <li>Create OAuth 2.0 Client ID → Application type: <strong>Web</strong></li>
-              <li>Tambahkan <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded font-mono">{window.location.origin}</code> ke Authorized origins</li>
+              <li>Tambahkan origin di bawah ke <strong>Authorized JavaScript origins</strong></li>
             </ol>
+            <div className="mt-3 space-y-2">
+              <div>
+                <p className="font-semibold text-blue-800 dark:text-blue-300">Authorized JavaScript origin</p>
+                <code className="mt-1 block rounded-lg bg-white/80 dark:bg-black/20 border border-blue-200 dark:border-blue-800 px-3 py-2 font-mono text-[11px] text-foreground break-all">
+                  {googleAuthorizedOrigin}
+                </code>
+              </div>
+              <div>
+                <p className="font-semibold text-blue-800 dark:text-blue-300">Callback/Webhook aplikasi</p>
+                <code className="mt-1 block rounded-lg bg-white/80 dark:bg-black/20 border border-blue-200 dark:border-blue-800 px-3 py-2 font-mono text-[11px] text-foreground break-all">
+                  {googleLoginEndpoint}
+                </code>
+                <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400">
+                  Mode aplikasi ini memakai ID token dari tombol Google. Endpoint ini dipakai frontend untuk verifikasi ke server, bukan redirect URI wajib di Google Console.
+                </p>
+              </div>
+            </div>
           </div>
 
           <Separator />
