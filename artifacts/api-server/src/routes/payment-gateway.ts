@@ -5,8 +5,8 @@
  */
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
-import { db, settingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, paymentWebhookLogsTable, settingsTable } from "@workspace/db";
+import { desc, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -90,6 +90,34 @@ router.get("/admin/payment-gateway", (_req, res): void => {
 });
 
 // ── Admin: PUT payment gateway config ────────────────────────────────────────
+
+router.get("/admin/payment-gateway/webhook-logs", async (req, res): Promise<void> => {
+  const parsedLimit = Number(req.query.limit ?? 30);
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100)
+    : 30;
+
+  const rows = await db
+    .select({
+      id: paymentWebhookLogsTable.id,
+      gateway: paymentWebhookLogsTable.gateway,
+      orderId: paymentWebhookLogsTable.orderId,
+      userId: paymentWebhookLogsTable.userId,
+      eventStatus: paymentWebhookLogsTable.eventStatus,
+      processingStatus: paymentWebhookLogsTable.processingStatus,
+      httpStatus: paymentWebhookLogsTable.httpStatus,
+      amount: paymentWebhookLogsTable.amount,
+      project: paymentWebhookLogsTable.project,
+      message: paymentWebhookLogsTable.message,
+      payload: paymentWebhookLogsTable.payload,
+      createdAt: paymentWebhookLogsTable.createdAt,
+    })
+    .from(paymentWebhookLogsTable)
+    .orderBy(desc(paymentWebhookLogsTable.createdAt))
+    .limit(limit);
+
+  res.json(rows);
+});
 
 router.put("/admin/payment-gateway", async (req, res): Promise<void> => {
   const b = req.body as Partial<GatewayConfig>;

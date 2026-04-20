@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Save, Loader2, CheckCircle2, XCircle,
-  Eye, EyeOff, Zap, AlertCircle, Wifi, ChevronDown, Check,
+  Eye, EyeOff, Zap, AlertCircle, Wifi, ChevronDown, Check, RefreshCw, Clock3,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,20 @@ interface GatewayConfig {
   xendit:   { secretKey: string; mode: "sandbox" | "production" };
   tokopay:  { merchantId: string; secret: string; mode: "sandbox" | "production" };
   tripay:   { apiKey: string; privateKey: string; merchantCode: string; mode: "sandbox" | "production" };
+}
+
+interface PaymentWebhookLog {
+  id: number;
+  gateway: string;
+  orderId: string | null;
+  userId: number | null;
+  eventStatus: string | null;
+  processingStatus: string;
+  httpStatus: number | null;
+  amount: string | null;
+  project: string | null;
+  message: string | null;
+  createdAt: string;
 }
 
 // ── Brand SVG Logos ──────────────────────────────────────────────────────────
@@ -108,6 +122,34 @@ const GATEWAY_META: Record<Gateway, { label: string; desc: string; color: string
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+const WEBHOOK_STATUS_STYLES: Record<string, string> = {
+  paid: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+  received: "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800",
+  ignored: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+  failed: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
+};
+
+function webhookStatusClass(status: string): string {
+  return WEBHOOK_STATUS_STYLES[status] ?? "bg-muted text-muted-foreground border-border";
+}
+
+function formatWebhookAmount(amount: string | null): string {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) return "-";
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
+}
+
+function formatWebhookTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function PasswordInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [show, setShow] = useState(false);
@@ -233,6 +275,16 @@ export default function AdminPaymentGateway() {
   const { data: config, isLoading } = useQuery<GatewayConfig>({
     queryKey: ["admin-payment-gateway"],
     queryFn: () => apiFetch("/admin/payment-gateway").then((r) => r.json()),
+  });
+
+  const {
+    data: webhookLogs = [],
+    isLoading: webhookLogsLoading,
+    isFetching: webhookLogsFetching,
+  } = useQuery<PaymentWebhookLog[]>({
+    queryKey: ["admin-payment-gateway-webhook-logs"],
+    queryFn: () => apiFetch("/admin/payment-gateway/webhook-logs?limit=20").then((r) => r.json()),
+    refetchInterval: 15000,
   });
 
   const [activeGw, setActiveGw] = useState<Gateway>("none");
@@ -477,6 +529,70 @@ export default function AdminPaymentGateway() {
               </code>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Webhook logs */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock3 className="w-4 h-4 text-primary" />
+                Log Webhook Payment
+              </CardTitle>
+              <CardDescription>Audit callback terbaru dari gateway, auto-refresh setiap 15 detik</CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => qc.invalidateQueries({ queryKey: ["admin-payment-gateway-webhook-logs"] })}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${webhookLogsFetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
+          {webhookLogsLoading ? (
+            <div className="flex items-center justify-center rounded-xl border border-dashed py-8 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          ) : webhookLogs.length === 0 ? (
+            <div className="rounded-xl border border-dashed px-4 py-8 text-center">
+              <p className="text-sm font-medium">Belum ada webhook masuk</p>
+              <p className="text-xs text-muted-foreground mt-1">Saat Pakasir mengirim callback, detailnya akan muncul di sini.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {webhookLogs.map((log) => (
+                <div key={log.id} className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${webhookStatusClass(log.processingStatus)}`}>
+                          {log.processingStatus}
+                        </span>
+                        {log.httpStatus && (
+                          <span className="text-[11px] text-muted-foreground">HTTP {log.httpStatus}</span>
+                        )}
+                        <span className="text-[11px] text-muted-foreground">{formatWebhookTime(log.createdAt)}</span>
+                      </div>
+                      <p className="mt-2 font-mono text-xs break-all">{log.orderId ?? "order_id kosong"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{log.message ?? "Tidak ada pesan detail"}</p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground shrink-0 space-y-1">
+                      <p className="font-semibold text-foreground">{formatWebhookAmount(log.amount)}</p>
+                      <p>{log.gateway || "unknown"}{log.project ? ` / ${log.project}` : ""}</p>
+                      {log.eventStatus && <p>Status gateway: {log.eventStatus}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

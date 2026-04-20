@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, subscriptionsTable, transactionsTable, usersTable, plansTable, vouchersTable, voucherUsagesTable, walletTransactionsTable, adminWaBotSessionsTable, adminWaBotSettingsTable } from "@workspace/db";
+import { db, subscriptionsTable, transactionsTable, usersTable, plansTable, vouchersTable, voucherUsagesTable, walletTransactionsTable, adminWaBotSessionsTable, adminWaBotSettingsTable, paymentWebhookLogsTable } from "@workspace/db";
 import { sendSubscriptionEmail } from "../lib/email";
 import { eq, sql, and } from "drizzle-orm";
 import { getUserPlan, countUserDevices, countTodayMessages, countUserContacts } from "../lib/plan-limits";
@@ -21,9 +21,62 @@ function fmtRpBilling(n: number): string {
 }
 
 const PAID_STATUSES = new Set(["paid", "settlement", "capture", "success", "completed", "1"]);
+const SENSITIVE_WEBHOOK_FIELDS = new Set([
+  "api_key",
+  "apikey",
+  "apiKey",
+  "signature",
+  "secret",
+  "token",
+  "private_key",
+  "privateKey",
+]);
+
+type PaymentWebhookProcessingStatus = "received" | "ignored" | "paid" | "failed";
+
+function sanitizePaymentWebhookPayload(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(body).map(([key, value]) => [
+      key,
+      SENSITIVE_WEBHOOK_FIELDS.has(key) ? "[redacted]" : value,
+    ]),
+  );
+}
+
+async function recordPaymentWebhookLog(input: {
+  gateway?: string | null;
+  orderId?: string | null;
+  userId?: number | null;
+  eventStatus?: string | null;
+  processingStatus: PaymentWebhookProcessingStatus;
+  httpStatus?: number | null;
+  amount?: number | null;
+  project?: string | null;
+  message?: string | null;
+  payload: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await db.insert(paymentWebhookLogsTable).values({
+      gateway: input.gateway || "unknown",
+      orderId: input.orderId ?? null,
+      userId: input.userId ?? null,
+      eventStatus: input.eventStatus ?? null,
+      processingStatus: input.processingStatus,
+      httpStatus: input.httpStatus ?? null,
+      amount: input.amount === undefined || input.amount === null ? null : String(input.amount),
+      project: input.project ?? null,
+      message: input.message ?? null,
+      payload: input.payload,
+    });
+  } catch (err) {
+    logger.error({ err }, "[Billing] Failed to record payment webhook log");
+  }
+}
 
 function readWebhookString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 function readWebhookRecord(value: unknown): Record<string, unknown> | null {
@@ -595,21 +648,58 @@ router.post("/billing/simulate-pay/:orderId", async (req, res): Promise<void> =>
 
 router.post("/billing/webhook", async (req, res): Promise<void> => {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  logger.info(`[Billing] Webhook received: ${JSON.stringify(body)}`);
+  const safePayload = sanitizePaymentWebhookPayload(body);
+  logger.info(`[Billing] Webhook received: ${JSON.stringify(safePayload)}`);
 
   // Try to find orderId from various gateway formats
-  const orderId = (body.external_id ?? body.order_id ?? body.merchant_ref ?? body.ref_id ?? body.orderId ?? body.orderId) as string;
+  const orderId = readWebhookString(body.external_id ?? body.order_id ?? body.merchant_ref ?? body.ref_id ?? body.orderId);
+  const status = String(body.status ?? body.transaction_status ?? body.status_code ?? body.payment_status ?? "").trim();
+  const eventStatus = status || null;
+  const isPaid = isPaidStatus(status);
+  const payloadProject = readWebhookString(body.project);
+  const payloadAmount = readWebhookAmount(body);
+  const payloadIsSandbox = typeof body.is_sandbox === "boolean" ? body.is_sandbox : null;
+
   if (!orderId) { 
     logger.warn("[Billing] Webhook received without orderId");
+    await recordPaymentWebhookLog({
+      gateway: gatewayConfig.activeGateway,
+      orderId: null,
+      eventStatus,
+      processingStatus: "ignored",
+      httpStatus: 200,
+      amount: payloadAmount,
+      project: payloadProject,
+      message: "Webhook ignored: missing order ID",
+      payload: safePayload,
+    });
     res.sendStatus(200); 
     return; 
   }
 
   let order = pendingOrders.get(orderId);
-  
-  // STATUS CHECK
-  const status = String(body.status ?? body.transaction_status ?? body.status_code ?? body.payment_status ?? "");
-  const isPaid = isPaidStatus(status);
+
+  const resolveLogGateway = () =>
+    order?.gateway && order.gateway !== "unknown"
+      ? order.gateway
+      : gatewayConfig.activeGateway;
+
+  const writeWebhookLog = (
+    processingStatus: PaymentWebhookProcessingStatus,
+    message: string,
+    httpStatus = 200,
+  ) => recordPaymentWebhookLog({
+    gateway: resolveLogGateway(),
+    orderId,
+    userId: order?.userId ?? null,
+    eventStatus,
+    processingStatus,
+    httpStatus,
+    amount: payloadAmount,
+    project: payloadProject,
+    message,
+    payload: safePayload,
+  });
   
   if (!order) {
     logger.info(`[Billing] Order ${orderId} not in memory, searching DB...`);
@@ -658,9 +748,6 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
     }
   }
 
-  const payloadProject = readWebhookString(body.project);
-  const payloadAmount = readWebhookAmount(body);
-  const payloadIsSandbox = typeof body.is_sandbox === "boolean" ? body.is_sandbox : null;
   const shouldValidatePakasir =
     order?.gateway === "pakasir" ||
     gatewayConfig.activeGateway === "pakasir" ||
@@ -671,6 +758,7 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
 
     if (!payloadProject) {
       logger.warn({ orderId }, "[Billing] Pakasir webhook ignored: missing project");
+      await writeWebhookLog("ignored", "Pakasir webhook ignored: missing project");
       res.sendStatus(200);
       return;
     }
@@ -680,12 +768,14 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
         { orderId, payloadProject, expectedProject },
         "[Billing] Pakasir webhook ignored: project mismatch",
       );
+      await writeWebhookLog("ignored", `Pakasir webhook ignored: project mismatch (${payloadProject})`);
       res.sendStatus(200);
       return;
     }
 
     if (!payloadAmount) {
       logger.warn({ orderId, payloadProject }, "[Billing] Pakasir webhook ignored: missing amount");
+      await writeWebhookLog("ignored", "Pakasir webhook ignored: missing amount");
       res.sendStatus(200);
       return;
     }
@@ -695,6 +785,7 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
         { orderId, payloadAmount, expectedAmount: order.amount },
         "[Billing] Pakasir webhook ignored: amount mismatch",
       );
+      await writeWebhookLog("ignored", `Pakasir webhook ignored: amount mismatch (${payloadAmount} != ${order.amount})`);
       res.sendStatus(200);
       return;
     }
@@ -706,6 +797,7 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
           { orderId, payloadIsSandbox, expectedSandbox },
           "[Billing] Pakasir webhook ignored: mode mismatch",
         );
+        await writeWebhookLog("ignored", `Pakasir webhook ignored: mode mismatch (${payloadIsSandbox ? "sandbox" : "production"})`);
         res.sendStatus(200);
         return;
       }
@@ -714,6 +806,7 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
 
   if (!order || order.status !== "pending") { 
     logger.warn(`[Billing] Order ${orderId} not found or not pending (Status: ${order?.status})`);
+    await writeWebhookLog("ignored", order ? `Order ignored: status is ${order.status}` : "Order ignored: not found");
     res.sendStatus(200); 
     return; 
   }
@@ -727,10 +820,12 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
       );
 
       if (verification.retryable) {
+        await writeWebhookLog("failed", verification.reason, 503);
         res.status(503).json({ success: false, message: "Pakasir verification temporarily failed" });
         return;
       }
 
+      await writeWebhookLog("ignored", verification.reason);
       res.sendStatus(200);
       return;
     }
@@ -757,6 +852,7 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
         `🏦 Saldo sekarang: *${fmtRpBilling(newBalanceWh)}*\n\n` +
         `Ketik *cek* untuk lihat saldo terbaru.\nKetik *menu* untuk kembali.`
       );
+      await writeWebhookLog("paid", "Topup credited to wallet");
     } else {
       const allPlansWh = (await getPlansFromDb()) ?? PLANS_FALLBACK;
       // Try to find by slug/id
@@ -780,10 +876,14 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
           `📅 Aktif selama 1 bulan ke depan.\n\n` +
           `Ketik *cek* untuk lihat status langganan.\nKetik *menu* untuk kembali.`
         );
+        await writeWebhookLog("paid", `Plan activated: ${planData.name}`);
       } else {
         logger.error(`[Billing] Plan data not found for plan: ${order.plan}`);
+        await writeWebhookLog("failed", `Plan data not found: ${order.plan}`);
       }
     }
+  } else {
+    await writeWebhookLog("received", status ? `Webhook status is ${status}; waiting for paid status` : "Webhook status is empty; waiting for paid status");
   }
 
   res.sendStatus(200);
