@@ -1168,35 +1168,118 @@ router.get("/admin/transactions", async (req, res): Promise<void> => {
   const limit = Math.min(100, parseInt(String(req.query.limit ?? "30"), 10));
   const search = String(req.query.search ?? "").trim();
   const status = String(req.query.status ?? "").trim();
+  const type = String(req.query.type ?? "").trim();
   const offset = (page - 1) * limit;
 
   const rows = await db.execute(sql`
-    SELECT t.id, t.amount, t.currency, t.status, t.description, t.created_at,
-           u.id AS user_id, u.email, u.name
-    FROM transactions t
-    JOIN users u ON u.id = t.user_id
-    WHERE (${search} = '' OR u.email ILIKE ${'%' + search + '%'} OR u.name ILIKE ${'%' + search + '%'} OR t.description ILIKE ${'%' + search + '%'})
-      AND (${status} = '' OR t.status = ${status})
-    ORDER BY t.created_at DESC
+    WITH all_transactions AS (
+      SELECT
+        'plan'::text AS type,
+        t.id,
+        t.user_id,
+        t.amount::numeric AS amount,
+        t.currency,
+        t.status,
+        t.description,
+        t.created_at,
+        NULLIF(split_part(t.description, '|', 2), '') AS order_id,
+        NULL::text AS wallet_type,
+        NULL::text AS plan_id
+      FROM transactions t
+
+      UNION ALL
+
+      SELECT
+        'wallet'::text AS type,
+        w.id,
+        w.user_id,
+        w.amount::numeric AS amount,
+        'IDR'::text AS currency,
+        w.status,
+        COALESCE(w.description, w.type) AS description,
+        w.created_at,
+        w.order_id,
+        w.type AS wallet_type,
+        w.plan_id
+      FROM wallet_transactions w
+    )
+    SELECT
+      a.type, a.id, a.amount, a.currency, a.status, a.description, a.created_at,
+      a.order_id, a.wallet_type, a.plan_id,
+      u.id AS user_id, u.email, u.name,
+      wh.processing_status AS webhook_status,
+      wh.message AS webhook_message,
+      wh.http_status AS webhook_http_status,
+      wh.created_at AS webhook_at,
+      COALESCE(wh_count.total, 0)::int AS webhook_count
+    FROM all_transactions a
+    JOIN users u ON u.id = a.user_id
+    LEFT JOIN LATERAL (
+      SELECT processing_status, message, http_status, created_at
+      FROM payment_webhook_logs
+      WHERE order_id = a.order_id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) wh ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) AS total
+      FROM payment_webhook_logs
+      WHERE order_id = a.order_id
+    ) wh_count ON TRUE
+    WHERE (${search} = '' OR u.email ILIKE ${'%' + search + '%'} OR u.name ILIKE ${'%' + search + '%'} OR a.description ILIKE ${'%' + search + '%'} OR a.order_id ILIKE ${'%' + search + '%'})
+      AND (${status} = '' OR a.status = ${status})
+      AND (${type} = '' OR a.type = ${type})
+    ORDER BY a.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `);
 
   const [{ total }] = (await db.execute(sql`
+    WITH all_transactions AS (
+      SELECT
+        'plan'::text AS type,
+        t.user_id,
+        t.status,
+        t.description,
+        NULLIF(split_part(t.description, '|', 2), '') AS order_id
+      FROM transactions t
+
+      UNION ALL
+
+      SELECT
+        'wallet'::text AS type,
+        w.user_id,
+        w.status,
+        COALESCE(w.description, w.type) AS description,
+        w.order_id
+      FROM wallet_transactions w
+    )
     SELECT COUNT(*) AS total
-    FROM transactions t
-    JOIN users u ON u.id = t.user_id
-    WHERE (${search} = '' OR u.email ILIKE ${'%' + search + '%'} OR u.name ILIKE ${'%' + search + '%'} OR t.description ILIKE ${'%' + search + '%'})
-      AND (${status} = '' OR t.status = ${status})
+    FROM all_transactions a
+    JOIN users u ON u.id = a.user_id
+    WHERE (${search} = '' OR u.email ILIKE ${'%' + search + '%'} OR u.name ILIKE ${'%' + search + '%'} OR a.description ILIKE ${'%' + search + '%'} OR a.order_id ILIKE ${'%' + search + '%'})
+      AND (${status} = '' OR a.status = ${status})
+      AND (${type} = '' OR a.type = ${type})
   `)).rows as any[];
 
   res.json({
     data: rows.rows.map((r: any) => ({
+      type: r.type,
       id: r.id,
       amount: parseFloat(r.amount),
       currency: r.currency,
       status: r.status,
       description: r.description,
       createdAt: r.created_at,
+      orderId: r.order_id,
+      walletType: r.wallet_type,
+      planId: r.plan_id,
+      webhook: r.webhook_status ? {
+        status: r.webhook_status,
+        message: r.webhook_message,
+        httpStatus: r.webhook_http_status,
+        createdAt: r.webhook_at,
+        count: Number(r.webhook_count ?? 0),
+      } : null,
       user: { id: r.user_id, email: r.email, name: r.name },
     })),
     total: Number(total),
