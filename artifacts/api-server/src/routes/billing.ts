@@ -6,6 +6,7 @@ import { getUserPlan, countUserDevices, countTodayMessages, countUserContacts } 
 import { getUserFromToken } from "./auth";
 import { createCheckout, pendingOrders, gatewayConfig, type PendingOrder } from "./payment-gateway";
 import { getSession } from "../lib/wa-manager";
+import { logger } from "../lib/logger";
 import crypto from "crypto";
 
 const router: IRouter = Router();
@@ -19,8 +20,16 @@ function fmtRpBilling(n: number): string {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
+const PAID_STATUSES = new Set(["paid", "settlement", "capture", "success", "completed", "1"]);
+
 function readWebhookString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readWebhookRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function readWebhookAmount(body: Record<string, unknown>): number | null {
@@ -39,6 +48,80 @@ function readWebhookAmount(body: Record<string, unknown>): number | null {
       : Number(raw);
 
   return Number.isFinite(normalized) && normalized > 0 ? normalized : null;
+}
+
+function isPaidStatus(value: unknown): boolean {
+  return PAID_STATUSES.has(String(value ?? "").trim().toLowerCase());
+}
+
+function readPakasirTransaction(data: unknown): Record<string, unknown> | null {
+  const root = readWebhookRecord(data);
+  if (!root) return null;
+
+  const nestedData = readWebhookRecord(root.data);
+  return (
+    readWebhookRecord(root.transaction) ??
+    readWebhookRecord(nestedData?.transaction) ??
+    nestedData
+  );
+}
+
+async function verifyPakasirTransaction(order: PendingOrder): Promise<{ ok: boolean; retryable: boolean; reason: string }> {
+  const project = gatewayConfig.pakasir.merchantId.trim();
+  const apiKey = gatewayConfig.pakasir.apiKey.trim();
+
+  if (!project || !apiKey) {
+    return { ok: false, retryable: false, reason: "Pakasir project/API key is not configured" };
+  }
+
+  const url = new URL("https://app.pakasir.com/api/transactiondetail");
+  url.searchParams.set("project", project);
+  url.searchParams.set("amount", String(order.amount));
+  url.searchParams.set("order_id", order.orderId);
+  url.searchParams.set("api_key", apiKey);
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return {
+        ok: false,
+        retryable: response.status >= 500 || response.status === 429,
+        reason: `Pakasir transactiondetail HTTP ${response.status}`,
+      };
+    }
+
+    const data = await response.json().catch(() => null);
+    const transaction = readPakasirTransaction(data);
+    if (!transaction) {
+      return { ok: false, retryable: false, reason: "Pakasir transactiondetail response has no transaction" };
+    }
+
+    const remoteOrderId = readWebhookString(transaction.order_id ?? transaction.orderId);
+    const remoteProject = readWebhookString(transaction.project);
+    const remoteAmount = readWebhookAmount(transaction);
+    const remoteStatus = transaction.status ?? transaction.transaction_status ?? transaction.payment_status;
+
+    if (remoteOrderId !== order.orderId) {
+      return { ok: false, retryable: false, reason: "Pakasir order_id mismatch" };
+    }
+
+    if (remoteProject !== project) {
+      return { ok: false, retryable: false, reason: "Pakasir project mismatch" };
+    }
+
+    if (remoteAmount !== order.amount) {
+      return { ok: false, retryable: false, reason: "Pakasir amount mismatch" };
+    }
+
+    if (!isPaidStatus(remoteStatus)) {
+      return { ok: false, retryable: false, reason: `Pakasir status is ${String(remoteStatus ?? "empty")}` };
+    }
+
+    return { ok: true, retryable: false, reason: "verified" };
+  } catch (err: any) {
+    logger.error({ err, orderId: order.orderId }, "[Billing] Pakasir transaction verification failed");
+    return { ok: false, retryable: true, reason: err?.message ?? "Pakasir verification request failed" };
+  }
 }
 
 async function sendBotNotification(userId: number, message: string): Promise<void> {
@@ -512,7 +595,6 @@ router.post("/billing/simulate-pay/:orderId", async (req, res): Promise<void> =>
 
 router.post("/billing/webhook", async (req, res): Promise<void> => {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { logger } = await import("../lib/logger");
   logger.info(`[Billing] Webhook received: ${JSON.stringify(body)}`);
 
   // Try to find orderId from various gateway formats
@@ -527,7 +609,7 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
   
   // STATUS CHECK
   const status = String(body.status ?? body.transaction_status ?? body.status_code ?? body.payment_status ?? "");
-  const isPaid = ["PAID", "paid", "settlement", "capture", "success", "Success", "completed", "1"].includes(status);
+  const isPaid = isPaidStatus(status);
   
   if (!order) {
     logger.info(`[Billing] Order ${orderId} not in memory, searching DB...`);
@@ -634,6 +716,24 @@ router.post("/billing/webhook", async (req, res): Promise<void> => {
     logger.warn(`[Billing] Order ${orderId} not found or not pending (Status: ${order?.status})`);
     res.sendStatus(200); 
     return; 
+  }
+
+  if (shouldValidatePakasir && isPaid) {
+    const verification = await verifyPakasirTransaction(order);
+    if (!verification.ok) {
+      logger.warn(
+        { orderId, retryable: verification.retryable, reason: verification.reason },
+        "[Billing] Pakasir webhook ignored: transactiondetail verification failed",
+      );
+
+      if (verification.retryable) {
+        res.status(503).json({ success: false, message: "Pakasir verification temporarily failed" });
+        return;
+      }
+
+      res.sendStatus(200);
+      return;
+    }
   }
 
   if (isPaid) {
