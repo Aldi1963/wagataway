@@ -1,71 +1,38 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# Go
+/go-backend/bin/
+/go-backend/wa-sessions/
+/go-backend/public/uploads/*
+!/go-backend/public/uploads/.gitkeep
 
-# compiled output
-dist
-tmp
-out-tsc
-*.tsbuildinfo
-.expo
-.expo-shared
+# Frontend
+/go-backend/web/node_modules/
+/go-backend/web/dist/
 
-# dependencies
-node_modules
+# Environment
+.env
+.env.local
+.env.production
 
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
+# OS
 .DS_Store
 Thumbs.db
 
-# Environment and Data (IMPORTANT: Protect your keys and sessions!)
-.env
-*.env
-.env.local
-.env.*.local
-wa-sessions/
-**/wa-sessions/
-wa_sessions/
+# Database
+*.db
+*.sqlite
 
-# Large files and logs
-error.log
+# Logs
 *.log
-artifacts.zip
-attached_assets/
 
-# Uploads and temporary data
-artifacts/public/uploads/*
-!artifacts/public/uploads/.gitkeep
-tmp/
-
-# Cursor and GitHub configs
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
-
-# Replit and local config
-.cache/
-.local/
-.config/
+# Binary
+*.exe
+*.dll
+*.so
+*.dylib
