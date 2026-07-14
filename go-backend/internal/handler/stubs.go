@@ -69,18 +69,6 @@ func registerApiKeyRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	}
 }
 
-func registerBillingRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
-	billing := rg.Group("/billing")
-	{
-		billing.GET("/plans", stubHandler("list-plans"))
-		billing.GET("/subscription", stubHandler("get-subscription"))
-		billing.POST("/subscribe", stubHandler("subscribe"))
-		billing.POST("/webhook", stubHandler("payment-webhook"))
-		billing.GET("/transactions", stubHandler("list-transactions"))
-		billing.POST("/voucher/redeem", stubHandler("redeem-voucher"))
-	}
-}
-
 func registerScheduleRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	schedule := rg.Group("/schedule")
 	{
@@ -124,29 +112,6 @@ func registerAntiBannedRoutes(rg *gin.RouterGroup, _ *gorm.DB, _ *whatsapp.Manag
 
 func registerUploadRoutes(rg *gin.RouterGroup) {
 	rg.POST("/upload", stubHandler("upload-file"))
-}
-
-func registerDripRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	drip := rg.Group("/drip")
-	{
-		drip.GET("", stubHandler("list-drip-campaigns"))
-		drip.POST("", stubHandler("create-drip-campaign"))
-		drip.GET("/:id", stubHandler("get-drip-campaign"))
-		drip.PUT("/:id", stubHandler("update-drip-campaign"))
-		drip.DELETE("/:id", stubHandler("delete-drip-campaign"))
-		drip.POST("/:id/steps", stubHandler("add-drip-step"))
-		drip.POST("/:id/enroll", stubHandler("enroll-drip"))
-	}
-}
-
-func registerResellerRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	reseller := rg.Group("/reseller")
-	{
-		reseller.GET("/sub-users", stubHandler("list-sub-users"))
-		reseller.POST("/sub-users", stubHandler("create-sub-user"))
-		reseller.PUT("/sub-users/:id", stubHandler("update-sub-user"))
-		reseller.DELETE("/sub-users/:id", stubHandler("delete-sub-user"))
-	}
 }
 
 func registerLinkManageRoutes(rg *gin.RouterGroup, _ *gorm.DB) {

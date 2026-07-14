@@ -15,14 +15,13 @@ type User struct {
 	Phone     string         `gorm:"size:20" json:"phone"`
 	Password  string         `gorm:"size:255" json:"-"`
 	Avatar    string         `gorm:"size:500" json:"avatar"`
-	Role      string         `gorm:"size:20;default:user" json:"role"` // admin, user, reseller
+	Role      string         `gorm:"size:20;default:user" json:"role"` // admin, user
 	Plan      string         `gorm:"size:50;default:free" json:"plan"`
 	Status    string         `gorm:"size:20;default:active" json:"status"` // active, suspended, banned
 	GoogleID  string         `gorm:"size:255" json:"-"`
 	TwoFASecret string      `gorm:"size:255" json:"-"`
 	TwoFAEnabled bool        `gorm:"default:false" json:"twoFaEnabled"`
 	Timezone  string         `gorm:"size:50;default:Asia/Jakarta" json:"timezone"`
-	ResellerID *uint         `json:"resellerId"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

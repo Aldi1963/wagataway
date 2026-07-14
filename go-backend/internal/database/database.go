@@ -64,7 +64,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.DripCampaign{},
 		&models.DripStep{},
 		&models.DripEnrollment{},
-		&models.ResellerSubUser{},
 		&models.Blacklist{},
 		&models.ShortLink{},
 		&models.BotProduct{},

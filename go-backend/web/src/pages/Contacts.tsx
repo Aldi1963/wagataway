@@ -7,7 +7,7 @@ const mockContacts = [
   { id: 1, name: "Ahmad Rizky", phone: "628123456789", tags: "pelanggan" },
   { id: 2, name: "Siti Nurhaliza", phone: "628987654321", tags: "supplier" },
   { id: 3, name: "Budi Setiawan", phone: "628111222333", tags: "pelanggan" },
-  { id: 4, name: "Dewi Lestari", phone: "628444555666", tags: "reseller" },
+  { id: 4, name: "Dewi Lestari", phone: "628444555666", tags: "pelanggan" },
   { id: 5, name: "Eko Prasetyo", phone: "628777888999", tags: "pelanggan" },
 ];
 
