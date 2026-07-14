@@ -9,8 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ── Remaining stub handlers ───────────────────────────────────────────────────
-
 func stubHandler(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": name + " endpoint ready", "code": "OK"})
@@ -30,10 +28,6 @@ func registerOtpAuthRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
 	}
 }
 
-func registerLinkRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	rg.GET("/l/:code", stubHandler("link-redirect"))
-}
-
 func registerPublicAPIRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB, _ *whatsapp.Manager) {
 	pub := rg.Group("/v1")
 	{
@@ -48,34 +42,12 @@ func registerDashboardRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	rg.GET("/dashboard/stats", stubHandler("dashboard-stats"))
 }
 
-func registerContactGroupRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	groups := rg.Group("/contact-groups")
-	{
-		groups.GET("", stubHandler("list-contact-groups"))
-		groups.POST("", stubHandler("create-contact-group"))
-		groups.PUT("/:id", stubHandler("update-contact-group"))
-		groups.DELETE("/:id", stubHandler("delete-contact-group"))
-		groups.POST("/:id/members", stubHandler("add-group-members"))
-		groups.DELETE("/:id/members/:memberId", stubHandler("remove-group-member"))
-	}
-}
-
 func registerApiKeyRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	keys := rg.Group("/api-keys")
 	{
 		keys.GET("", stubHandler("list-api-keys"))
 		keys.POST("", stubHandler("create-api-key"))
 		keys.DELETE("/:id", stubHandler("delete-api-key"))
-	}
-}
-
-func registerScheduleRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	schedule := rg.Group("/schedule")
-	{
-		schedule.GET("", stubHandler("list-schedules"))
-		schedule.POST("", stubHandler("create-schedule"))
-		schedule.PUT("/:id", stubHandler("update-schedule"))
-		schedule.DELETE("/:id", stubHandler("delete-schedule"))
 	}
 }
 
@@ -98,7 +70,6 @@ func registerCsBotRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
 		csbot.DELETE("/:id", stubHandler("delete-csbot"))
 		csbot.GET("/:id/faqs", stubHandler("list-csbot-faqs"))
 		csbot.POST("/:id/faqs", stubHandler("create-csbot-faq"))
-		csbot.POST("/:id/knowledge", stubHandler("upload-knowledge"))
 	}
 }
 
@@ -112,17 +83,6 @@ func registerAntiBannedRoutes(rg *gin.RouterGroup, _ *gorm.DB, _ *whatsapp.Manag
 
 func registerUploadRoutes(rg *gin.RouterGroup) {
 	rg.POST("/upload", stubHandler("upload-file"))
-}
-
-func registerLinkManageRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	links := rg.Group("/links")
-	{
-		links.GET("", stubHandler("list-links"))
-		links.POST("", stubHandler("create-link"))
-		links.PUT("/:id", stubHandler("update-link"))
-		links.DELETE("/:id", stubHandler("delete-link"))
-		links.GET("/:id/stats", stubHandler("link-stats"))
-	}
 }
 
 func registerBotProductRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
@@ -158,25 +118,4 @@ func registerTwoFARoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
 		twofa.POST("/verify", stubHandler("verify-2fa"))
 		twofa.POST("/disable", stubHandler("disable-2fa"))
 	}
-}
-
-func registerAdminRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB, _ *whatsapp.Manager) {
-	rg.GET("/users", stubHandler("admin-list-users"))
-	rg.PUT("/users/:id", stubHandler("admin-update-user"))
-	rg.DELETE("/users/:id", stubHandler("admin-delete-user"))
-	rg.GET("/packages", stubHandler("admin-list-packages"))
-	rg.POST("/packages", stubHandler("admin-create-package"))
-	rg.PUT("/packages/:id", stubHandler("admin-update-package"))
-	rg.DELETE("/packages/:id", stubHandler("admin-delete-package"))
-	rg.GET("/vouchers", stubHandler("admin-list-vouchers"))
-	rg.POST("/vouchers", stubHandler("admin-create-voucher"))
-	rg.DELETE("/vouchers/:id", stubHandler("admin-delete-voucher"))
-	rg.GET("/settings", stubHandler("admin-get-settings"))
-	rg.PUT("/settings", stubHandler("admin-update-settings"))
-	rg.GET("/analytics", stubHandler("admin-analytics"))
-	rg.GET("/transactions", stubHandler("admin-transactions"))
-	rg.POST("/notifications", stubHandler("admin-send-notification"))
-	rg.GET("/wa-bot", stubHandler("admin-wa-bot"))
-	rg.PUT("/wa-bot", stubHandler("admin-update-wa-bot"))
-	rg.PUT("/maintenance", stubHandler("admin-toggle-maintenance"))
 }
