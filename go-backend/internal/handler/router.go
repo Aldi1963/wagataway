@@ -77,6 +77,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerGroupRoutes(protected, db, waManager)
 			registerCannedResponseRoutes(protected, db)
 			registerTwoFARoutes(protected, cfg, db)
+			registerSSERoutes(protected)
 
 			// ── Admin only routes ──────────────────────────────────────────
 			admin := protected.Group("/admin")
