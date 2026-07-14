@@ -1,0 +1,121 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * DESIGN SYSTEM: Monochrome (Vercel/Linear inspired)
+ * - No gradients, ever
+ * - Black & white with gray scale
+ * - Solid colors, sharp borders
+ * - Clean typography (Inter)
+ * - Generous whitespace
+ */
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--card-fg);
+  --color-primary: var(--primary-color);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--secondary-color);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-fg);
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-fg);
+  --color-sidebar-bg: var(--sidebar-color);
+  --color-sidebar-foreground: var(--sidebar-fg);
+  --color-sidebar-border: var(--sidebar-border-color);
+  --color-success: var(--success-color);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+/* ── LIGHT MODE ─────────────────────────────────────────────────────────────── */
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --card-bg: #ffffff;
+  --card-fg: #0a0a0a;
+  --border-color: #e5e5e5;
+  --input-color: #e5e5e5;
+  --ring-color: #0a0a0a;
+
+  --primary-color: #0a0a0a;
+  --primary-fg: #fafafa;
+  --secondary-color: #f5f5f5;
+  --secondary-fg: #0a0a0a;
+  --muted-color: #f5f5f5;
+  --muted-fg: #737373;
+  --accent-color: #f5f5f5;
+  --accent-fg: #0a0a0a;
+  --destructive-color: #dc2626;
+  --destructive-fg: #ffffff;
+  --success-color: #16a34a;
+
+  --sidebar-color: #0a0a0a;
+  --sidebar-fg: #fafafa;
+  --sidebar-border-color: #262626;
+}
+
+/* ── DARK MODE ──────────────────────────────────────────────────────────────── */
+.dark {
+  --bg: #0a0a0a;
+  --fg: #fafafa;
+  --card-bg: #141414;
+  --card-fg: #fafafa;
+  --border-color: #262626;
+  --input-color: #262626;
+  --ring-color: #fafafa;
+
+  --primary-color: #fafafa;
+  --primary-fg: #0a0a0a;
+  --secondary-color: #1a1a1a;
+  --secondary-fg: #fafafa;
+  --muted-color: #1a1a1a;
+  --muted-fg: #a3a3a3;
+  --accent-color: #1a1a1a;
+  --accent-fg: #fafafa;
+  --destructive-color: #ef4444;
+  --destructive-fg: #ffffff;
+  --success-color: #22c55e;
+
+  --sidebar-color: #0a0a0a;
+  --sidebar-fg: #fafafa;
+  --sidebar-border-color: #262626;
+}
+
+@layer base {
+  * {
+    border-color: var(--border-color);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  /* Vercel-style focus ring */
+  .focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring-color);
+  }
+}

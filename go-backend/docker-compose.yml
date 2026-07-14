@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - GIN_MODE=release
+      - DATABASE_URL=postgres://wagataway:wagataway@postgres:5432/wagataway?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - WA_SESSIONS_DIR=/app/wa-sessions
+    volumes:
+      - wa-sessions:/app/wa-sessions
+      - uploads:/app/public/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wagataway
+      POSTGRES_USER: wagataway
+      POSTGRES_PASSWORD: wagataway
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wagataway"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
+  wa-sessions:
+  uploads:
