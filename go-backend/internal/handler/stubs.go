@@ -9,8 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ── Stub handlers — will be fully implemented per module ──────────────────────
-// Each returns a "not implemented yet" response as placeholder.
+// ── Remaining stub handlers ───────────────────────────────────────────────────
 
 func stubHandler(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -49,18 +48,6 @@ func registerDashboardRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	rg.GET("/dashboard/stats", stubHandler("dashboard-stats"))
 }
 
-func registerContactRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	contacts := rg.Group("/contacts")
-	{
-		contacts.GET("", stubHandler("list-contacts"))
-		contacts.POST("", stubHandler("create-contact"))
-		contacts.PUT("/:id", stubHandler("update-contact"))
-		contacts.DELETE("/:id", stubHandler("delete-contact"))
-		contacts.POST("/import", stubHandler("import-contacts"))
-		contacts.GET("/export", stubHandler("export-contacts"))
-	}
-}
-
 func registerContactGroupRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	groups := rg.Group("/contact-groups")
 	{
@@ -70,17 +57,6 @@ func registerContactGroupRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 		groups.DELETE("/:id", stubHandler("delete-contact-group"))
 		groups.POST("/:id/members", stubHandler("add-group-members"))
 		groups.DELETE("/:id/members/:memberId", stubHandler("remove-group-member"))
-	}
-}
-
-func registerAutoReplyRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	ar := rg.Group("/auto-reply")
-	{
-		ar.GET("", stubHandler("list-auto-replies"))
-		ar.POST("", stubHandler("create-auto-reply"))
-		ar.PUT("/:id", stubHandler("update-auto-reply"))
-		ar.DELETE("/:id", stubHandler("delete-auto-reply"))
-		ar.PATCH("/:id/toggle", stubHandler("toggle-auto-reply"))
 	}
 }
 
@@ -115,17 +91,6 @@ func registerScheduleRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	}
 }
 
-func registerWebhookRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	webhooks := rg.Group("/webhooks")
-	{
-		webhooks.GET("", stubHandler("list-webhooks"))
-		webhooks.POST("", stubHandler("create-webhook"))
-		webhooks.PUT("/:id", stubHandler("update-webhook"))
-		webhooks.DELETE("/:id", stubHandler("delete-webhook"))
-		webhooks.POST("/:id/test", stubHandler("test-webhook"))
-	}
-}
-
 func registerPluginRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	plugins := rg.Group("/plugins")
 	{
@@ -133,16 +98,6 @@ func registerPluginRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 		plugins.POST("", stubHandler("create-plugin"))
 		plugins.PUT("/:id", stubHandler("update-plugin"))
 		plugins.DELETE("/:id", stubHandler("delete-plugin"))
-	}
-}
-
-func registerTemplateRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	templates := rg.Group("/templates")
-	{
-		templates.GET("", stubHandler("list-templates"))
-		templates.POST("", stubHandler("create-template"))
-		templates.PUT("/:id", stubHandler("update-template"))
-		templates.DELETE("/:id", stubHandler("delete-template"))
 	}
 }
 
@@ -156,7 +111,6 @@ func registerCsBotRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
 		csbot.GET("/:id/faqs", stubHandler("list-csbot-faqs"))
 		csbot.POST("/:id/faqs", stubHandler("create-csbot-faq"))
 		csbot.POST("/:id/knowledge", stubHandler("upload-knowledge"))
-		csbot.POST("/receive", stubHandler("csbot-receive-webhook"))
 	}
 }
 
@@ -168,37 +122,8 @@ func registerAntiBannedRoutes(rg *gin.RouterGroup, _ *gorm.DB, _ *whatsapp.Manag
 	}
 }
 
-func registerNotificationRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	notifs := rg.Group("/notifications")
-	{
-		notifs.GET("", stubHandler("list-notifications"))
-		notifs.PUT("/:id/read", stubHandler("mark-read"))
-		notifs.PUT("/read-all", stubHandler("mark-all-read"))
-		notifs.DELETE("/:id", stubHandler("delete-notification"))
-	}
-}
-
 func registerUploadRoutes(rg *gin.RouterGroup) {
 	rg.POST("/upload", stubHandler("upload-file"))
-}
-
-func registerChatRoutes(rg *gin.RouterGroup, _ *gorm.DB, _ *whatsapp.Manager) {
-	chat := rg.Group("/chat")
-	{
-		chat.GET("/conversations", stubHandler("list-conversations"))
-		chat.GET("/messages/:phone", stubHandler("get-chat-messages"))
-		chat.POST("/send", stubHandler("send-chat"))
-		chat.GET("/stream", stubHandler("chat-sse-stream"))
-	}
-}
-
-func registerAnalyticsRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	analytics := rg.Group("/analytics")
-	{
-		analytics.GET("/overview", stubHandler("analytics-overview"))
-		analytics.GET("/messages", stubHandler("analytics-messages"))
-		analytics.GET("/devices", stubHandler("analytics-devices"))
-	}
 }
 
 func registerDripRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
@@ -221,15 +146,6 @@ func registerResellerRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 		reseller.POST("/sub-users", stubHandler("create-sub-user"))
 		reseller.PUT("/sub-users/:id", stubHandler("update-sub-user"))
 		reseller.DELETE("/sub-users/:id", stubHandler("delete-sub-user"))
-	}
-}
-
-func registerBlacklistRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	bl := rg.Group("/blacklist")
-	{
-		bl.GET("", stubHandler("list-blacklist"))
-		bl.POST("", stubHandler("add-blacklist"))
-		bl.DELETE("/:id", stubHandler("remove-blacklist"))
 	}
 }
 
@@ -267,16 +183,6 @@ func registerGroupRoutes(rg *gin.RouterGroup, _ *gorm.DB, _ *whatsapp.Manager) {
 	{
 		groups.GET("", stubHandler("list-wa-groups"))
 		groups.POST("/send", stubHandler("send-to-group"))
-	}
-}
-
-func registerCannedResponseRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	canned := rg.Group("/canned-responses")
-	{
-		canned.GET("", stubHandler("list-canned"))
-		canned.POST("", stubHandler("create-canned"))
-		canned.PUT("/:id", stubHandler("update-canned"))
-		canned.DELETE("/:id", stubHandler("delete-canned"))
 	}
 }
 

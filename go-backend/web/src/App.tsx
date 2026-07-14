@@ -13,6 +13,7 @@ const Devices = lazy(() => import("@/pages/Devices"));
 const SendMessage = lazy(() => import("@/pages/SendMessage"));
 const Contacts = lazy(() => import("@/pages/Contacts"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
+const LiveChat = lazy(() => import("@/pages/LiveChat"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // ── Loading ───────────────────────────────────────────────────────────────────
@@ -80,6 +81,9 @@ function AppRouter() {
         </Route>
         <Route path="/analytics">
           <ProtectedRoute><Analytics /></ProtectedRoute>
+        </Route>
+        <Route path="/live-chat">
+          <ProtectedRoute><LiveChat /></ProtectedRoute>
         </Route>
         <Route component={NotFound} />
       </Switch>
