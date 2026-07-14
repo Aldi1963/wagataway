@@ -1,132 +1,171 @@
-# 🚀 SaaS WhatsApp Gateway Pro — v1.6.0 Premium Edition
+# WaGataway
 
-Platform WhatsApp Gateway SaaS (Software as a Service) paling lengkap, cepat, dan aman untuk mengelola bisnis Anda melalui WhatsApp. Dibangun dengan desain **Zen Mode Premium** dan teknologi mutakhir untuk menangani ribuan pesan setiap harinya dengan kehandalan tinggi.
+Platform WhatsApp Gateway SaaS — kirim pesan otomatis, blast, auto-reply, live chat + AI, dan drip campaign. Single binary, deploy simpel.
 
-![Banner](https://images.unsplash.com/photo-1611746872915-64382b5c76da?auto=format&fit=crop&q=80&w=1200&h=400)
+## Tech Stack
 
-## ✨ Fitur Unggulan (Premium Edition)
+| Layer | Teknologi |
+|-------|-----------|
+| Backend | Go 1.23 + Gin |
+| WhatsApp | whatsmeow (native Go, tanpa Node.js) |
+| Database | PostgreSQL + GORM |
+| Cache | Redis |
+| Frontend | React + Vite + TailwindCSS v4 |
+| AI | OpenAI (GPT-4o) + Anthropic (Claude) |
+| Auth | JWT + 2FA + Google OAuth |
+| Real-time | SSE (Server-Sent Events) |
+| Deploy | Docker / single binary |
 
-### 🤖 AI Knowledge Base & CS Bot
-*   **AI Voice-to-Text (New!)**: Transkripsi otomatis pesan suara (voice notes) pelanggan secara real-time menggunakan OpenAI Whisper.
-*   **AI Conversation Summary (New!)**: Rangkuman isi percakapan panjang secara otomatis untuk membantu agen memahami konteks masalah dengan cepat.
-*   **Multi-Provider AI**: Integrasi OpenAI (GPT-4o) & Anthropic (Claude 3.5) untuk jawaban yang cerdas.
-*   **Custom Training**: Latih bot Anda dengan website scraping, file PDF/Doc, atau FAQ manual.
-*   **Automatic API Billing**: Penggunaan API Key admin secara otomatis untuk user dengan paket tertentu tanpa perlu input key mandiri.
-*   **Human-in-the-loop**: Fitur unik di mana bot otomatis berhenti (*pause*) jika admin mengambil alih percakapan di Dashboard Live Chat.
+## Fitur
 
-### 💬 Live Chat & Omnichannel Inbox
-*   **Real-time Dashboard**: Kelola semua percakapan dari semua perangkat dalam satu inbox terpusat.
-*   **Media Transcription Display**: Hasil transkripsi pesan suara muncul langsung di bawah bubble chat audio.
-*   **Agent Management**: Penugasan chat ke agen tertentu, labelisasi chat (Komplain, Sales, dll).
-*   **Internal Notes**: Berkolaborasi dengan tim menggunakan catatan internal yang tidak dapat dilihat pelanggan.
-*   **SLA Tracking**: Pantau waktu respons tim untuk menjaga kualitas layanan pelanggan.
+- **Multi-Device** — hubungkan banyak nomor WhatsApp sekaligus
+- **Kirim Pesan** — text, image, document, video
+- **Blast Pesan** — bulk send dengan delay anti-banned
+- **Auto Reply** — keyword matching (exact/contains/startsWith) + jadwal
+- **Live Chat + AI CS Bot** — balas manual atau generate AI reply (OpenAI/Anthropic)
+- **Drip Campaign** — sequence otomatis dengan delay per step
+- **Scheduled Messages** — jadwalkan kirim di waktu tertentu
+- **Link Shortener** — buat short link + tracking klik
+- **Contacts & Groups** — kelola kontak + grup + import batch
+- **Templates** — simpan template pesan untuk reuse
+- **Blacklist** — blokir nomor dari menerima pesan
+- **Webhooks** — kirim event ke URL eksternal
+- **Analytics** — statistik harian, delivery rate, overview
+- **Billing** — paket langganan, transaksi, voucher
+- **Admin Panel** — kelola user, paket, voucher, settings, maintenance mode
+- **Dark Mode** — UI monochrome hitam-putih, tanpa gradasi
 
-### 🚀 Features & Capabilities
-*   **AI Smart Agent**: Chatbot berbasis OpenAI yang mampu berinteraksi secara natural, memahami konteks produk, dan didukung fitur *Human-in-the-loop* (Admin bisa mengambil alih chat kapan saja).
-*   **Omni-Device Management**: Hubungkan banyak nomor WhatsApp sekaligus dengan sistem rotasi cerdas (*Smart Load Balancing*) untuk keamanan akun.
-*   **PWA Ready**: Dashboard progresif yang bisa diinstal di ponsel (Android/iOS) dengan performa loading instan berkat *lazy loading* dan *code splitting*.
-*   **Sistem Keagenan (Reseller)**: Fitur manajemen reseller lengkap dengan limitasi kuota (perangkat, pesan, kontak) dan kontrol status akun (*real-time suspension*).
-*   **Interactive Messaging**: Kirim pesan dengan Button, List Menu, Template Lokasi, dan Media Interaktif yang meningkatkan interaksi pelanggan.
-*   **Commerce Flow**: Alur belanja otomatis di WhatsApp terintegrasi dengan RajaOngkir (disertai sistem *fail-safe* otomatis jika API eksternal sibuk).
-*   **Advanced Analytics**: Visualisasi grafik interaktif, Heatmap jam sibuk, dan laporan performa agen per perangkat.
-*   **Security First**: Password dienkripsi dengan argon2/scrypt, dukungan 2FA, dan Rate Limiting sistematis untuk perlindungan server.
+## UI Design
 
-## 🛠️ Tech Stack
-*   **Frontend**: React.js 18, Vite, TailwindCSS, Framer Motion, ShadcnUI.
-*   **Backend**: Node.js, Express.js (TypeScript), Baileys WA Socket.
-*   **Database**: PostgreSQL, Drizzle ORM.
-*   **Caching & Optimization**: Vite PWA, Service Workers, Manual Chunking.
-*   **AI Engine**: OpenAI API (GPT-4o/o1), Whisper API for Audio.
+Monochrome, terinspirasi dari Vercel dan Linear:
 
----
+- Sidebar hitam solid, content area putih
+- Tidak ada gradient, tidak ada glassmorphism
+- Font: Inter + JetBrains Mono
+- Border tipis, whitespace generous
+- Light + Dark mode
 
-## 🚀 Panduan Instalasi Rinci
-
-### 📋 Prasyarat
-- Node.js versi 20.x ke atas.
-- PostgreSQL Database.
-- PNPM (direkomendasikan) atau NPM.
-
-### 💻 1. Instalasi Lokal (Development)
-1.  **Clone Repositori**:
-    ```bash
-    git clone https://github.com/Aldi1963/wagataway.git
-    cd wagataway
-    ```
-2.  **Install Dependensi**:
-    ```bash
-    pnpm install
-    ```
-3.  **Konfigurasi Database**:
-    - Buat database PostgreSQL di lokal Anda.
-    - Copy file `.env.example` (jika ada) atau buat file `.env` baru di `artifacts/api-server/`.
-    - Isi `DATABASE_URL=postgresql://user:pass@localhost:5432/dbname`.
-4.  **Push Schema ke Database**:
-    ```bash
-    pnpm --filter @workspace/db run push
-    ```
-5.  **Jalankan Project**:
-    - **API Server**: `cd artifacts/api-server && npm run dev`
-    - **Frontend**: `cd artifacts/wa-gateway && npm run dev`
-
----
-
-### 🌐 2. Deployment ke Hosting (VPS)
-
-#### ⚡ Cara Tercepat: Auto-Installer (Rekomendasi)
-Jika Anda menggunakan **Ubuntu 22.04/24.04**, Anda bisa menginstal seluruh sistem (Database, Backend, Frontend, Nginx, SSL) hanya dengan satu baris perintah:
+## Quick Start
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Aldi1963/wagataway/main/scripts/vps-setup.sh)"
+cd go-backend
+
+# 1. Copy environment
+cp .env.example .env
+# Edit .env (isi DATABASE_URL, JWT_SECRET, dll)
+
+# 2. Jalankan database
+docker compose up -d postgres redis
+
+# 3. Jalankan backend (auto-migrate database)
+make dev
+
+# 4. Jalankan frontend (terminal terpisah)
+cd web && pnpm install && pnpm dev
 ```
 
-#### 🛠️ Cara Manual (Step-by-Step)
-#### Step A: Persiapan File
-1.  Compress folder `artifacts/` dan file di root ke dalam satu ZIP (kecuali `node_modules`).
-2.  Upload ke File Manager cPanel (rekomendasi: di luar `public_html`, misal di folder `/home/user/wagateway`).
-3.  Extract file tersebut.
+Buka `http://localhost:5173` untuk frontend, API di `http://localhost:8080`.
 
-#### Step B: Setup Node.js App di cPanel
-1.  Buka menu **Setup Node.js App** -> **Create Application**.
-2.  Pilih Versi Node.js (20+) dan mode **Production**.
-3.  **Application root**: `wagateway`
-4.  **Application URL**: domain-anda.com
-5.  Klik **Create**, lalu **Stop App** sementara untuk konfigurasi.
+## Deploy Production
 
-#### Step C: Database & Env
-1.  Buat database PostgreSQL di menu **PostgreSQL Databases** cPanel.
-2.  Edit file `artifacts/api-server/.env` dan masukan `DATABASE_URL` PostgreSQL Anda.
-3.  Masukan `SESSION_SECRET` dengan string acak panjang.
+```bash
+# Docker (recommended) — build semua dalam 1 image
+cd go-backend
+docker compose up --build -d
 
-#### Step D: Build & Start
-1.  Masuk ke **Terminal** cPanel.
-2.  Jalankan perintah virtual environment Node.js (ada di halaman Setup Node.js App).
-3.  Install pnpm & build project:
-    ```bash
-    npm install -g pnpm
-    cd ~/wagateway
-    pnpm install
-    cd artifacts/wa-gateway && pnpm build
-    cd ../api-server && pnpm build
-    ```
-4.  Jalankan API dengan PM2:
-    ```bash
-    pm2 start dist/index.mjs --name "wa-api"
-    pm2 save
-    ```
+# Atau manual
+make build                    # → ./bin/server
+cd web && pnpm build          # → ./web/dist
+./bin/server                  # serve API + frontend
+```
 
----
+## Project Structure
 
-## 🖥️ Roadmap Progress
-- [x] **Interactive Messaging support** (Buttons & Lists).
-- [x] **Advanced AI Knowledge Base system**.
-- [x] **Live Chat & Omnichannel Dashboard**.
-- [x] **Automated Order Flow with RajaOngkir**.
-- [x] **AI Human-in-the-loop handoff**.
-- [x] **AI Voice-to-Text Transcription**.
-- [x] **AI Conversation Summarization**.
-- [x] **PWA & Mobile Ready Dashboard**.
+```
+wagataway/
+├── go-backend/
+│   ├── cmd/server/              # Entry point (main.go)
+│   ├── internal/
+│   │   ├── config/              # Environment config
+│   │   ├── database/models/     # 34 GORM models
+│   │   ├── handler/             # 26+ HTTP handlers
+│   │   ├── middleware/          # Auth, CORS, rate limit
+│   │   ├── service/             # AI service (OpenAI + Anthropic)
+│   │   ├── whatsapp/            # WhatsApp session manager
+│   │   ├── realtime/            # SSE hub
+│   │   └── worker/              # Background scheduler
+│   ├── web/                     # React frontend (monochrome)
+│   │   ├── src/pages/           # 8 pages
+│   │   ├── src/components/      # UI components (shadcn-style)
+│   │   └── src/hooks/           # Auth, theme
+│   ├── Dockerfile               # Multi-stage build
+│   ├── docker-compose.yml       # Full stack
+│   └── Makefile
+└── artifacts/                   # Legacy Node.js (deprecated)
+```
 
----
+## API Endpoints
 
-Developed with ❤️ by **Aldi1963**
+### Public
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| POST | /api/auth/login | Login |
+| POST | /api/auth/register | Register |
+| GET | /api/l/:code | Short link redirect |
+
+### Protected (Bearer Token)
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| GET | /api/devices | List perangkat |
+| POST | /api/devices/:id/connect | Hubungkan WA |
+| GET | /api/devices/:id/qr | Get QR code |
+| POST | /api/messages/send | Kirim pesan |
+| POST | /api/messages/bulk | Blast pesan |
+| GET | /api/contacts | List kontak |
+| GET | /api/chat/conversations | List percakapan |
+| POST | /api/chat/send | Kirim chat manual |
+| POST | /api/chat/ai-reply | Generate AI reply |
+| GET | /api/auto-reply | List auto-reply rules |
+| GET | /api/drip | List drip campaigns |
+| GET | /api/schedule | List jadwal pesan |
+| GET | /api/analytics/overview | Statistik |
+| GET | /api/billing/plans | List paket |
+| GET | /api/stream | SSE real-time events |
+
+### Admin (/api/admin/*)
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| GET | /api/admin/users | List semua user |
+| GET | /api/admin/analytics | Global analytics |
+| PUT | /api/admin/maintenance | Toggle maintenance |
+
+## Environment Variables
+
+```env
+PORT=8080
+DATABASE_URL=postgres://user:pass@localhost:5432/wagataway?sslmode=disable
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=your-secret-key
+WA_SESSIONS_DIR=./wa-sessions
+OPENAI_API_KEY=sk-xxx
+ANTHROPIC_API_KEY=sk-ant-xxx
+SMTP_HOST=smtp.gmail.com
+SMTP_USER=email@gmail.com
+SMTP_PASS=app-password
+```
+
+## Architecture
+
+```
+Single Go Binary
+├── HTTP Server (Gin) ─── REST API + SSE + Static files
+├── WhatsApp Manager ──── whatsmeow sessions (per-device SQLite)
+├── Background Workers ── Cron scheduler (bulk, drip, scheduled)
+└── AI Service ────────── OpenAI + Anthropic completions
+```
+
+Tidak perlu Node.js, tidak perlu microservice terpisah. Satu binary handle semuanya.
+
+## License
+
+Private — Aldi1963
