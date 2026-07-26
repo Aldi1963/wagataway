@@ -32,3 +32,22 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+# Production (VPS) — lihat deploy/DEPLOY.md
+PROD_COMPOSE = docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env
+
+prod-up:
+	$(PROD_COMPOSE) up -d --build
+
+prod-down:
+	$(PROD_COMPOSE) down
+
+prod-logs:
+	$(PROD_COMPOSE) logs -f app
+
+prod-restart:
+	$(PROD_COMPOSE) restart app
+
+prod-update:
+	git pull
+	$(PROD_COMPOSE) up -d --build
