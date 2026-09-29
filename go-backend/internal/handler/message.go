@@ -15,7 +15,7 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 	{
 		msgs.GET("", listMessages(db))
 		msgs.POST("/send", sendMessage(db, wm))
-		msgs.POST("/bulk", sendBulkMessage(db, wm))
+		msgs.POST("/send-bulk", sendBulkMessage(db, wm))
 	}
 }
 
