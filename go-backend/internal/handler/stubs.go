@@ -15,9 +15,10 @@ func stubHandler(name string) gin.HandlerFunc {
 	}
 }
 
-func registerPublicRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
+func registerPublicRoutes(rg *gin.RouterGroup, _ *config.Config, db *gorm.DB) {
 	rg.GET("/public/landing", stubHandler("landing-page"))
-	rg.GET("/public/plans", stubHandler("public-plans"))
+	rg.GET("/public/plans", publicPlans(db))
+	rg.GET("/public/stats", publicStats(db))
 }
 
 func registerOtpAuthRoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {

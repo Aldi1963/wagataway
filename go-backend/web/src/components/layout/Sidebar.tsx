@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import QuotaMeter from "@/components/QuotaMeter";
 import {
   LayoutDashboard,
   Smartphone,
@@ -164,6 +165,13 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           </div>
         ))}
       </nav>
+
+      {/* Meter kuota — desktop/mobile, sembunyi saat collapsed */}
+      {!collapsed && (
+        <div className="p-2 border-t border-sidebar-border shrink-0">
+          <QuotaMeter collapsed={false} />
+        </div>
+      )}
 
       {/* Collapse Toggle — desktop only */}
       <div className="p-2 border-t border-sidebar-border hidden lg:block">

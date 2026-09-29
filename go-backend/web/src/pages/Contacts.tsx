@@ -1,10 +1,31 @@
 import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Users } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
+
+interface ContactGroup {
+  id: number;
+  name: string;
+}
+
+async function apiDeleteWithBody(path: string, body: unknown): Promise<void> {
+  const res = await apiFetch(path, {
+    method: "DELETE",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = "Request failed";
+    try {
+      msg = (await res.json()).message || msg;
+    } catch {
+      /* abaikan */
+    }
+    throw new Error(msg);
+  }
+}
 
 interface Contact {
   id: number;
@@ -83,6 +104,13 @@ export default function Contacts() {
   const [importParsed, setImportParsed] = useState<{ name: string; phone: string; email?: string }[]>([]);
   const [deleting, setDeleting] = useState<Contact | null>(null);
 
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [groups, setGroups] = useState<ContactGroup[]>([]);
+  const [bulkGroup, setBulkGroup] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+
   const firstRun = useRef(true);
 
   const load = async (q: string) => {
@@ -111,6 +139,28 @@ export default function Contacts() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  // Daftar grup untuk bulk "pindah ke grup"
+  useEffect(() => {
+    apiGet<{ groups: ContactGroup[] }>("/contact-groups")
+      .then((res) => setGroups(res.groups || []))
+      .catch(() => {
+        /* abaikan — fitur grup opsional */
+      });
+  }, []);
+
+  // Bersihkan pilihan saat data berubah
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(contacts.map((c) => c.id));
+      const next = new Set<number>();
+      prev.forEach((id) => {
+        if (ids.has(id)) next.add(id);
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts]);
 
   const openAdd = () => {
     setEditing(null);
@@ -164,6 +214,91 @@ export default function Contacts() {
       load(search);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal menghapus kontak");
+    }
+  };
+
+  /* ── Bulk actions ─────────────────────────────────────── */
+  const allSelected =
+    contacts.length > 0 && contacts.every((c) => selected.has(c.id));
+
+  const toggleOne = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(contacts.map((c) => c.id)));
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await apiDeleteWithBody("/contacts/bulk", { ids: Array.from(selected) });
+      toast.success(`${selected.size} kontak dihapus`);
+      setSelected(new Set());
+      setShowBulkDelete(false);
+      load(search);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus kontak");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const exportCsv = () => {
+    const rows =
+      selected.size > 0
+        ? contacts.filter((c) => selected.has(c.id))
+        : contacts;
+    if (rows.length === 0) {
+      toast.error("Tidak ada kontak untuk diekspor");
+      return;
+    }
+    const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [
+      "nama,nomor,email,tag",
+      ...rows.map((c) =>
+        [c.name, c.phone, c.email || "", c.tags || ""].map(esc).join(",")
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kontak-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`${rows.length} kontak diekspor ke CSV`);
+  };
+
+  const bulkAddToGroup = async () => {
+    if (!bulkGroup || selected.size === 0) {
+      toast.error("Pilih grup tujuan dulu");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      await apiPost(`/contact-groups/${bulkGroup}/members`, {
+        contactIds: Array.from(selected),
+      });
+      const g = groups.find((x) => String(x.id) === bulkGroup);
+      toast.success(`${selected.size} kontak dipindah ke grup ${g?.name || ""}`);
+      setSelected(new Set());
+      setBulkGroup("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memindah kontak");
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -259,6 +394,61 @@ export default function Contacts() {
         />
       </div>
 
+      {/* Bulk toolbar */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+          <span className="text-sm font-medium">{selected.size} dipilih</span>
+          <button
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+            onClick={() => setSelected(new Set())}
+          >
+            Batalkan pilihan
+          </button>
+          <div className="flex-1" />
+          {groups.length > 0 && (
+            <>
+              <select
+                value={bulkGroup}
+                onChange={(e) => setBulkGroup(e.target.value)}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                aria-label="Pindah ke grup"
+              >
+                <option value="">Pindah ke grup...</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!bulkGroup || bulkBusy}
+                onClick={bulkAddToGroup}
+              >
+                Pindah
+              </Button>
+            </>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={exportCsv}
+            className="gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => setShowBulkDelete(true)}
+            className="gap-1.5"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Hapus terpilih
+          </Button>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <Card>
@@ -281,15 +471,30 @@ export default function Contacts() {
       ) : contacts.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center">
-            <Users className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium mb-1">
-              {search ? "Tidak ada kontak yang cocok" : "Belum ada kontak"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {search
-                ? "Coba kata kunci lain"
-                : "Tambahkan kontak pertama Anda dengan tombol di atas"}
-            </p>
+            {search ? (
+              <>
+                <p className="font-medium mb-1">Tidak ada kontak yang cocok</p>
+                <p className="text-sm text-muted-foreground">
+                  Coba kata kunci lain
+                </p>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <img
+                  src="/illustrations/manage-chats.svg"
+                  alt="Belum ada kontak"
+                  className="w-44 h-auto mx-auto"
+                />
+                <p className="font-medium">Belum ada kontak</p>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                  Tambahkan kontak pertama Anda untuk mulai mengirim pesan
+                  personal dan broadcast.
+                </p>
+                <Button onClick={openAdd} className="gap-1.5">
+                  <Plus className="w-4 h-4" /> Tambah Kontak
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -299,6 +504,15 @@ export default function Contacts() {
               <table className="w-full min-w-[640px]">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="w-10 px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Pilih semua"
+                        className="w-4 h-4 accent-primary cursor-pointer"
+                      />
+                    </th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
                       Nama
                     </th>
@@ -320,6 +534,15 @@ export default function Contacts() {
                       key={c.id}
                       className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors"
                     >
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(c.id)}
+                          onChange={() => toggleOne(c.id)}
+                          aria-label={`Pilih ${c.name}`}
+                          className="w-4 h-4 accent-primary cursor-pointer"
+                        />
+                      </td>
                       <td className="px-5 py-3 font-medium">{c.name}</td>
                       <td className="px-5 py-3 text-sm text-muted-foreground">{c.phone}</td>
                       <td className="px-5 py-3 text-sm text-muted-foreground">
@@ -542,6 +765,28 @@ export default function Contacts() {
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
               Hapus
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk delete confirm */}
+      {showBulkDelete && (
+        <Modal title="Hapus Kontak Terpilih" onClose={() => setShowBulkDelete(false)}>
+          <p className="text-sm text-muted-foreground mb-5">
+            Hapus <span className="font-medium text-foreground">{selected.size} kontak</span>{" "}
+            yang dipilih? Tindakan ini tidak bisa dibatalkan.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmBulkDelete}
+              disabled={bulkBusy}
+            >
+              {bulkBusy ? "Menghapus..." : "Hapus Semua"}
             </Button>
           </div>
         </Modal>

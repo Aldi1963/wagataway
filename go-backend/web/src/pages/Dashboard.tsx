@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { Smartphone, Send, Users, BarChart3, RefreshCw } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiGet } from "@/lib/api";
+import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
 
 interface Overview {
   totalMessages: number;
@@ -27,6 +37,18 @@ interface Message {
   content: string;
   status: string;
   createdAt: string;
+}
+
+interface DailyStat {
+  date: string;
+  sent: number;
+  failed: number;
+}
+
+function fmtDay(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
 function timeAgo(iso: string): string {
@@ -60,6 +82,10 @@ export default function Dashboard() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [daily, setDaily] = useState<DailyStat[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyError, setDailyError] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -79,6 +105,24 @@ export default function Dashboard() {
   };
 
   useEffect(load, []);
+
+  useEffect(() => {
+    apiGet<{ stats: DailyStat[] }>("/analytics/messages")
+      .then((res) => setDaily(res.stats || []))
+      .catch(() => setDailyError(true))
+      .finally(() => setDailyLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (isOnboardingDone()) return;
+    apiGet<{ devices: unknown[] }>("/devices")
+      .then((res) => {
+        if ((res.devices || []).length === 0) setShowOnboarding(true);
+      })
+      .catch(() => {
+        /* abaikan — wizard tidak tampil */
+      });
+  }, []);
 
   const cards = overview
     ? [
@@ -259,6 +303,82 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Grafik pesan 7 hari (recharts) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">
+            Pesan 7 Hari Terakhir
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dailyLoading ? (
+            <div className="h-48 rounded bg-muted animate-pulse" />
+          ) : dailyError ? (
+            <p className="text-sm text-muted-foreground py-10 text-center">
+              Gagal memuat grafik.
+            </p>
+          ) : daily.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-10 text-center">
+              Belum ada data pengiriman 7 hari terakhir.
+            </p>
+          ) : (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={daily}
+                  margin={{ top: 4, right: 8, left: -8, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={fmtDay}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={36}
+                  />
+                  <Tooltip
+                    labelFormatter={fmtDay}
+                    formatter={(value, name) => [
+                      Number(value).toLocaleString("id-ID"),
+                      name === "sent" ? "Terkirim" : "Gagal",
+                    ]}
+                    contentStyle={{
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sent"
+                    name="sent"
+                    stroke="#059669"
+                    strokeWidth={2}
+                    fill="#059669"
+                    fillOpacity={0.15}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="failed"
+                    name="failed"
+                    stroke="#dc2626"
+                    strokeWidth={2}
+                    fill="#dc2626"
+                    fillOpacity={0.08}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Recent Messages */}
       <Card>
         <CardHeader className="pb-3">
@@ -315,6 +435,16 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Onboarding wizard — hanya untuk user tanpa perangkat */}
+      {showOnboarding && (
+        <OnboardingWizard
+          onDone={() => {
+            setShowOnboarding(false);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

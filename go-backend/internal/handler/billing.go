@@ -16,6 +16,7 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 	{
 		b.GET("/plans", listPlans(db))
 		b.GET("/subscription", getSubscription(db))
+		b.GET("/usage", getBillingUsage(db))
 		b.POST("/subscribe", createSubscription(cfg, db))
 		b.GET("/transactions", listTransactions(db))
 		b.POST("/voucher/redeem", redeemVoucher(db))
@@ -41,6 +42,41 @@ func getSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"subscription": sub})
+	}
+}
+
+// GET /api/billing/usage — kuota paket & pemakaian pesan bulan ini
+func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+
+		planName := "Free"
+		quota := 1000
+		var sub models.Subscription
+		if err := db.Where("user_id = ? AND status = ?", userID, "active").
+			Preload("Plan").First(&sub).Error; err == nil {
+			planName = sub.Plan.Name
+			quota = sub.Plan.MaxMessages
+		}
+
+		now := time.Now()
+		startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		var used int64
+		db.Model(&models.Message{}).
+			Where("user_id = ? AND direction = ? AND created_at >= ?", userID, "outgoing", startOfMonth).
+			Count(&used)
+
+		remaining := quota - int(used)
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"planName":      planName,
+			"quota":         quota,
+			"usedThisMonth": int(used),
+			"remaining":     remaining,
+		})
 	}
 }
 

@@ -16,6 +16,7 @@ func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		contacts.GET("", listContacts(db))
 		contacts.POST("", createContact(db))
 		contacts.PUT("/:id", updateContact(db))
+		contacts.DELETE("/bulk", bulkDeleteContacts(db))
 		contacts.DELETE("/:id", deleteContact(db))
 		contacts.POST("/import", importContacts(db))
 	}
@@ -141,6 +142,28 @@ func deleteContact(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Kontak dihapus"})
+	}
+}
+
+// DELETE /api/contacts/bulk — hapus banyak kontak milik user yang login
+func bulkDeleteContacts(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+
+		var req struct {
+			IDs []uint `json:"ids" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "IDs wajib diisi"})
+			return
+		}
+
+		result := db.Where("user_id = ? AND id IN ?", userID, req.IDs).Delete(&models.Contact{})
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghapus kontak"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Kontak dihapus", "deleted": result.RowsAffected})
 	}
 }
 

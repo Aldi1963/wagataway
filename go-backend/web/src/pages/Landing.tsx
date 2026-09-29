@@ -33,6 +33,8 @@ import {
   X,
   BellRing,
   Timer,
+  Play,
+  FlaskConical,
 } from "lucide-react";
 
 /* ── Util: reveal on scroll ─────────────────────────── */
@@ -149,29 +151,14 @@ function Navbar() {
 /* ── Hero: ilustrasi vector + kartu melayang ────── */
 function HeroArt() {
   return (
-    <div className="relative mx-auto w-full max-w-[440px]">
+    <div className="relative mx-auto w-full max-w-[420px]">
       <img
         src="/illustrations/messaging-fun.svg"
         alt="Ilustrasi pengiriman pesan WhatsApp otomatis"
-        className="relative w-full h-auto hero-float"
+        className="w-full h-auto hero-float"
         loading="eager"
       />
-      {/* floating cards */}
-      <div className="float-card absolute left-0 top-8 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "0s" }}>
-        <span className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><Zap className="w-4 h-4 text-emerald-600" /></span>
-        <div><p className="text-[11px] font-bold text-slate-800">API 200 OK</p><p className="text-[10px] text-slate-400">86 ms</p></div>
-      </div>
-      <div className="float-card absolute right-0 top-1/3 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "1.2s" }}>
-        <span className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center"><Webhook className="w-4 h-4 text-sky-600" /></span>
-        <div><p className="text-[11px] font-bold text-slate-800">Webhook</p><p className="text-[10px] text-slate-400">delivered</p></div>
-      </div>
-      <div className="float-card absolute left-4 bottom-6 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "2.1s" }}>
-        <span className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center"><BellRing className="w-4 h-4 text-violet-600" /></span>
-        <div><p className="text-[11px] font-bold text-slate-800">1.240 pesan</p><p className="text-[10px] text-slate-400">terkirim hari ini</p></div>
-      </div>
       <style>{`
-        @keyframes floatY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        .float-card { animation: floatY 4s ease-in-out infinite; }
         @keyframes heroFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         .hero-float { animation: heroFloat 6s ease-in-out infinite; }
       `}</style>
@@ -181,55 +168,26 @@ function HeroArt() {
 
 function Hero() {
   return (
-    <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-24">
-      <div className="relative max-w-6xl mx-auto px-4 grid md:grid-cols-2 gap-12 items-center">
+    <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-20">
+      <div className="relative max-w-6xl mx-auto px-4">
         <Reveal>
-          <div className="inline-flex items-center gap-2 bg-white border border-emerald-200 rounded-full px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm mb-6">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            WhatsApp API Gateway Indonesia
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
-            Kirim pesan WhatsApp <span className="text-emerald-500">otomatis</span> lewat API
+          <h1 className="text-7xl md:text-8xl font-extrabold tracking-tight text-[#1e2a5c] leading-none">
+            CLIDI
           </h1>
-          <p className="text-slate-500 text-lg mt-5 max-w-lg">
-            Hubungkan nomor WhatsApp Anda, lalu kirim pesan personal, broadcast, terjadwal, dan balasan otomatis — semua dari dashboard atau satu panggilan API.
+          <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#1e2a5c] mt-3">
+            WHATSAPP API
           </p>
-          <div className="flex flex-wrap gap-3 mt-8">
-            <Link href="/register" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors shadow-lg shadow-emerald-500/25">
-              Coba Gratis <ArrowRight className="w-4 h-4" />
+          <p className="text-slate-600 text-lg mt-4">
+            Kirim pesan WhatsApp secara otomatis.
+          </p>
+          <div className="mt-8">
+            <Link href="/register" className="inline-flex items-center gap-2 bg-[#1e2a5c] hover:bg-[#16224a] text-white font-semibold px-8 py-4 rounded-2xl transition-colors">
+              <Send className="w-5 h-5" /> Coba Gratis
             </Link>
-            <Link href="/api-docs" className="inline-flex items-center gap-2 bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 font-semibold px-6 py-3 rounded-xl transition-colors">
-              <BookOpen className="w-4 h-4" /> Lihat Dokumentasi
-            </Link>
-          </div>
-          <div className="flex items-center gap-6 mt-8 text-sm text-slate-500">
-            <div className="flex -space-x-2">
-              {["A", "B", "C", "D"].map((c, i) => (
-                <span key={i} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-xs font-bold text-white ${["bg-emerald-500", "bg-sky-500", "bg-violet-500", "bg-amber-500"][i]}`}>{c}</span>
-              ))}
-            </div>
-            <p><b className="text-slate-800">2.000+</b> device terhubung<br className="sm:hidden" /> dan mengirim tiap hari</p>
           </div>
         </Reveal>
-        <Reveal delay={150}>
+        <Reveal delay={150} className="mt-12">
           <HeroArt />
-        </Reveal>
-      </div>
-      {/* stats strip */}
-      <div className="relative max-w-6xl mx-auto px-4 mt-16">
-        <Reveal delay={200}>
-          <div className="grid grid-cols-3 gap-4 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-200/50 px-6 py-6">
-            {[
-              { v: "2.000+", l: "Device terdaftar" },
-              { v: "100K+", l: "Pesan terkirim / hari" },
-              { v: "<100ms", l: "Rata-rata respon API" },
-            ].map((s) => (
-              <div key={s.l} className="text-center">
-                <p className="text-2xl md:text-3xl font-extrabold text-emerald-600">{s.v}</p>
-                <p className="text-xs md:text-sm text-slate-500 mt-1">{s.l}</p>
-              </div>
-            ))}
-          </div>
         </Reveal>
       </div>
     </section>
@@ -411,6 +369,170 @@ function CaraKerja() {
   );
 }
 
+/* ── Demo simulasi ────────────────────────────────── */
+function DemoSimulasi() {
+  const [nomor, setNomor] = useState("6281234567890");
+  const [pesan, setPesan] = useState("Halo! Pesanan Anda sudah dikirim 🚚");
+  const [resp, setResp] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+
+  const curlCmd = `curl -X POST https://wa.clipku.com/api/messages/send \\\n  -H "X-API-Key: ••••" \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ to: nomor.trim() || "62812...", message: pesan })}'`;
+
+  const kirim = () => {
+    const msgId = "3EB0" + Array.from({ length: 8 }, () => "0123456789ABCDEF"[Math.floor(Math.random() * 16)]).join("");
+    const full = JSON.stringify(
+      { status: "sent", messageId: msgId, to: nomor.trim() || "62812...", timestamp: new Date().toISOString() },
+      null,
+      2
+    );
+    setResp("");
+    setRunning(true);
+    let i = 0;
+    const t = setInterval(() => {
+      i += 4;
+      setResp(full.slice(0, i));
+      if (i >= full.length) {
+        clearInterval(t);
+        setRunning(false);
+      }
+    }, 10);
+  };
+
+  return (
+    <section id="demo" className="py-20 bg-slate-50 scroll-mt-16">
+      <div className="max-w-6xl mx-auto px-4">
+        <SectionHead kicker="Demo" title="Coba simulasi pengiriman" desc="Rasakan alur API tanpa daftar dan tanpa mengirim pesan beneran." />
+        <div className="flex justify-center mb-10 -mt-6">
+          <span className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <FlaskConical className="w-3.5 h-3.5" /> Simulasi — tanpa login, tanpa kirim pesan beneran
+          </span>
+        </div>
+        <div className="grid md:grid-cols-2 gap-6 items-start">
+          <Reveal>
+            <div className="bg-white border border-slate-200 rounded-2xl p-6">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Nomor WhatsApp tujuan</label>
+              <input
+                value={nomor}
+                onChange={(e) => setNomor(e.target.value)}
+                placeholder="6281234567890"
+                inputMode="tel"
+                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 mb-4"
+              />
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Isi pesan</label>
+              <textarea
+                value={pesan}
+                onChange={(e) => setPesan(e.target.value)}
+                rows={4}
+                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 mb-4 resize-y"
+              />
+              <button
+                onClick={kirim}
+                disabled={running}
+                className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+              >
+                <Play className="w-4 h-4" /> {running ? "Mengirim…" : "Kirim simulasi"}
+              </button>
+            </div>
+          </Reveal>
+          <div className="space-y-4">
+            <Reveal delay={100}>
+              <div className="bg-slate-900 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-white/10 text-xs text-slate-400 font-mono">Request</div>
+                <pre className="p-5 text-[12.5px] font-mono leading-relaxed overflow-x-auto">
+                  <code className="text-slate-300 whitespace-pre-wrap break-all">{curlCmd}</code>
+                </pre>
+              </div>
+            </Reveal>
+            <Reveal delay={150}>
+              <div className="bg-slate-900 rounded-2xl overflow-hidden min-h-[190px]">
+                <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-mono">Response</span>
+                  {resp !== null && !running && <span className="text-xs font-mono font-bold text-emerald-400">200 OK</span>}
+                </div>
+                <pre className="p-5 text-[12.5px] font-mono leading-relaxed overflow-x-auto">
+                  <code className="text-emerald-300 whitespace-pre-wrap">
+                    {resp === null ? <span className="text-slate-500">// Tekan "Kirim simulasi" untuk melihat response</span> : resp + (running ? "▍" : "")}
+                  </code>
+                </pre>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── WaGataway vs Fonnte ────────────────────────────── */
+const vsRows = [
+  { prov: "fonnte", paket: "Free", harga: "Rp 0", kuota: "1.000/bln", device: "—", plus: "—" },
+  { prov: "wag", paket: "Free", harga: "Rp 0", kuota: "1.000/bln", device: "1", plus: "Gratis selamanya" },
+  { prov: "fonnte", paket: "Lite", harga: "Rp 25.000", kuota: "1.000/bln", device: "—", plus: "—" },
+  { prov: "wag", paket: "Lite", harga: "Rp 25.000", kuota: "1.000/bln", device: "2", plus: "Attachment & broadcast CSV" },
+  { prov: "fonnte", paket: "Regular", harga: "Rp 66.000", kuota: "10.000/bln", device: "—", plus: "—" },
+  { prov: "wag", paket: "Regular", harga: "Rp 66.000", kuota: "10.000/bln", device: "3", plus: "Drip campaign + analitik" },
+  { prov: "fonnte", paket: "Regular Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "—", plus: "—" },
+  { prov: "wag", paket: "Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "5", plus: "Multi device + webhook retry" },
+  { prov: "fonnte", paket: "Master", harga: "Rp 175.000", kuota: "unlimited", device: "—", plus: "—" },
+  { prov: "wag", paket: "Master", harga: "Rp 175.000", kuota: "unlimited", device: "10", plus: "Pesan tanpa batas" },
+];
+
+function VsFonnte() {
+  return (
+    <section id="perbandingan" className="py-20 bg-white scroll-mt-16">
+      <div className="max-w-5xl mx-auto px-4">
+        <SectionHead kicker="Perbandingan" title="WaGataway vs Fonnte" desc="Bandingkan harga dan kuota secara jujur — lalu putuskan sendiri." />
+        <Reveal>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left">
+                  {["Paket", "Harga", "Kuota", "Device", "Nilai plus"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {vsRows.map((r, i) => {
+                  const wag = r.prov === "wag";
+                  return (
+                    <tr key={i} className={`border-t border-slate-100 ${wag ? "bg-emerald-50/70" : "bg-white"}`}>
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-slate-900">{r.paket}</span>{" "}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${wag ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>
+                          {wag ? "WaGataway" : "Fonnte"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{r.harga}</td>
+                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.kuota}</td>
+                      <td className="px-4 py-3 text-slate-600">{r.device}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {wag ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                            {r.plus}
+                          </span>
+                        ) : (
+                          r.plus
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Reveal>
+        <Reveal className="mt-4">
+          <p className="text-xs text-slate-400 text-center">Harga Fonnte per fonnte.com (Sep 2026), dapat berubah sewaktu-waktu.</p>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 /* ── Integrasi ──────────────────────────────────────── */
 function Integrasi() {
   const items = ["Toko Online", "CRM", "ERP", "Sistem Kasir", "Aplikasi Absensi", "Notifikasi OTP", "E-Commerce", "Helpdesk"];
@@ -517,9 +639,50 @@ const paketBulanan: Paket[] = [
   },
 ];
 
+type PlanDB = {
+  id: number | string;
+  name: string;
+  slug: string;
+  description?: string;
+  price: number;
+  duration?: string;
+  maxDevices: number;
+  maxMessages: number;
+  maxContacts?: number;
+  features: string[];
+};
+
+function kuotaLabel(maxMessages: number): string {
+  if (!maxMessages || maxMessages >= 1000000) return "Unlimited pesan/bulan";
+  return `${maxMessages.toLocaleString("id-ID")} pesan/bulan`;
+}
+
 function Harga() {
   const [tahunan, setTahunan] = useState(false);
+  const [plans, setPlans] = useState<PlanDB[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/public/plans")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d && Array.isArray(d.plans) && d.plans.length > 0) setPlans(d.plans);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const rp = (n: number) => (n === 0 ? "Rp 0" : "Rp " + Math.round(n).toLocaleString("id-ID"));
+  const daftar: Paket[] = plans
+    ? plans.map((p) => ({
+        nama: p.name,
+        harga: p.price,
+        pesan: kuotaLabel(p.maxMessages),
+        device: p.maxDevices,
+        fitur: Array.isArray(p.features) ? p.features : [],
+        populer: p.slug === "regular" || p.name.toLowerCase() === "regular",
+      }))
+    : paketBulanan;
   return (
     <section id="harga" className="py-20 bg-slate-50 scroll-mt-16">
       <div className="max-w-7xl mx-auto px-4">
@@ -530,12 +693,12 @@ function Harga() {
               Bulanan
             </button>
             <button onClick={() => setTahunan(true)} className={`px-5 py-2 rounded-full transition-all ${tahunan ? "bg-emerald-500 text-white shadow" : "text-slate-500"}`}>
-              Tahunan <span className="text-xs opacity-80">−17%</span>
+              Tahunan <span className="text-xs opacity-80">hemat 2 bulan</span>
             </button>
           </div>
         </Reveal>
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-5">
-          {paketBulanan.map((p, i) => {
+          {daftar.map((p, i) => {
             const harga = tahunan ? p.harga * 10 : p.harga;
             return (
               <Reveal key={p.nama} delay={i * 60}>
@@ -634,6 +797,12 @@ function CTA() {
 }
 
 function Footer() {
+  const [health, setHealth] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/health")
+      .then((r) => setHealth(r.ok))
+      .catch(() => setHealth(false));
+  }, []);
   return (
     <footer className="bg-slate-950 text-slate-400 py-12">
       <div className="max-w-6xl mx-auto px-4">
@@ -671,10 +840,47 @@ function Footer() {
         </div>
         <div className="border-t border-white/10 pt-6 flex flex-col md:flex-row justify-between gap-2 text-xs">
           <p>© 2026 WaGataway. Layanan unofficial, tidak berafiliasi dengan WhatsApp Inc.</p>
+          <span className="inline-flex items-center gap-2 font-semibold">
+            <span className="relative flex w-2.5 h-2.5">
+              {health && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
+              <span className={`relative inline-flex rounded-full w-2.5 h-2.5 ${health === false ? "bg-red-500" : "bg-emerald-500"}`} />
+            </span>
+            <span className={health === false ? "text-red-400" : "text-emerald-400"}>
+              {health === null ? "Memeriksa status…" : health ? "Semua sistem normal" : "Gangguan sistem"}
+            </span>
+          </span>
           <p>Gunakan nomor sekunder untuk keamanan.</p>
         </div>
       </div>
     </footer>
+  );
+}
+
+/* ── Sticky CTA (mobile) ────────────────────────────── */
+function StickyCTA() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const fn = () => {
+      const y = window.scrollY;
+      const nearBottom = window.innerHeight + y > document.documentElement.scrollHeight - 200;
+      setShow(y > 600 && !nearBottom);
+    };
+    window.addEventListener("scroll", fn, { passive: true });
+    fn();
+    return () => window.removeEventListener("scroll", fn);
+  }, []);
+  return (
+    <div
+      aria-hidden={!show}
+      className={`md:hidden fixed bottom-0 inset-x-0 z-40 transition-transform duration-300 ${show ? "translate-y-0" : "translate-y-full"}`}
+    >
+      <div className="bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-800">Siap otomatisasi WA bisnis?</p>
+        <Link href="/register" className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap">
+          Coba Gratis
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -686,12 +892,15 @@ export default function Landing() {
       <Kelebihan />
       <Fitur />
       <CaraKerja />
+      <DemoSimulasi />
+      <VsFonnte />
       <Integrasi />
       <Testimoni />
       <Harga />
       <FAQ />
       <CTA />
       <Footer />
+      <StickyCTA />
     </div>
   );
 }

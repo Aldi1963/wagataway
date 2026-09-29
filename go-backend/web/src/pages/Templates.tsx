@@ -204,16 +204,20 @@ export default function Templates() {
       {!loading && !error && templates.length === 0 && (
         <Card>
           <CardContent className="p-10 text-center space-y-3">
-            <FileText className="w-10 h-10 mx-auto text-muted-foreground" />
+            <img
+              src="/illustrations/message-sent.svg"
+              alt="Belum ada template"
+              className="w-44 h-auto mx-auto"
+            />
             <p className="text-sm font-medium text-foreground">
               Belum ada template
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
               Buat template pesan yang bisa dipakai ulang dengan variabel seperti
               {" {{nama}}"}.
             </p>
             <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Tambah Template
+              <Plus className="w-3.5 h-3.5" /> Buat Template
             </Button>
           </CardContent>
         </Card>
