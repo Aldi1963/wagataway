@@ -34,20 +34,20 @@ export default function QuotaMeter({ collapsed }: { collapsed: boolean }) {
   const danger = pct > 90;
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+    <div className="rounded-lg border border-border bg-muted p-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-white">
+        <p className="text-xs font-semibold text-foreground">
           Paket {usage.planName}
         </p>
         <Link
           href="/billing"
-          className="text-[11px] font-medium text-emerald-300 hover:text-emerald-200"
+          className="text-[11px] font-medium text-primary hover:text-primary/80"
         >
           Upgrade
         </Link>
       </div>
       <div
-        className="mt-2 h-1.5 rounded-full bg-white/10"
+        className="mt-2 h-1.5 rounded-full bg-border"
         role="progressbar"
         aria-valuenow={Math.round(pct)}
         aria-valuemin={0}
@@ -56,12 +56,12 @@ export default function QuotaMeter({ collapsed }: { collapsed: boolean }) {
         <div
           className={cn(
             "h-full rounded-full transition-all",
-            danger ? "bg-red-500" : "bg-emerald-500"
+            danger ? "bg-destructive" : "bg-success"
           )}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="mt-1.5 text-[11px] text-white/60">
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
         {usage.remaining.toLocaleString("id-ID")} pesan tersisa
       </p>
     </div>

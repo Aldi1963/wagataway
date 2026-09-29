@@ -179,7 +179,7 @@ export default function SendMessage() {
                 </p>
               </div>
               <Button asChild size="sm">
-                <Link to="/devices">Ke Halaman Perangkat</Link>
+                <Link to="/">Ke Dashboard</Link>
               </Button>
             </div>
           ) : (

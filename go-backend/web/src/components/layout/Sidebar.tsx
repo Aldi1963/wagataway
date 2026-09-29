@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import QuotaMeter from "@/components/QuotaMeter";
-import { useAuth } from "@/hooks/use-auth";
 import { apiGet } from "@/lib/api";
 import {
   LayoutDashboard,
-  Smartphone,
   Send,
   Users,
   UsersRound,
@@ -52,7 +49,6 @@ const sections: NavSection[] = [
     label: "Utama",
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Perangkat", href: "/devices", icon: Smartphone },
       { label: "Analytics", href: "/analytics", icon: BarChart3 },
     ],
   },
@@ -124,11 +120,8 @@ function badgeColorFor(href: string): string {
 
 export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
-  const { user } = useAuth();
   const [openSections, setOpenSections] = useState<string[]>(loadOpenSections);
   const [badges, setBadges] = useState<Record<string, number>>({});
-  const [connectedCount, setConnectedCount] = useState(0);
-  const [devicesLoaded, setDevicesLoaded] = useState(false);
 
   // Simpan state buka/tutup ke localStorage
   useEffect(() => {
@@ -154,21 +147,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   // Fetch badge counter + status perangkat sekali saat mount; gagal = diam
   useEffect(() => {
     let cancelled = false;
-
-    apiGet<{ devices: { status?: string }[] }>("/devices")
-      .then((d) => {
-        if (cancelled) return;
-        const devs = d.devices || [];
-        setBadges((p) => ({
-          ...p,
-          "/devices": devs.filter((x) => x.status !== "connected").length,
-        }));
-        setConnectedCount(devs.filter((x) => x.status === "connected").length);
-        setDevicesLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setDevicesLoaded(true);
-      });
 
     apiGet<{ schedules: { sendAt?: string; status?: string }[] }>("/schedule")
       .then((d) => {
@@ -257,7 +235,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
     );
   };
 
-  const initials = (user?.name || "U").charAt(0).toUpperCase();
 
   return (
     <aside
@@ -351,64 +328,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           </>
         )}
       </nav>
-
-      {/* Status perangkat mini + profil — sembunyi saat collapsed kecuali avatar */}
-      <div className="shrink-0 border-t border-border px-2 pt-2 pb-1 space-y-1">
-        {devicesLoaded && !collapsed && (
-          <Link
-            href="/devices"
-            onClick={onClose}
-            className="flex items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 transition-colors hover:bg-accent"
-          >
-            <span
-              className={cn(
-                "h-2 w-2 shrink-0 rounded-full",
-                connectedCount > 0 ? "bg-success" : "bg-destructive"
-              )}
-            />
-            <span className="min-w-0">
-              <span className="block truncate text-xs font-medium text-foreground">
-                {connectedCount > 0
-                  ? `${connectedCount} terhubung`
-                  : "Tidak ada yang terhubung"}
-              </span>
-              <span className="block text-[10px] text-muted-foreground">
-                Perangkat WhatsApp
-              </span>
-            </span>
-          </Link>
-        )}
-        <Link
-          href="/profile"
-          aria-label="Profil saya"
-          onClick={onClose}
-          className={cn(
-            "flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-accent",
-            collapsed && "justify-center"
-          )}
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-            {initials}
-          </span>
-          {!collapsed && (
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-medium text-foreground">
-                {user?.name || "User"}
-              </span>
-              <span className="mt-0.5 inline-block rounded-full bg-muted px-1.5 py-px text-[10px] capitalize text-muted-foreground">
-                {user?.plan || "free"}
-              </span>
-            </span>
-          )}
-        </Link>
-      </div>
-
-      {/* Meter kuota — desktop/mobile, sembunyi saat collapsed */}
-      {!collapsed && (
-        <div className="p-2 border-t border-border shrink-0">
-          <QuotaMeter collapsed={false} />
-        </div>
-      )}
 
       {/* Collapse Toggle — desktop only */}
       <div className="p-2 border-t border-border hidden lg:block">

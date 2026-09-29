@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "wouter";
 import { toast } from "sonner";
 import {
   Smartphone,
@@ -16,6 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
@@ -172,8 +172,6 @@ function StatCard({
   );
 }
 
-const MAX_TABLE_ROWS = 5;
-
 export default function Dashboard() {
   const { user } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
@@ -194,6 +192,10 @@ export default function Dashboard() {
 
   const [deleting, setDeleting] = useState<Device | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [savingAdd, setSavingAdd] = useState(false);
 
   const loadDevices = () => {
     return apiGet<{ devices: Device[] }>("/devices")
@@ -338,10 +340,39 @@ export default function Dashboard() {
     }
   };
 
+  const handleAdd = async () => {
+    const name = addName.trim();
+    if (!name) {
+      toast.error("Nama perangkat wajib diisi");
+      return;
+    }
+    setSavingAdd(true);
+    try {
+      const created = await apiPost<{ device?: Device; id?: number }>(
+        "/devices",
+        { name }
+      );
+      const res = await apiGet<{ devices: Device[] }>("/devices");
+      const list = res.devices || [];
+      setDevices(list);
+      toast.success("Perangkat ditambahkan");
+      setShowAdd(false);
+      setAddName("");
+      const id = created.device?.id ?? created.id;
+      const dev = id
+        ? list.find((d) => d.id === id)
+        : list.filter((d) => d.name === name).pop();
+      if (dev) handleConnect(dev);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menambah perangkat");
+    } finally {
+      setSavingAdd(false);
+    }
+  };
+
   const planName = user?.plan
     ? user.plan.charAt(0).toUpperCase() + user.plan.slice(1)
     : "-";
-  const visibleDevices = devices.slice(0, MAX_TABLE_ROWS);
 
   return (
     <div className="space-y-6">
@@ -410,11 +441,9 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-semibold">
               WhatsApp Accounts
             </CardTitle>
-            <Link href="/devices">
-              <Button size="sm" className="gap-1.5">
-                <Plus className="w-4 h-4" /> Add Device
-              </Button>
-            </Link>
+            <Button size="sm" className="gap-1.5" onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4" /> Add Device
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -429,11 +458,13 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground">
                 Belum ada perangkat terhubung.
               </p>
-              <Link href="/devices">
-                <Button size="sm" className="mt-3 gap-1.5">
-                  <Plus className="w-4 h-4" /> Tambah Perangkat
-                </Button>
-              </Link>
+              <Button
+                size="sm"
+                className="mt-3 gap-1.5"
+                onClick={() => setShowAdd(true)}
+              >
+                <Plus className="w-4 h-4" /> Tambah Perangkat
+              </Button>
             </div>
           ) : (
             <>
@@ -471,7 +502,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleDevices.map((d) => (
+                    {devices.map((d) => (
                       <tr
                         key={d.id}
                         className="border-b border-border last:border-0"
@@ -564,16 +595,6 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
-              {devices.length > MAX_TABLE_ROWS && (
-                <div className="mt-3 text-center">
-                  <Link
-                    href="/devices"
-                    className="text-sm text-primary hover:underline font-medium"
-                  >
-                    Lihat semua ({devices.length})
-                  </Link>
-                </div>
-              )}
             </>
           )}
         </CardContent>
@@ -587,6 +608,41 @@ export default function Dashboard() {
             load();
           }}
         />
+      )}
+
+      {/* Dialog tambah perangkat */}
+      {showAdd && (
+        <Modal title="Tambah Perangkat" onClose={() => setShowAdd(false)}>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">
+                Nama perangkat
+              </label>
+              <Input
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="cth: CS Bot"
+                maxLength={60}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAdd();
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAdd(false)}
+                disabled={savingAdd}
+              >
+                Batal
+              </Button>
+              <Button size="sm" onClick={handleAdd} disabled={savingAdd}>
+                {savingAdd ? "Menyimpan..." : "Simpan & Hubungkan"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Dialog QR */}

@@ -19,7 +19,6 @@ import { apiGet } from "@/lib/api";
 
 const routeLabels: Record<string, string> = {
   "/": "Dashboard",
-  "/devices": "Perangkat",
   "/send": "Kirim Pesan",
   "/bulk": "Blast Pesan",
   "/schedule": "Jadwal Pesan",

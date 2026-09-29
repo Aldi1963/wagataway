@@ -10,7 +10,6 @@ import { Toaster } from "sonner";
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Devices = lazy(() => import("@/pages/Devices"));
 const SendMessage = lazy(() => import("@/pages/SendMessage"));
 const BulkMessages = lazy(() => import("@/pages/BulkMessages"));
 const Schedule = lazy(() => import("@/pages/Schedule"));
@@ -120,9 +119,6 @@ function AppRouter() {
         </Route>
         <Route path="/">
           <HomeRoute />
-        </Route>
-        <Route path="/devices">
-          <ProtectedRoute><Devices /></ProtectedRoute>
         </Route>
         <Route path="/send">
           <ProtectedRoute><SendMessage /></ProtectedRoute>
