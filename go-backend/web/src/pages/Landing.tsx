@@ -146,71 +146,36 @@ function Navbar() {
   );
 }
 
-/* ── Hero: mockup HP dengan chat animasi ────────────── */
-function PhoneMockup() {
+/* ── Hero: ilustrasi vector + kartu melayang ────── */
+function HeroArt() {
   return (
-    <div className="relative mx-auto w-[280px] sm:w-[300px]">
+    <div className="relative mx-auto w-full max-w-[440px]">
       {/* glow */}
       <div className="absolute -inset-8 bg-emerald-400/20 blur-3xl rounded-full" />
-      <div className="relative rounded-[2.5rem] border-[10px] border-slate-900 bg-white shadow-2xl overflow-hidden">
-        {/* notch */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 bg-slate-900 rounded-b-2xl z-10" />
-        {/* WA header */}
-        <div className="bg-emerald-600 px-4 pt-8 pb-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">T</div>
-          <div>
-            <p className="text-white text-sm font-semibold leading-tight">Toko Berkah</p>
-            <p className="text-emerald-100 text-[11px]">online</p>
-          </div>
-        </div>
-        {/* chat area */}
-        <div className="bg-[#e7dfd3] px-3 py-4 space-y-2.5 min-h-[340px]">
-          <div className="chat-msg max-w-[80%] bg-white rounded-xl rounded-tl-sm px-3 py-2 text-xs text-slate-700 shadow-sm" style={{ animationDelay: "0.4s" }}>
-            Halo kak, pesanannya sudah dikirim ya 🙏
-          </div>
-          <div className="chat-msg max-w-[80%] bg-white rounded-xl rounded-tl-sm px-3 py-2 text-xs text-slate-700 shadow-sm" style={{ animationDelay: "1.6s" }}>
-            No resi: <b>JNE-882131</b>, estimasi 2 hari sampai
-          </div>
-          <div className="chat-msg max-w-[80%] ml-auto bg-[#d9fdd3] rounded-xl rounded-tr-sm px-3 py-2 text-xs text-slate-700 shadow-sm" style={{ animationDelay: "2.8s" }}>
-            Wah cepat banget, makasih kak!
-          </div>
-          <div className="chat-msg max-w-[80%] bg-white rounded-xl rounded-tl-sm px-3 py-2 text-xs text-slate-700 shadow-sm" style={{ animationDelay: "4s" }}>
-            Sama-sama! Jangan lupa kasih bintang 5 ya ⭐
-          </div>
-          <div className="chat-typing flex gap-1 bg-white rounded-xl px-3 py-2.5 w-fit shadow-sm" style={{ animationDelay: "5.2s" }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 typing-dot" />
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 typing-dot" style={{ animationDelay: "0.15s" }} />
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 typing-dot" style={{ animationDelay: "0.3s" }} />
-          </div>
-        </div>
-        {/* input */}
-        <div className="bg-[#f0f0f0] px-3 py-2.5 flex items-center gap-2">
-          <div className="flex-1 bg-white rounded-full px-4 py-2 text-[11px] text-slate-400">Ketik pesan</div>
-          <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-            <Send className="w-4 h-4 text-white" />
-          </div>
-        </div>
-      </div>
+      <img
+        src="/illustrations/messaging-fun.svg"
+        alt="Ilustrasi pengiriman pesan WhatsApp otomatis"
+        className="relative w-full h-auto hero-float"
+        loading="eager"
+      />
       {/* floating cards */}
-      <div className="float-card absolute -left-16 top-16 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "0s" }}>
+      <div className="float-card absolute left-0 top-8 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "0s" }}>
         <span className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><Zap className="w-4 h-4 text-emerald-600" /></span>
         <div><p className="text-[11px] font-bold text-slate-800">API 200 OK</p><p className="text-[10px] text-slate-400">86 ms</p></div>
       </div>
-      <div className="float-card absolute -right-14 bottom-24 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "1.2s" }}>
+      <div className="float-card absolute right-0 top-1/3 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "1.2s" }}>
         <span className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center"><Webhook className="w-4 h-4 text-sky-600" /></span>
         <div><p className="text-[11px] font-bold text-slate-800">Webhook</p><p className="text-[10px] text-slate-400">delivered</p></div>
       </div>
-      <div className="float-card absolute -left-12 bottom-10 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "2.1s" }}>
+      <div className="float-card absolute left-4 bottom-6 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "2.1s" }}>
         <span className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center"><BellRing className="w-4 h-4 text-violet-600" /></span>
         <div><p className="text-[11px] font-bold text-slate-800">1.240 pesan</p><p className="text-[10px] text-slate-400">terkirim hari ini</p></div>
       </div>
       <style>{`
-        @keyframes chatIn { 0% { opacity: 0; transform: translateY(10px) scale(0.97); } 8%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
-        .chat-msg, .chat-typing { opacity: 0; animation: chatIn 7s ease-in-out infinite; }
-        @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
-        .typing-dot { animation: typingBounce 1s infinite; }
         @keyframes floatY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         .float-card { animation: floatY 4s ease-in-out infinite; }
+        @keyframes heroFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        .hero-float { animation: heroFloat 6s ease-in-out infinite; }
       `}</style>
     </div>
   );
@@ -252,8 +217,8 @@ function Hero() {
             <p><b className="text-slate-800">2.000+</b> device terhubung<br className="sm:hidden" /> dan mengirim tiap hari</p>
           </div>
         </Reveal>
-        <Reveal delay={150} className="hidden md:block">
-          <PhoneMockup />
+        <Reveal delay={150}>
+          <HeroArt />
         </Reveal>
       </div>
       {/* stats strip */}
@@ -660,11 +625,11 @@ function CTA() {
         <div className="absolute -top-24 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl" />
         <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
       </div>
-      <div className="relative max-w-3xl mx-auto px-4 text-center">
-        <Reveal>
+      <div className="relative max-w-5xl mx-auto px-4 grid md:grid-cols-2 gap-10 items-center">
+        <Reveal className="text-center md:text-left">
           <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Siap mengotomatisasi WhatsApp bisnis Anda?</h2>
           <p className="text-slate-400 mt-4">Daftar gratis hari ini — 1.000 pesan pertama tiap bulan, tanpa kartu kredit.</p>
-          <div className="flex flex-wrap justify-center gap-3 mt-8">
+          <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-8">
             <Link href="/register" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors shadow-lg shadow-emerald-500/25">
               Coba Gratis Sekarang <ArrowRight className="w-4 h-4" />
             </Link>
@@ -672,6 +637,14 @@ function CTA() {
               Baca Dokumentasi
             </Link>
           </div>
+        </Reveal>
+        <Reveal delay={150}>
+          <img
+            src="/illustrations/chatting.svg"
+            alt="Ilustrasi chatting WhatsApp"
+            className="w-full max-w-[380px] h-auto mx-auto hero-float"
+            loading="lazy"
+          />
         </Reveal>
       </div>
     </section>
