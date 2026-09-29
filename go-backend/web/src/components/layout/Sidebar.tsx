@@ -239,7 +239,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col bg-card text-foreground border-r border-border",
+        "flex h-screen h-dvh flex-col bg-card text-foreground border-r border-border",
         // Mobile: slide-over drawer
         "fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
