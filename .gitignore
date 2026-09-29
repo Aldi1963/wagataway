@@ -36,3 +36,7 @@ Thumbs.db
 *.dll
 *.so
 *.dylib
+
+# Local deploy only (secrets + nginx-served build copy)
+/go-backend/docker-compose.override.yml
+/go-backend/web-dist-static/

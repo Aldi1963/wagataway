@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus, Ban, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 
 const mockBlacklist = [
@@ -15,7 +14,7 @@ export default function Blacklist() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">
             Blacklist

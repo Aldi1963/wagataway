@@ -21,7 +21,7 @@ export default function Templates() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Template Pesan</h2>
           <p className="text-sm text-muted-foreground">Template reusable dengan variabel</p>

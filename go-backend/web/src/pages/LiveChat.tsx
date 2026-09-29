@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, User, Wifi, Search, MoreHorizontal } from "lucide-react";
+import {Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -141,7 +141,10 @@ export default function LiveChat() {
   return (
     <div className="flex h-[calc(100vh-7rem)] border border-border rounded-lg overflow-hidden">
       {/* ── Conversation List ─────────────────────────── */}
-      <div className="w-80 border-r border-border flex flex-col bg-card">
+      <div className={cn(
+        "border-r border-border flex-col bg-card",
+        activePhone ? "hidden md:flex md:w-80" : "flex w-full md:w-80"
+      )}>
         {/* Search */}
         <div className="p-3 border-b border-border">
           <div className="relative">
@@ -198,12 +201,21 @@ export default function LiveChat() {
       </div>
 
       {/* ── Chat Area ────────────────────────────────── */}
-      <div className="flex-1 flex flex-col">
+      <div className={cn("flex-1 flex-col", activePhone ? "flex" : "hidden md:flex")}>
         {activePhone ? (
           <>
             {/* Chat Header */}
             <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-card">
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Kembali"
+                  onClick={() => setActivePhone(null)}
+                  className="md:hidden -ml-2 h-8 w-8 shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
                 <div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold">
                   {(activeConvo?.contactName || activePhone).charAt(0).toUpperCase()}
                 </div>

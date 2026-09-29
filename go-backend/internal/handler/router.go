@@ -31,6 +31,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 
 	// ── Static files (uploads) ─────────────────────────────────────────────
 	r.Static("/uploads", "./public/uploads")
+	r.Static("/assets", "./web/dist/assets")
 
 	// ── API Routes ─────────────────────────────────────────────────────────
 	api := r.Group("/api")

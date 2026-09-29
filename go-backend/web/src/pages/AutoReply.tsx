@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Plus, Zap, Trash2, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import {Card, CardContent} from "@/components/ui/card";
+import {Badge} from "@/components/ui/badge";
 
 interface Rule {
   id: number;
@@ -25,7 +24,7 @@ export default function AutoReply() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Auto Reply</h2>
           <p className="text-sm text-muted-foreground">Balas pesan otomatis berdasarkan keyword</p>

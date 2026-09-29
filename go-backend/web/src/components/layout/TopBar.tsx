@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Bell, Moon, Sun, Search, LogOut, User } from "lucide-react";
+import { Bell, Moon, Sun, Search, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
@@ -23,7 +23,11 @@ const routeLabels: Record<string, string> = {
   "/profile": "Profil",
 };
 
-export function TopBar() {
+interface TopBarProps {
+  onMenu: () => void;
+}
+
+export function TopBar({ onMenu }: TopBarProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -31,16 +35,25 @@ export function TopBar() {
   const pageLabel = routeLabels[location] || "Dashboard";
 
   return (
-    <header className="h-14 flex items-center justify-between px-6 border-b border-border bg-background sticky top-0 z-30">
-      {/* Page title */}
-      <div className="flex items-center gap-2">
-        <h1 className="text-sm font-semibold text-foreground">{pageLabel}</h1>
+    <header className="h-14 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-background sticky top-0 z-30">
+      {/* Page title + mobile menu */}
+      <div className="flex items-center gap-1 min-w-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Buka menu"
+          onClick={onMenu}
+          className="lg:hidden -ml-2 text-muted-foreground shrink-0"
+        >
+          <Menu className="w-5 h-5" />
+        </Button>
+        <h1 className="text-sm font-semibold text-foreground truncate">{pageLabel}</h1>
       </div>
 
       {/* Right actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         {/* Search */}
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
+        <Button variant="ghost" size="icon" className="text-muted-foreground hidden sm:inline-flex">
           <Search className="w-4 h-4" />
         </Button>
 

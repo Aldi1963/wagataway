@@ -12,6 +12,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -273,7 +274,7 @@ func (m *Manager) CheckNumberRegistered(deviceID uint, phone string) (bool, erro
 		return false, err
 	}
 
-	resp, err := sess.Client.IsOnWhatsApp([]string{jid.User})
+	resp, err := sess.Client.IsOnWhatsApp(context.Background(), []string{jid.User})
 	if err != nil {
 		return false, err
 	}
@@ -296,7 +297,7 @@ func (m *Manager) GetGroups(deviceID uint) ([]*types.GroupInfo, error) {
 		return nil, fmt.Errorf("device %d tidak terhubung", deviceID)
 	}
 
-	groups, err := sess.Client.GetJoinedGroups()
+	groups, err := sess.Client.GetJoinedGroups(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +377,7 @@ func (m *Manager) startSession(sess *SessionState) {
 	dbURI := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
 
 	dbLog := waLog.Noop
-	container, err := sqlstore.New("sqlite3", dbURI, dbLog)
+	container, err := sqlstore.New(context.Background(), "sqlite3", dbURI, dbLog)
 	if err != nil {
 		log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to create sqlstore")
 		sess.mu.Lock()
@@ -390,7 +391,7 @@ func (m *Manager) startSession(sess *SessionState) {
 	sess.mu.Unlock()
 
 	// Get or create device store
-	deviceStore, err := container.GetFirstDevice()
+	deviceStore, err := container.GetFirstDevice(context.Background())
 	if err != nil {
 		log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to get device store")
 		sess.mu.Lock()
@@ -401,7 +402,7 @@ func (m *Manager) startSession(sess *SessionState) {
 
 	// Set device name/browser info
 	store.DeviceProps.Os = proto.String("WaGataway")
-	store.DeviceProps.PlatformType = store.DeviceProps_CHROME.Enum()
+	store.DeviceProps.PlatformType = waCompanionReg.DeviceProps_CHROME.Enum()
 
 	clientLog := waLog.Noop
 	client := whatsmeow.NewClient(deviceStore, clientLog)

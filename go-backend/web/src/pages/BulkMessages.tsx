@@ -45,7 +45,7 @@ export default function BulkMessages() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">Delay Min (detik)</label>
               <Input value={minDelay} onChange={(e) => setMinDelay(e.target.value)} type="number" />

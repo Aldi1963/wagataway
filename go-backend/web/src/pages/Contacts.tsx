@@ -1,7 +1,7 @@
 import { Users, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {Card, CardContent} from "@/components/ui/card";
 
 const mockContacts = [
   { id: 1, name: "Ahmad Rizky", phone: "628123456789", tags: "pelanggan" },
@@ -15,7 +15,7 @@ export default function Contacts() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Kontak</h2>
           <p className="text-sm text-muted-foreground">
@@ -37,7 +37,7 @@ export default function Contacts() {
       {/* Contact List */}
       <Card>
         <CardContent className="p-0">
-          <table className="w-full">
+          <div className="overflow-x-auto"><table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
@@ -86,7 +86,7 @@ export default function Contacts() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </CardContent>
       </Card>
     </div>
