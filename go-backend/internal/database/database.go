@@ -70,5 +70,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.BotProduct{},
 		&models.BotOrder{},
 		&models.AdminWaBot{},
+		&models.AdminActivityLog{},
 	)
 }

@@ -23,6 +23,20 @@ type ApiKey struct {
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }
 
+// ── Admin Activity Log ───────────────────────────────────────────────────────
+
+type AdminActivityLog struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	AdminID    uint      `gorm:"index;not null" json:"adminId"`
+	Action     string    `gorm:"size:50;not null" json:"action"`
+	TargetType string    `gorm:"size:50" json:"targetType"`
+	TargetID   string    `gorm:"size:50" json:"targetId"`
+	Detail     string    `gorm:"type:text" json:"detail"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	Admin User `gorm:"foreignKey:AdminID" json:"-"`
+}
+
 // ── Scheduled Messages ────────────────────────────────────────────────────────
 
 type ScheduledMessage struct {

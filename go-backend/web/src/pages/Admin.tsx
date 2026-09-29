@@ -5,9 +5,12 @@ import {
   Users,
   Package,
   Ticket,
-  Receipt,
-  Settings2,
-  Bell,
+  ReceiptText,
+  Settings,
+  BellRing,
+  ScrollText,
+  HeartPulse,
+  Menu,
   Smartphone,
   MessageSquareText,
   Wallet,
@@ -35,6 +38,7 @@ import {
   Tooltip,
 } from "recharts";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -570,7 +574,7 @@ function UsersTab() {
 
       {!loading && !error && (
         <>
-          <Card>
+          <Card className="hidden md:block">
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[760px]">
                 <thead>
@@ -627,6 +631,58 @@ function UsersTab() {
               </table>
             </div>
           </Card>
+          {/* Kartu mobile */}
+          <div className="md:hidden space-y-3">
+            {users.map((u) => (
+              <Card key={u.id}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground truncate">{u.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                    </div>
+                    {statusBadge(u.status)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Role</p>
+                      <Select value={u.role} onChange={(v) => updateField(u, "role", v)} options={ROLE_OPTS} ariaLabel="Ubah role" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Paket</p>
+                      <Select value={u.plan} onChange={(v) => updateField(u, "plan", v)} options={PLAN_OPTS} ariaLabel="Ubah paket" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Status</p>
+                      <Select value={u.status} onChange={(v) => updateField(u, "status", v)} options={STATUS_OPTS} ariaLabel="Ubah status" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Terdaftar</p>
+                      <p className="text-xs text-foreground">{fmtDate(u.createdAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive gap-1"
+                      onClick={() => setDeleting(u)}
+                      aria-label="Hapus pengguna"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Hapus
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {users.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                  Tidak ada pengguna ditemukan
+                </CardContent>
+              </Card>
+            )}
+          </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <p>
               {total} pengguna · Halaman {page} dari {totalPages}
@@ -1175,7 +1231,7 @@ function TransactionsTab() {
 
       {!loading && !error && (
         <>
-          <Card>
+          <Card className="hidden md:block">
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[720px]">
                 <thead>
@@ -1213,6 +1269,44 @@ function TransactionsTab() {
               </table>
             </div>
           </Card>
+          {/* Kartu mobile */}
+          <div className="md:hidden space-y-3">
+            {txns.map((t) => (
+              <Card key={t.id}>
+                <CardContent className="p-4 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">#{t.id}</span>
+                    {txnBadge(t.status)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground truncate">{t.user?.name || "-"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{t.user?.email || ""}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Paket</p>
+                      <p className="text-foreground">{t.plan?.name || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Jumlah</p>
+                      <p className="font-semibold text-foreground">{fmtRp(t.amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Tanggal</p>
+                      <p className="text-foreground">{fmtDate(t.createdAt)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {txns.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                  Belum ada transaksi
+                </CardContent>
+              </Card>
+            )}
+          </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <p>
               {total} transaksi · Halaman {page} dari {totalPages}
@@ -1351,6 +1445,10 @@ function NotificationsTab() {
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("");
   const [sending, setSending] = useState(false);
+  const [waMessage, setWaMessage] = useState("");
+  const [waConfirm, setWaConfirm] = useState(false);
+  const [waSending, setWaSending] = useState(false);
+  const [waResult, setWaResult] = useState<{ sent: number; failed: number } | null>(null);
 
   const handleSend = async () => {
     if (!title.trim() || !message.trim()) {
@@ -1377,6 +1475,27 @@ function NotificationsTab() {
       toast.error(errMsg(e, "Gagal mengirim notifikasi"));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleWaSend = async () => {
+    if (!waMessage.trim()) {
+      toast.error("Pesan WhatsApp wajib diisi");
+      return;
+    }
+    setWaSending(true);
+    try {
+      const res = await apiPost<{ sent: number; failed: number }>("/admin/broadcast-wa", {
+        message: waMessage.trim(),
+      });
+      setWaResult({ sent: res.sent || 0, failed: res.failed || 0 });
+      setWaConfirm(false);
+      setWaMessage("");
+      toast.success(`Broadcast terkirim ke ${res.sent || 0} perangkat`);
+    } catch (e) {
+      toast.error(errMsg(e, "Gagal mengirim broadcast WhatsApp"));
+    } finally {
+      setWaSending(false);
     }
   };
 
@@ -1419,6 +1538,288 @@ function NotificationsTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Broadcast WhatsApp */}
+      <Card>
+        <CardContent className="p-5 space-y-4 max-w-2xl">
+          <div>
+            <h3 className="font-medium text-foreground">Broadcast WhatsApp</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Pesan dikirim sebagai pesan WhatsApp ke nomor masing-masing pengguna yang perangkatnya terhubung.
+            </p>
+          </div>
+          <Field label={`Pesan (${waMessage.length}/1000)`}>
+            <textarea
+              value={waMessage}
+              onChange={(e) => setWaMessage(e.target.value.slice(0, 1000))}
+              placeholder="Tulis pesan broadcast..."
+              rows={4}
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </Field>
+          {waResult && (
+            <p className="text-sm text-muted-foreground">
+              Terkirim ke {waResult.sent} perangkat
+              {waResult.failed > 0 ? `, gagal ${waResult.failed}` : ""}.
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={() => setWaConfirm(true)}
+              disabled={!waMessage.trim() || waSending}
+              className="gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {waSending ? "Mengirim..." : "Kirim via WhatsApp"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {waConfirm && (
+        <Modal title="Kirim Broadcast WhatsApp" onClose={() => setWaConfirm(false)}>
+          <p className="text-sm text-muted-foreground">
+            Pesan akan dikirim ke semua perangkat terhubung. Lanjutkan?
+          </p>
+          <div className="flex justify-end gap-2 mt-5">
+            <Button variant="outline" size="sm" onClick={() => setWaConfirm(false)}>
+              Batal
+            </Button>
+            <Button size="sm" onClick={handleWaSend} disabled={waSending}>
+              {waSending ? "Mengirim..." : "Ya, kirim"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ── Tab: Log Aktivitas ─────────────────────────────── */
+
+interface ActivityLog {
+  id: number;
+  adminId: number;
+  adminEmail: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  detail: string;
+  createdAt: string;
+}
+
+const ACTION_LABEL: Record<string, string> = {
+  create_user: "Buat pengguna",
+  update_user: "Ubah pengguna",
+  delete_user: "Hapus pengguna",
+  create_package: "Buat paket",
+  update_package: "Ubah paket",
+  delete_package: "Hapus paket",
+  create_voucher: "Buat voucher",
+  delete_voucher: "Hapus voucher",
+  send_notification: "Kirim notifikasi",
+  broadcast_wa: "Broadcast WhatsApp",
+  update_setting: "Ubah pengaturan",
+  update_plan: "Ubah paket pengguna",
+  login: "Masuk",
+  logout: "Keluar",
+};
+
+const actionLabel = (a: string) =>
+  ACTION_LABEL[a] || a.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+function ActivityLogTab() {
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = (p = page) => {
+    setLoading(true);
+    setError(null);
+    apiGet<{ logs: ActivityLog[]; total: number }>(`/admin/activity-logs?page=${p}&limit=${PAGE_LIMIT}`)
+      .then((res) => {
+        setLogs(res.logs || []);
+        setTotal(res.total || 0);
+      })
+      .catch((e) => setError(errMsg(e, "Gagal memuat log aktivitas")))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
+
+  const targetText = (l: ActivityLog) =>
+    l.targetType ? `${l.targetType}${l.targetId ? ` #${l.targetId}` : ""}` : "-";
+
+  return (
+    <div className="space-y-4">
+      {loading && <LoadingRows />}
+      {!loading && error && <ErrorCard message={error} onRetry={() => load()} />}
+
+      {!loading && !error && (
+        <>
+          <Card className="hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[680px]">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="p-3 font-medium">Waktu</th>
+                    <th className="p-3 font-medium">Admin</th>
+                    <th className="p-3 font-medium">Aksi</th>
+                    <th className="p-3 font-medium">Target</th>
+                    <th className="p-3 font-medium">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((l) => (
+                    <tr key={l.id} className="border-b border-border last:border-0">
+                      <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(l.createdAt)}</td>
+                      <td className="p-3 text-xs truncate max-w-[180px]">{l.adminEmail || `#${l.adminId}`}</td>
+                      <td className="p-3">
+                        <Badge variant="secondary">{actionLabel(l.action)}</Badge>
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{targetText(l)}</td>
+                      <td className="p-3 text-xs text-muted-foreground max-w-[280px] truncate" title={l.detail || ""}>
+                        {l.detail || "-"}
+                      </td>
+                    </tr>
+                  ))}
+                  {logs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                        Belum ada aktivitas tercatat
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Kartu mobile */}
+          <div className="md:hidden space-y-3">
+            {logs.map((l) => (
+              <Card key={l.id}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="secondary">{actionLabel(l.action)}</Badge>
+                    <span className="text-xs text-muted-foreground shrink-0">{fmtDate(l.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-foreground truncate">{l.adminEmail || `Admin #${l.adminId}`}</p>
+                  {(l.targetType || l.detail) && (
+                    <p className="text-xs text-muted-foreground">
+                      {l.targetType ? `Target: ${targetText(l)}` : ""}
+                      {l.detail ? `${l.targetType ? " · " : ""}${l.detail}` : ""}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+            {logs.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                  Belum ada aktivitas tercatat
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <p>
+              {total} log · Halaman {page} dari {totalPages}
+            </p>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)} className="gap-1">
+                <ChevronLeft className="w-3.5 h-3.5" /> Sebelumnya
+              </Button>
+              <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="gap-1">
+                Berikutnya <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Tab: Kesehatan Sistem ──────────────────────────── */
+
+interface HealthStatus {
+  database: "ok" | "error";
+  redis: "ok" | "error";
+  timestamp: number;
+}
+
+function HealthTab() {
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    apiGet<HealthStatus>("/admin/health")
+      .then(setHealth)
+      .catch((e) => setError(errMsg(e, "Gagal memeriksa kesehatan sistem")))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const statusCard = (label: string, status: "ok" | "error") => (
+    <Card>
+      <CardContent className="p-5 flex items-center gap-4">
+        <span
+          className={cn("w-3 h-3 rounded-full shrink-0", status === "ok" ? "bg-green-500" : "bg-red-500")}
+        />
+        <div>
+          <p className="font-medium text-foreground">{label}</p>
+          <p
+            className={cn(
+              "text-sm",
+              status === "ok" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+            )}
+          >
+            {status === "ok" ? "Berfungsi normal" : "Bermasalah"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="gap-1.5">
+          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} /> Muat ulang
+        </Button>
+      </div>
+
+      {loading && <LoadingRows n={2} />}
+      {!loading && error && <ErrorCard message={error} onRetry={load} />}
+
+      {!loading && !error && health && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {statusCard("Database", health.database)}
+            {statusCard("Redis", health.redis)}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Terakhir dicek: {new Date(health.timestamp * 1000).toLocaleString("id-ID")}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -1430,45 +1831,136 @@ const TABS = [
   { id: "pengguna", label: "Pengguna", icon: Users },
   { id: "paket", label: "Paket", icon: Package },
   { id: "voucher", label: "Voucher", icon: Ticket },
-  { id: "transaksi", label: "Transaksi", icon: Receipt },
-  { id: "pengaturan", label: "Pengaturan", icon: Settings2 },
-  { id: "notifikasi", label: "Notifikasi", icon: Bell },
+  { id: "transaksi", label: "Transaksi", icon: ReceiptText },
+  { id: "log", label: "Log Aktivitas", icon: ScrollText },
+  { id: "kesehatan", label: "Kesehatan Sistem", icon: HeartPulse },
+  { id: "pengaturan", label: "Pengaturan", icon: Settings },
+  { id: "notifikasi", label: "Notifikasi", icon: BellRing },
 ];
+
+const SECTION_DESC: Record<string, string> = {
+  ringkasan: "Pantau pengguna, perangkat, pesan, dan pendapatan",
+  pengguna: "Kelola semua pengguna terdaftar",
+  paket: "Kelola paket langganan",
+  voucher: "Kelola kode voucher",
+  transaksi: "Riwayat transaksi pembayaran",
+  log: "Jejak aktivitas para admin",
+  kesehatan: "Status database dan Redis",
+  pengaturan: "Pengaturan sistem",
+  notifikasi: "Kirim notifikasi ke pengguna",
+};
+
+function AdminNav({
+  activeTab,
+  onSelect,
+}: {
+  activeTab: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <nav className="space-y-1">
+      {TABS.map((t) => {
+        const isActive = activeTab === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onSelect(t.id)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+              isActive
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            <t.icon className="w-4 h-4 shrink-0" />
+            {t.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
 
 export default function Admin() {
   const [tab, setTab] = useState("ringkasan");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const active = TABS.find((t) => t.id === tab) ?? TABS[0];
+
+  const selectTab = (id: string) => {
+    setTab(id);
+    setMobileOpen(false);
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Dashboard Admin</h2>
-        <p className="text-sm text-muted-foreground">
-          Kelola pengguna, paket, voucher, transaksi, dan pengaturan sistem
-        </p>
+    <div className="flex gap-6">
+      {/* Sidebar — desktop */}
+      <aside className="hidden lg:block w-60 shrink-0">
+        <div className="sticky top-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Dashboard Admin</h2>
+            <p className="text-sm text-muted-foreground">
+              Kelola pengguna, paket, voucher, transaksi, dan pengaturan sistem
+            </p>
+          </div>
+          <AdminNav activeTab={tab} onSelect={selectTab} />
+        </div>
+      </aside>
+
+      {/* Drawer — mobile */}
+      <div className={cn("fixed inset-0 z-50 lg:hidden", !mobileOpen && "pointer-events-none")}>
+        <div
+          onClick={() => setMobileOpen(false)}
+          className={cn(
+            "absolute inset-0 bg-black/50 transition-opacity duration-200",
+            mobileOpen ? "opacity-100" : "opacity-0"
+          )}
+        />
+        <aside
+          className={cn(
+            "absolute inset-y-0 left-0 w-64 bg-background border-r border-border p-4 transition-transform duration-200",
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-foreground">Dashboard Admin</h2>
+            <button
+              onClick={() => setMobileOpen(false)}
+              aria-label="Tutup menu"
+              className="p-2 -mr-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <AdminNav activeTab={tab} onSelect={selectTab} />
+        </aside>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-        {TABS.map((t) => (
-          <Button
-            key={t.id}
-            size="sm"
-            variant={tab === t.id ? "default" : "outline"}
-            onClick={() => setTab(t.id)}
-            className="gap-1.5 shrink-0"
+      {/* Konten */}
+      <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMobileOpen(true)}
+            aria-label="Buka menu admin"
+            className="lg:hidden p-2 -ml-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
           >
-            <t.icon className="w-3.5 h-3.5" />
-            {t.label}
-          </Button>
-        ))}
-      </div>
+            <Menu className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">{active.label}</h2>
+            <p className="text-sm text-muted-foreground">{SECTION_DESC[tab]}</p>
+          </div>
+        </div>
 
-      {tab === "ringkasan" && <OverviewTab />}
-      {tab === "pengguna" && <UsersTab />}
-      {tab === "paket" && <PackagesTab />}
-      {tab === "voucher" && <VouchersTab />}
-      {tab === "transaksi" && <TransactionsTab />}
-      {tab === "pengaturan" && <SettingsTab />}
-      {tab === "notifikasi" && <NotificationsTab />}
+        {tab === "ringkasan" && <OverviewTab />}
+        {tab === "pengguna" && <UsersTab />}
+        {tab === "paket" && <PackagesTab />}
+        {tab === "voucher" && <VouchersTab />}
+        {tab === "transaksi" && <TransactionsTab />}
+        {tab === "log" && <ActivityLogTab />}
+        {tab === "kesehatan" && <HealthTab />}
+        {tab === "pengaturan" && <SettingsTab />}
+        {tab === "notifikasi" && <NotificationsTab />}
+      </div>
     </div>
   );
 }
