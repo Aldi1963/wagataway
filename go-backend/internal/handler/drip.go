@@ -93,7 +93,7 @@ func updateDripCampaign(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&campaign).Updates(req)
+		db.Model(&campaign).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"campaign": campaign, "message": "Diperbarui"})
 	}
 }
@@ -166,7 +166,7 @@ func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&step).Updates(req)
+		db.Model(&step).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"step": step})
 	}
 }

@@ -62,7 +62,7 @@ func updateTemplate(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&tpl).Updates(req)
+		db.Model(&tpl).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"template": tpl})
 	}
 }

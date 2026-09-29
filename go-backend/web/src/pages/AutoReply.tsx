@@ -1,26 +1,174 @@
-import { useState } from "react";
-import { Plus, Zap, Trash2, Power } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Zap, Trash2, Power, Pencil, X, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {Card, CardContent} from "@/components/ui/card";
-import {Badge} from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
+import { toast } from "sonner";
 
 interface Rule {
   id: number;
   name: string;
   keyword: string;
   matchType: string;
+  replyType: string;
   replyContent: string;
+  deviceId: number | null;
   isActive: boolean;
+  priority: number;
 }
 
-const mockRules: Rule[] = [
-  { id: 1, name: "Salam", keyword: "halo,hi,hey", matchType: "contains", replyContent: "Halo! Ada yang bisa kami bantu?", isActive: true },
-  { id: 2, name: "Harga", keyword: "harga,price", matchType: "contains", replyContent: "Silakan cek katalog kami di wagataway.com/katalog", isActive: true },
-  { id: 3, name: "Jam Operasional", keyword: "jam,buka", matchType: "contains", replyContent: "Kami buka Senin-Jumat, 08:00-17:00 WIB", isActive: false },
-];
+interface Device {
+  id: number;
+  name: string;
+}
+
+const matchTypeLabels: Record<string, string> = {
+  contains: "Mengandung",
+  exact: "Persis sama",
+  startsWith: "Diawali",
+};
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative bg-card text-card-foreground border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card rounded-t-xl">
+          <h3 className="font-semibold">{title}</h3>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Tutup">
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+const emptyForm = { name: "", keyword: "", matchType: "contains", replyContent: "", deviceId: "" };
 
 export default function AutoReply() {
-  const [rules] = useState<Rule[]>(mockRules);
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Rule | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<Rule | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      apiGet<{ rules: Rule[] }>("/auto-reply"),
+      apiGet<{ devices: Device[] }>("/devices"),
+    ])
+      .then(([r, d]) => {
+        setRules(r.rules || []);
+        setDevices(d.devices || []);
+      })
+      .catch((e) => setError(e.message || "Gagal memuat data"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setShowForm(true);
+  };
+
+  const openEdit = (rule: Rule) => {
+    setEditing(rule);
+    setForm({
+      name: rule.name,
+      keyword: rule.keyword,
+      matchType: rule.matchType || "contains",
+      replyContent: rule.replyContent,
+      deviceId: rule.deviceId ? String(rule.deviceId) : "",
+    });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.name.trim() || !form.keyword.trim() || !form.replyContent.trim()) {
+      toast.error("Nama, keyword, dan isi balasan wajib diisi");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        keyword: form.keyword.trim(),
+        matchType: form.matchType,
+        replyContent: form.replyContent.trim(),
+        deviceId: form.deviceId ? Number(form.deviceId) : null,
+      };
+      if (editing) {
+        const res = await apiPut<{ rule: Rule }>(`/auto-reply/${editing.id}`, payload);
+        setRules((prev) => prev.map((r) => (r.id === editing.id ? res.rule : r)));
+        toast.success("Rule diperbarui");
+      } else {
+        const res = await apiPost<{ rule: Rule }>("/auto-reply", payload);
+        setRules((prev) => [res.rule, ...prev]);
+        toast.success("Rule ditambahkan");
+      }
+      setShowForm(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = async (rule: Rule) => {
+    const next = !rule.isActive;
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, isActive: next } : r)));
+    try {
+      const res = await apiFetch(`/auto-reply/${rule.id}/toggle`, { method: "PATCH" });
+      if (!res.ok) throw new Error((await res.json()).message || "Gagal mengubah status");
+      const data = await res.json();
+      setRules((prev) =>
+        prev.map((r) => (r.id === rule.id ? { ...r, isActive: data.isActive } : r))
+      );
+      toast.success(next ? "Rule diaktifkan" : "Rule dinonaktifkan");
+    } catch (e) {
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, isActive: rule.isActive } : r)));
+      toast.error(e instanceof Error ? e.message : "Gagal mengubah status");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    try {
+      await apiDelete(`/auto-reply/${deleting.id}`);
+      setRules((prev) => prev.filter((r) => r.id !== deleting.id));
+      toast.success("Rule dihapus");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const deviceName = (id: number | null) =>
+    id == null ? "Semua perangkat" : devices.find((d) => d.id === id)?.name || `Perangkat #${id}`;
 
   return (
     <div className="space-y-6">
@@ -29,49 +177,175 @@ export default function AutoReply() {
           <h2 className="text-lg font-semibold text-foreground">Auto Reply</h2>
           <p className="text-sm text-muted-foreground">Balas pesan otomatis berdasarkan keyword</p>
         </div>
-        <Button size="sm" className="gap-1.5">
+        <Button size="sm" className="gap-1.5" onClick={openAdd}>
           <Plus className="w-3.5 h-3.5" />
           Tambah Rule
         </Button>
       </div>
 
-      <div className="space-y-3">
-        {rules.map((rule) => (
-          <Card key={rule.id}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center mt-0.5">
-                    <Zap className="w-4 h-4 text-foreground" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-foreground">{rule.name}</p>
-                      <Badge variant={rule.isActive ? "default" : "outline"} className="text-[10px]">
-                        {rule.isActive ? "Aktif" : "Nonaktif"}
-                      </Badge>
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 rounded-lg bg-secondary animate-pulse" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-border p-8 text-center space-y-3">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+          </Button>
+        </div>
+      ) : rules.length === 0 ? (
+        <div className="rounded-lg border border-border p-8 text-center">
+          <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
+          <p className="text-sm font-medium mt-2">Belum ada rule</p>
+          <p className="text-xs text-muted-foreground mt-1">Tambah rule pertama untuk mulai membalas otomatis</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rules.map((rule) => (
+            <Card key={rule.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center mt-0.5 shrink-0">
+                      <Zap className="w-4 h-4 text-foreground" />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Keyword: <span className="font-mono">{rule.keyword}</span> ({rule.matchType})
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1 border-l-2 border-border pl-2">
-                      {rule.replyContent}
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-foreground">{rule.name}</p>
+                        <Badge variant={rule.isActive ? "default" : "outline"} className="text-[10px]">
+                          {rule.isActive ? "Aktif" : "Nonaktif"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Keyword: <span className="font-mono">{rule.keyword}</span> (
+                        {matchTypeLabels[rule.matchType] || rule.matchType}) · {deviceName(rule.deviceId)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 border-l-2 border-border pl-2 line-clamp-2">
+                        {rule.replyContent}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => toggle(rule)}
+                      aria-label={rule.isActive ? "Nonaktifkan" : "Aktifkan"}
+                      title={rule.isActive ? "Nonaktifkan" : "Aktifkan"}
+                    >
+                      <Power className={`w-3.5 h-3.5 ${rule.isActive ? "text-green-600" : "text-muted-foreground"}`} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(rule)} aria-label="Edit">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => setDeleting(rule)}
+                      aria-label="Hapus"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                    <Power className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <Modal title={editing ? "Edit Rule" : "Tambah Rule"} onClose={() => setShowForm(false)}>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium">Nama rule</label>
+              <Input
+                className="mt-1"
+                placeholder="cth: Salam pembuka"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">Keyword (pisahkan koma)</label>
+              <Input
+                className="mt-1 font-mono"
+                placeholder="halo, hi, selamat pagi"
+                value={form.keyword}
+                onChange={(e) => setForm({ ...form, keyword: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium">Tipe kecocokan</label>
+                <select
+                  className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  value={form.matchType}
+                  onChange={(e) => setForm({ ...form, matchType: e.target.value })}
+                >
+                  <option value="contains">Mengandung keyword</option>
+                  <option value="exact">Persis sama</option>
+                  <option value="startsWith">Diawali keyword</option>
+                </select>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              <div>
+                <label className="text-xs font-medium">Perangkat</label>
+                <select
+                  className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  value={form.deviceId}
+                  onChange={(e) => setForm({ ...form, deviceId: e.target.value })}
+                >
+                  <option value="">Semua perangkat</option>
+                  {devices.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium">Isi balasan</label>
+              <textarea
+                className="mt-1 flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[100px]"
+                placeholder="Tulis balasan otomatis..."
+                value={form.replyContent}
+                onChange={(e) => setForm({ ...form, replyContent: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
+                Batal
+              </Button>
+              <Button onClick={save} disabled={saving}>
+                {saving ? "Menyimpan..." : editing ? "Simpan" : "Tambah"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {deleting && (
+        <Modal title="Hapus Rule" onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground">
+            Hapus rule <span className="font-semibold text-foreground">"{deleting.name}"</span>? Tindakan ini
+            tidak bisa dibatalkan.
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleting(null)}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Hapus
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

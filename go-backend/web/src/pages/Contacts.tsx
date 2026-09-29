@@ -1,94 +1,450 @@
-import { Users, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Users } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {Card, CardContent} from "@/components/ui/card";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
-const mockContacts = [
-  { id: 1, name: "Ahmad Rizky", phone: "628123456789", tags: "pelanggan" },
-  { id: 2, name: "Siti Nurhaliza", phone: "628987654321", tags: "supplier" },
-  { id: 3, name: "Budi Setiawan", phone: "628111222333", tags: "pelanggan" },
-  { id: 4, name: "Dewi Lestari", phone: "628444555666", tags: "pelanggan" },
-  { id: 5, name: "Eko Prasetyo", phone: "628777888999", tags: "pelanggan" },
-];
+interface Contact {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  notes: string;
+  tags: string;
+  createdAt: string;
+}
+
+const emptyForm = { name: "", phone: "", email: "", notes: "", tags: "" };
+
+function tagList(tags: string): string[] {
+  if (!tags) return [];
+  const t = tags.trim();
+  if (t.startsWith("[")) {
+    try {
+      const a = JSON.parse(t);
+      if (Array.isArray(a)) return a.map(String).filter(Boolean);
+    } catch {
+      /* fall through */
+    }
+  }
+  return t.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative bg-card text-card-foreground border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-secondary"
+            aria-label="Tutup"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function Contacts() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Contact | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [deleting, setDeleting] = useState<Contact | null>(null);
+
+  const firstRun = useRef(true);
+
+  const load = async (q: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiGet<{ contacts: Contact[]; total: number }>(
+        `/contacts?search=${encodeURIComponent(q)}&limit=100`
+      );
+      setContacts(res.contacts || []);
+      setTotal(res.total ?? (res.contacts || []).length);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal memuat kontak");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      load("");
+      return;
+    }
+    const t = setTimeout(() => load(search), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setShowForm(true);
+  };
+
+  const openEdit = (c: Contact) => {
+    setEditing(c);
+    setForm({
+      name: c.name || "",
+      phone: c.phone || "",
+      email: c.email || "",
+      notes: c.notes || "",
+      tags: Array.isArray(tagList(c.tags)) ? tagList(c.tags).join(", ") : c.tags || "",
+    });
+    setShowForm(true);
+  };
+
+  const saveContact = async () => {
+    if (!form.name.trim() || !form.phone.trim()) {
+      toast.error("Nama dan nomor wajib diisi");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editing) {
+        await apiPut(`/contacts/${editing.id}`, form);
+        toast.success("Kontak diperbarui");
+      } else {
+        await apiPost("/contacts", form);
+        toast.success("Kontak ditambahkan");
+      }
+      setShowForm(false);
+      setEditing(null);
+      setForm(emptyForm);
+      load(search);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menyimpan kontak");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    try {
+      await apiDelete(`/contacts/${deleting.id}`);
+      toast.success("Kontak dihapus");
+      setDeleting(null);
+      load(search);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus kontak");
+    }
+  };
+
+  const doImport = async () => {
+    const lines = importText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const parsed: { name: string; phone: string; email?: string }[] = [];
+    for (const line of lines) {
+      const parts = line.split(",").map((p) => p.trim());
+      if (parts.length >= 2 && parts[0] && parts[1]) {
+        const item: { name: string; phone: string; email?: string } = {
+          name: parts[0],
+          phone: parts[1],
+        };
+        if (parts[2]) item.email = parts[2];
+        parsed.push(item);
+      }
+    }
+    if (parsed.length === 0) {
+      toast.error("Tidak ada baris valid. Format: nama,nomor[,email]");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await apiPost<{ imported: number; message: string }>(
+        "/contacts/import",
+        { contacts: parsed }
+      );
+      toast.success(res.message || `${res.imported} kontak diimpor`);
+      setShowImport(false);
+      setImportText("");
+      load(search);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal mengimpor kontak");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-4 sm:space-y-6"> {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Kontak</h2>
+          <h1 className="text-xl sm:text-2xl font-bold">Kontak</h1>
           <p className="text-sm text-muted-foreground">
-            {mockContacts.length} kontak tersimpan
+            {total} kontak tersimpan
           </p>
         </div>
-        <Button size="sm" className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" />
-          Tambah Kontak
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5">
+            <Upload className="w-4 h-4" />
+            Import
+          </Button>
+          <Button onClick={openAdd} className="gap-1.5">
+            <Plus className="w-4 h-4" />
+            Tambah Kontak
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input placeholder="Cari kontak..." className="pl-9" />
+        <Input
+          placeholder="Cari nama atau nomor..."
+          className="pl-9"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      {/* Contact List */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto"><table className="w-full min-w-[640px]">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                  Nama
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                  Nomor
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                  Tag
-                </th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockContacts.map((contact) => (
-                <tr
-                  key={contact.id}
-                  className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors"
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                        <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground">
-                        {contact.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className="text-sm text-muted-foreground font-mono">
-                      {contact.phone}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className="text-xs px-2 py-0.5 rounded-full border border-border text-muted-foreground">
-                      {contact.tags}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        </CardContent>
-      </Card>
+      {/* Content */}
+      {loading ? (
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-10 rounded-md bg-secondary animate-pulse" />
+            ))}
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <Button variant="outline" onClick={() => load(search)} className="gap-1.5">
+              <RefreshCw className="w-4 h-4" />
+              Coba lagi
+            </Button>
+          </CardContent>
+        </Card>
+      ) : contacts.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <Users className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+            <p className="font-medium mb-1">
+              {search ? "Tidak ada kontak yang cocok" : "Belum ada kontak"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {search
+                ? "Coba kata kunci lain"
+                : "Tambahkan kontak pertama Anda dengan tombol di atas"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
+                      Nama
+                    </th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
+                      Nomor
+                    </th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
+                      Email
+                    </th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
+                      Tag
+                    </th>
+                    <th className="w-24"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contacts.map((c) => (
+                    <tr
+                      key={c.id}
+                      className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors"
+                    >
+                      <td className="px-5 py-3 font-medium">{c.name}</td>
+                      <td className="px-5 py-3 text-sm text-muted-foreground">{c.phone}</td>
+                      <td className="px-5 py-3 text-sm text-muted-foreground">
+                        {c.email || "-"}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {tagList(c.tags).map((t) => (
+                            <span
+                              key={t}
+                              className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEdit(c)}
+                            aria-label={`Edit ${c.name}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleting(c)}
+                            aria-label={`Hapus ${c.name}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add/Edit dialog */}
+      {showForm && (
+        <Modal
+          title={editing ? "Edit Kontak" : "Tambah Kontak"}
+          onClose={() => setShowForm(false)}
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Nama *</label>
+              <Input
+                placeholder="Nama kontak"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Nomor WhatsApp *</label>
+              <Input
+                placeholder="62812xxxxxxx"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Email</label>
+              <Input
+                type="email"
+                placeholder="email@contoh.com"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Tag (pisahkan dengan koma)
+              </label>
+              <Input
+                placeholder="pelanggan, vip"
+                value={form.tags}
+                onChange={(e) => setForm({ ...form, tags: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Catatan</label>
+              <Input
+                placeholder="Catatan tambahan"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setShowForm(false)}>
+                Batal
+              </Button>
+              <Button onClick={saveContact} disabled={saving}>
+                {saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Import dialog */}
+      {showImport && (
+        <Modal title="Import Kontak" onClose={() => setShowImport(false)}>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Satu kontak per baris dengan format:{" "}
+              <code className="bg-secondary px-1.5 py-0.5 rounded text-xs">
+                nama,nomor[,email]
+              </code>
+            </p>
+            <textarea
+              className="w-full min-h-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder={"Budi Santoso,6281234567890\nSiti Aminah,6289876543210,siti@contoh.com"}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowImport(false)}>
+                Batal
+              </Button>
+              <Button onClick={doImport} disabled={saving}>
+                {saving ? "Mengimpor..." : "Import"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirm */}
+      {deleting && (
+        <Modal title="Hapus Kontak" onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground mb-5">
+            Hapus kontak <span className="font-medium text-foreground">{deleting.name}</span>{" "}
+            ({deleting.phone})? Tindakan ini tidak bisa dibatalkan.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setDeleting(null)}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Hapus
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

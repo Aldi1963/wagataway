@@ -79,7 +79,7 @@ func updateLink(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&link).Updates(req)
+		db.Model(&link).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"link": link})
 	}
 }

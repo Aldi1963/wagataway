@@ -64,7 +64,7 @@ func updateContactGroup(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&group).Updates(req)
+		db.Model(&group).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"group": group})
 	}
 }

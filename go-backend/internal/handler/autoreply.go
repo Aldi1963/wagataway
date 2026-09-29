@@ -94,7 +94,7 @@ func updateAutoReply(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		db.Model(&rule).Updates(req)
+		db.Model(&rule).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"rule": rule, "message": "Diperbarui"})
 	}
 }
@@ -122,7 +122,8 @@ func toggleAutoReply(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Rule tidak ditemukan"})
 			return
 		}
-		db.Model(&rule).Update("is_active", !rule.IsActive)
-		c.JSON(http.StatusOK, gin.H{"isActive": !rule.IsActive})
+		newVal := !rule.IsActive
+		db.Model(&rule).Update("is_active", newVal)
+		c.JSON(http.StatusOK, gin.H{"isActive": newVal})
 	}
 }

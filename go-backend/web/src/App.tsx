@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Toaster } from "sonner";
 
 // ── Lazy Pages ────────────────────────────────────────────────────────────────
 const Login = lazy(() => import("@/pages/Login"));
@@ -143,6 +144,7 @@ export default function App() {
         <AuthProvider>
           <WouterRouter>
             <AppRouter />
+            <Toaster position="top-center" richColors />
           </WouterRouter>
         </AuthProvider>
       </QueryClientProvider>

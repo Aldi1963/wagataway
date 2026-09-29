@@ -21,6 +21,10 @@ const routeLabels: Record<string, string> = {
   "/billing": "Langganan",
   "/settings": "Pengaturan",
   "/profile": "Profil",
+  "/templates": "Templates",
+  "/contact-groups": "Grup Kontak",
+  "/blacklist": "Blacklist",
+  "/webhook": "Webhook",
 };
 
 interface TopBarProps {
