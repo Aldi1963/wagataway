@@ -27,7 +27,6 @@ import {
   ChevronDown,
   X,
   KeyRound,
-  History,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -94,10 +93,7 @@ const sections: NavSection[] = [
   },
 ];
 
-const allItems: NavItem[] = sections.flatMap((s) => s.items);
-
 const STORAGE_KEY = "wag-sidebar-sections";
-const FREQ_KEY = "wag-sidebar-freq";
 
 function isItemActive(location: string, href: string) {
   return location === href || (href !== "/" && location.startsWith(href));
@@ -119,34 +115,6 @@ function loadOpenSections(): string[] {
   return sections.map((s) => s.label);
 }
 
-interface FreqEntry {
-  count: number;
-  last: number;
-}
-
-function loadFreq(): Record<string, FreqEntry> {
-  try {
-    const raw = localStorage.getItem(FREQ_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") return parsed;
-    }
-  } catch {
-    // abaikan
-  }
-  return {};
-}
-
-function topFreqItems(): NavItem[] {
-  const freq = loadFreq();
-  return Object.entries(freq)
-    .filter(([href]) => href !== "/" && allItems.some((i) => i.href === href))
-    .sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last)
-    .slice(0, 3)
-    .map(([href]) => allItems.find((i) => i.href === href))
-    .filter((i): i is NavItem => Boolean(i));
-}
-
 function badgeColorFor(href: string): string {
   // Chat belum dibaca = merah; peringatan lain = oranye
   return href === "/live-chat"
@@ -161,7 +129,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [connectedCount, setConnectedCount] = useState(0);
   const [devicesLoaded, setDevicesLoaded] = useState(false);
-  const [freqItems, setFreqItems] = useState<NavItem[]>([]);
 
   // Simpan state buka/tutup ke localStorage
   useEffect(() => {
@@ -183,11 +150,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       );
     }
   }, [location]);
-
-  // Muat menu "Sering dibuka" sekali saat mount
-  useEffect(() => {
-    setFreqItems(topFreqItems());
-  }, []);
 
   // Fetch badge counter + status perangkat sekali saat mount; gagal = diam
   useEffect(() => {
@@ -247,20 +209,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
     );
   };
 
-  const trackVisit = (href: string) => {
-    try {
-      const freq = loadFreq();
-      const e = freq[href] || { count: 0, last: 0 };
-      e.count += 1;
-      e.last = Date.now();
-      freq[href] = e;
-      localStorage.setItem(FREQ_KEY, JSON.stringify(freq));
-      setFreqItems(topFreqItems());
-    } catch {
-      // abaikan
-    }
-  };
-
   const renderItem = (item: NavItem, hideLabelOnCollapsed: boolean) => {
     const isActive = isItemActive(location, item.href);
     const badge = badges[item.href] || 0;
@@ -268,18 +216,17 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       <Link
         key={item.href}
         href={item.href}
-        onClick={() => trackVisit(item.href)}
         className={cn(
           "relative flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
           isActive
-            ? "bg-white/10 text-white font-semibold"
-            : "text-white/60 hover:text-white hover:bg-white/5"
+            ? "bg-accent text-accent-foreground font-semibold"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
         {isActive && (
           <span
             aria-hidden
-            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white"
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-primary"
           />
         )}
         <item.icon className="w-4 h-4 shrink-0" />
@@ -315,33 +262,35 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col bg-sidebar-bg text-sidebar-foreground border-r border-sidebar-border",
+        "flex h-screen flex-col bg-card text-foreground border-r border-border",
         // Mobile: slide-over drawer
         "fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
+        // Safe-area bawah agar tidak tertutup tombol navigasi HP; desktop tidak berubah
+        "pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:pb-0",
         // Desktop: static sidebar, collapsible
         "lg:static lg:z-auto lg:translate-x-0",
         collapsed ? "lg:w-16" : "lg:w-60"
       )}
     >
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-sidebar-border shrink-0">
+      <div className="h-14 flex items-center px-4 border-b border-border shrink-0">
         <span
           className={cn(
-            "text-base font-semibold tracking-tight text-white",
+            "text-base font-semibold tracking-tight text-foreground",
             collapsed && "lg:hidden"
           )}
         >
           WaGataway
         </span>
         {collapsed && (
-          <span className="hidden lg:block text-base font-bold text-white mx-auto">W</span>
+          <span className="hidden lg:block text-base font-bold text-foreground mx-auto">W</span>
         )}
         {/* Close button — mobile only */}
         <button
           onClick={onClose}
           aria-label="Tutup menu"
-          className="ml-auto p-2 -mr-2 rounded-md text-white/60 hover:text-white hover:bg-white/5 lg:hidden"
+          className="ml-auto p-2 -mr-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent lg:hidden"
         >
           <X className="w-5 h-5" />
         </button>
@@ -355,7 +304,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
             <div key={section.label}>
               <p
                 className={cn(
-                  "px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/30",
+                  "px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60",
                   "lg:hidden"
                 )}
               >
@@ -367,19 +316,8 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
             </div>
           ))
         ) : (
-          // Mode normal: grup "Sering dibuka" + accordion collapsible per section
+          // Mode normal: accordion collapsible per section
           <>
-            {freqItems.length > 0 && (
-              <div>
-                <p className="px-3 mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
-                  <History className="w-3 h-3" />
-                  Sering dibuka
-                </p>
-                <div className="space-y-0.5">
-                  {freqItems.map((item) => renderItem(item, false))}
-                </div>
-              </div>
-            )}
             {sections.map((section) => {
               const isOpen = openSections.includes(section.label);
               return (
@@ -392,7 +330,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
                       e.stopPropagation();
                       toggleSection(section.label);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-1.5 mb-1 rounded-md text-[10px] font-semibold uppercase tracking-wider text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-1.5 mb-1 rounded-md text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors"
                   >
                     <span>{section.label}</span>
                     <ChevronDown
@@ -415,29 +353,26 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       </nav>
 
       {/* Status perangkat mini + profil — sembunyi saat collapsed kecuali avatar */}
-      <div className="shrink-0 border-t border-sidebar-border px-2 pt-2 pb-1 space-y-1">
+      <div className="shrink-0 border-t border-border px-2 pt-2 pb-1 space-y-1">
         {devicesLoaded && !collapsed && (
           <Link
             href="/devices"
-            onClick={() => {
-              trackVisit("/devices");
-              onClose();
-            }}
-            className="flex items-center gap-2.5 rounded-lg bg-white/5 px-3 py-2.5 transition-colors hover:bg-white/10"
+            onClick={onClose}
+            className="flex items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 transition-colors hover:bg-accent"
           >
             <span
               className={cn(
                 "h-2 w-2 shrink-0 rounded-full",
-                connectedCount > 0 ? "bg-green-500" : "bg-red-500"
+                connectedCount > 0 ? "bg-success" : "bg-destructive"
               )}
             />
             <span className="min-w-0">
-              <span className="block truncate text-xs font-medium text-white">
+              <span className="block truncate text-xs font-medium text-foreground">
                 {connectedCount > 0
                   ? `${connectedCount} terhubung`
                   : "Tidak ada yang terhubung"}
               </span>
-              <span className="block text-[10px] text-white/40">
+              <span className="block text-[10px] text-muted-foreground">
                 Perangkat WhatsApp
               </span>
             </span>
@@ -446,24 +381,21 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
         <Link
           href="/profile"
           aria-label="Profil saya"
-          onClick={() => {
-            trackVisit("/profile");
-            onClose();
-          }}
+          onClick={onClose}
           className={cn(
-            "flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-white/5",
+            "flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-accent",
             collapsed && "justify-center"
           )}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-black">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
             {initials}
           </span>
           {!collapsed && (
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-medium text-white">
+              <span className="block truncate text-xs font-medium text-foreground">
                 {user?.name || "User"}
               </span>
-              <span className="mt-0.5 inline-block rounded-full bg-white/10 px-1.5 py-px text-[10px] capitalize text-white/70">
+              <span className="mt-0.5 inline-block rounded-full bg-muted px-1.5 py-px text-[10px] capitalize text-muted-foreground">
                 {user?.plan || "free"}
               </span>
             </span>
@@ -473,17 +405,17 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
 
       {/* Meter kuota — desktop/mobile, sembunyi saat collapsed */}
       {!collapsed && (
-        <div className="p-2 border-t border-sidebar-border shrink-0">
+        <div className="p-2 border-t border-border shrink-0">
           <QuotaMeter collapsed={false} />
         </div>
       )}
 
       {/* Collapse Toggle — desktop only */}
-      <div className="p-2 border-t border-sidebar-border hidden lg:block">
+      <div className="p-2 border-t border-border hidden lg:block">
         <button
           onClick={onToggle}
           aria-label={collapsed ? "Buka sidebar" : "Tutup sidebar"}
-          className="w-full flex items-center justify-center py-2 rounded-md text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+          className="w-full flex items-center justify-center py-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
           {collapsed ? (
             <ChevronRight className="w-4 h-4" />

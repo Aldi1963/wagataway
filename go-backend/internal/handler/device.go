@@ -37,6 +37,26 @@ func listDevices(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// sentCount per device — satu query GROUP BY (hindari N+1)
+		type sentAgg struct {
+			DeviceID uint
+			Count    int64
+		}
+		var aggs []sentAgg
+		if err := db.Model(&models.Message{}).
+			Select("device_id, COUNT(*) AS count").
+			Where("user_id = ?", userID).
+			Group("device_id").
+			Scan(&aggs).Error; err == nil {
+			m := make(map[uint]int64, len(aggs))
+			for _, a := range aggs {
+				m[a.DeviceID] = a.Count
+			}
+			for i := range devices {
+				devices[i].SentCount = m[devices[i].ID]
+			}
+		}
+
 		c.JSON(http.StatusOK, gin.H{"devices": devices})
 	}
 }
@@ -98,6 +118,9 @@ func updateDevice(db *gorm.DB) gin.HandlerFunc {
 			Name       *string `json:"name"`
 			AutoOnline *bool   `json:"autoOnline"`
 			WebhookURL *string `json:"webhookUrl"`
+			ReadReceipts    *bool   `json:"readReceipts"`
+			RejectCall      *bool   `json:"rejectCall"`
+			TypingIndicator *bool   `json:"typingIndicator"`
 			MaxRetries *int    `json:"maxRetries"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -114,6 +137,15 @@ func updateDevice(db *gorm.DB) gin.HandlerFunc {
 		}
 		if req.WebhookURL != nil {
 			updates["webhook_url"] = *req.WebhookURL
+		}
+		if req.ReadReceipts != nil {
+			updates["read_receipts"] = *req.ReadReceipts
+		}
+		if req.RejectCall != nil {
+			updates["reject_call"] = *req.RejectCall
+		}
+		if req.TypingIndicator != nil {
+			updates["typing_indicator"] = *req.TypingIndicator
 		}
 		if req.MaxRetries != nil {
 			updates["max_retries"] = *req.MaxRetries

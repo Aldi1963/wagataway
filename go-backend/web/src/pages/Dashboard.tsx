@@ -1,104 +1,230 @@
-import { useEffect, useState } from "react";
-import { Smartphone, Send, Users, BarChart3, RefreshCw } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "wouter";
+import { toast } from "sonner";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-} from "recharts";
+  Smartphone,
+  Megaphone,
+  Star,
+  MessageSquare,
+  Plus,
+  QrCode,
+  Trash2,
+  WifiOff,
+  X,
+  RefreshCw,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { apiGet } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
 import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
 
-interface Overview {
-  totalMessages: number;
-  todayMessages: number;
-  sentMessages: number;
-  failedMessages: number;
-  totalContacts: number;
-  activeDevices: number;
-  deliveryRate: number;
-}
+const NAVY = "#243370";
 
-interface StatsOverview {
-  messagesPerDay: { date: string; count: number }[];
-  messagesByStatus: Record<string, number>;
-  devicesByStatus: Record<string, number>;
-  totals: { contacts: number; devices: number; messages: number };
-}
-
-interface Message {
+interface Device {
   id: number;
-  to: string;
-  content: string;
-  status: string;
-  createdAt: string;
+  name: string;
+  phone: string;
+  status: "connected" | "connecting" | "disconnected";
+  webhookUrl: string;
+  autoOnline: boolean;
+  readReceipts: boolean;
+  rejectCall: boolean;
+  typingIndicator: boolean;
+  sentCount: number;
 }
 
-interface DailyStat {
-  date: string;
-  sent: number;
-  failed: number;
+interface Plan {
+  slug: string;
+  name: string;
+  maxDevices: number;
 }
 
-function fmtDay(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+interface Campaign {
+  id: number;
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "baru saja";
-  if (mins < 60) return mins + " menit lalu";
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return hours + " jam lalu";
-  const days = Math.floor(hours / 24);
-  return days + " hari lalu";
+type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator";
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold">{title}</h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onClose}
+            aria-label="Tutup"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
 }
 
-const statusLabel: Record<string, string> = {
-  pending: "Menunggu",
-  sent: "Terkirim",
-  delivered: "Sampai",
-  read: "Dibaca",
-  failed: "Gagal",
-};
+function Toggle({
+  checked,
+  onToggle,
+  disabled,
+  label,
+}: {
+  checked: boolean;
+  onToggle: (v: boolean) => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onToggle(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? "bg-primary" : "bg-muted"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-4" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
 
-const deviceStatusLabel: Record<string, string> = {
-  connected: "Terhubung",
-  connecting: "Menghubungkan",
-  disconnected: "Terputus",
-};
+function StatusBadge({ status }: { status: string }) {
+  if (status === "connected")
+    return (
+      <Badge className="bg-primary text-primary-foreground hover:bg-primary whitespace-nowrap">
+        Terhubung
+      </Badge>
+    );
+  if (status === "connecting")
+    return (
+      <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/15 border border-amber-500/30 whitespace-nowrap">
+        Menghubungkan
+      </Badge>
+    );
+  return <Badge variant="secondary" className="whitespace-nowrap">Terputus</Badge>;
+}
+
+function StatCard({
+  label,
+  icon: Icon,
+  tile,
+  loading,
+  children,
+}: {
+  label: string;
+  icon: typeof Smartphone;
+  tile: string;
+  loading: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-4">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: tile }}
+          >
+            <Icon className="w-7 h-7 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {label}
+            </p>
+            {loading ? (
+              <div className="mt-1 space-y-1.5">
+                <div className="h-8 w-20 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+              </div>
+            ) : (
+              children
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const MAX_TABLE_ROWS = 5;
 
 export default function Dashboard() {
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [stats, setStats] = useState<StatsOverview | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { user } = useAuth();
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
+  const [campaignCount, setCampaignCount] = useState(0);
+  const [messagesTotal, setMessagesTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [daily, setDaily] = useState<DailyStat[]>([]);
-  const [dailyLoading, setDailyLoading] = useState(true);
-  const [dailyError, setDailyError] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  const [toggling, setToggling] = useState<Record<string, boolean>>({});
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const [qrDevice, setQrDevice] = useState<Device | null>(null);
+  const [qrCode, setQrCode] = useState("");
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
+
+  const [deleting, setDeleting] = useState<Device | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
+
+  const loadDevices = () => {
+    return apiGet<{ devices: Device[] }>("/devices")
+      .then((res) => setDevices(res.devices || []))
+      .catch(() => setDevices([]));
+  };
 
   const load = () => {
     setLoading(true);
     setError(null);
     Promise.all([
-      apiGet<Overview>("/analytics/overview"),
-      apiGet<{ messages: Message[] }>("/messages"),
-      apiGet<StatsOverview>("/stats/overview").catch(() => null),
+      loadDevices(),
+      apiGet<{ plans: Plan[] }>("/public/plans")
+        .then((res) => res.plans || [])
+        .catch(() => [] as Plan[]),
+      apiGet<{ campaigns: Campaign[] }>("/drip")
+        .then((res) => (res.campaigns || []).length)
+        .catch(() => 0),
+      apiGet<{ total: number }>("/messages")
+        .then((res) => (typeof res.total === "number" ? res.total : null))
+        .catch(() => null),
     ])
-      .then(([ov, msgRes, st]) => {
-        setOverview(ov);
-        setMessages((msgRes.messages || []).slice(0, 5));
-        setStats(st);
+      .then(([, plans, campCount, msgTotal]) => {
+        const planKey = (user?.plan || "").toLowerCase();
+        const match = plans.find(
+          (p) =>
+            p.slug.toLowerCase() === planKey || p.name.toLowerCase() === planKey
+        );
+        setDeviceLimit(match ? match.maxDevices : null);
+        setCampaignCount(campCount);
+        setMessagesTotal(msgTotal);
       })
       .catch((e) => setError(e.message || "Gagal memuat data"))
       .finally(() => setLoading(false));
@@ -107,83 +233,162 @@ export default function Dashboard() {
   useEffect(load, []);
 
   useEffect(() => {
-    apiGet<{ stats: DailyStat[] }>("/analytics/messages")
-      .then((res) => setDaily(res.stats || []))
-      .catch(() => setDailyError(true))
-      .finally(() => setDailyLoading(false));
-  }, []);
+    if (loading || isOnboardingDone()) return;
+    if (devices.length === 0) setShowOnboarding(true);
+  }, [loading, devices]);
 
+  // Polling status saat dialog QR terbuka
   useEffect(() => {
-    if (isOnboardingDone()) return;
-    apiGet<{ devices: unknown[] }>("/devices")
-      .then((res) => {
-        if ((res.devices || []).length === 0) setShowOnboarding(true);
-      })
-      .catch(() => {
-        /* abaikan — wizard tidak tampil */
+    if (!qrDevice) return;
+    const startedAt = Date.now();
+    const iv = setInterval(async () => {
+      if (Date.now() - startedAt > 60000) {
+        clearInterval(iv);
+        toast.error("Waktu tunggu habis, silakan coba hubungkan lagi");
+        setQrDevice(null);
+        return;
+      }
+      try {
+        const s = await apiGet<{ status: string }>(
+          `/devices/${qrDevice.id}/status`
+        );
+        if (s.status === "connected") {
+          clearInterval(iv);
+          toast.success("Perangkat terhubung");
+          setQrDevice(null);
+          loadDevices();
+        } else {
+          const q = await apiGet<{ qr: string }>(
+            `/devices/${qrDevice.id}/qr`
+          ).catch(() => null);
+          if (q && q.qr) setQrCode((prev) => (q.qr !== prev ? q.qr : prev));
+        }
+      } catch {
+        /* abaikan, coba lagi di tick berikutnya */
+      }
+    }, 3000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrDevice]);
+
+  const handleToggle = async (d: Device, field: ToggleField, value: boolean) => {
+    const key = `${d.id}:${field}`;
+    if (toggling[key]) return;
+    const prev = devices;
+    setDevices(devices.map((x) => (x.id === d.id ? { ...x, [field]: value } : x)));
+    setToggling((t) => ({ ...t, [key]: true }));
+    try {
+      await apiPut(`/devices/${d.id}`, { [field]: value });
+    } catch {
+      setDevices(prev);
+      toast.error("Gagal memperbarui pengaturan");
+    } finally {
+      setToggling((t) => {
+        const n = { ...t };
+        delete n[key];
+        return n;
       });
-  }, []);
+    }
+  };
 
-  const cards = overview
-    ? [
-        {
-          label: "Total Pesan",
-          value: overview.totalMessages.toLocaleString("id-ID"),
-          icon: Send,
-        },
-        {
-          label: "Total Kontak",
-          value: overview.totalContacts.toLocaleString("id-ID"),
-          icon: Users,
-        },
-        {
-          label: "Perangkat Terhubung",
-          value: String(overview.activeDevices),
-          icon: Smartphone,
-        },
-        {
-          label: "Tingkat Terkirim",
-          value: Number(overview.deliveryRate).toFixed(1) + "%",
-          icon: BarChart3,
-        },
-      ]
-    : [];
+  const handleConnect = async (d: Device) => {
+    setQrDevice(d);
+    setQrCode("");
+    setQrError(null);
+    setQrLoading(true);
+    try {
+      await apiPost(`/devices/${d.id}/connect`);
+      await new Promise((r) => setTimeout(r, 1500));
+      const q = await apiGet<{ qr: string }>(`/devices/${d.id}/qr`).catch(
+        () => null
+      );
+      if (q && q.qr) setQrCode(q.qr);
+    } catch (e) {
+      setQrError(e instanceof Error ? e.message : "Gagal memulai koneksi");
+    } finally {
+      setQrLoading(false);
+    }
+  };
 
-  const perDay = (stats?.messagesPerDay || []).slice(-14);
-  const maxCount = Math.max(1, ...perDay.map((d) => d.count));
-  const deviceEntries = Object.entries(stats?.devicesByStatus || {});
+  const handleDisconnect = async (d: Device) => {
+    setBusyId(d.id);
+    try {
+      await apiPost(`/devices/${d.id}/disconnect`);
+      toast.success("Perangkat diputuskan");
+      loadDevices();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memutuskan perangkat");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    try {
+      await apiDelete(`/devices/${deleting.id}`);
+      toast.success("Perangkat dihapus");
+      setDeleting(null);
+      loadDevices();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus perangkat");
+    } finally {
+      setDeletingBusy(false);
+    }
+  };
+
+  const planName = user?.plan
+    ? user.plan.charAt(0).toUpperCase() + user.plan.slice(1)
+    : "-";
+  const visibleDevices = devices.slice(0, MAX_TABLE_ROWS);
 
   return (
     <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {loading
-          ? [0, 1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="p-5">
-                  <div className="h-4 w-4 rounded bg-muted animate-pulse" />
-                  <div className="mt-3 h-8 w-20 rounded bg-muted animate-pulse" />
-                  <div className="mt-2 h-3 w-24 rounded bg-muted animate-pulse" />
-                </CardContent>
-              </Card>
-            ))
-          : cards.map((stat) => (
-              <Card key={stat.label}>
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <stat.icon className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-2xl font-bold text-foreground tracking-tight">
-                      {stat.value}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {stat.label}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+      {/* Empat kartu statistik */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="Total Devices" icon={Smartphone} tile={NAVY} loading={loading}>
+          <p className="text-3xl font-bold text-foreground tracking-tight">
+            {devices.length}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Limit: {deviceLimit !== null ? deviceLimit : "-"}
+          </p>
+        </StatCard>
+
+        <StatCard label="Blast / Bulk" icon={Megaphone} tile="#1e2a5c" loading={loading}>
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            <span className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 text-[11px] font-semibold px-2 py-0.5">
+              0 Wait
+            </span>
+            <span
+              className="inline-flex items-center rounded-full text-[11px] font-semibold px-2 py-0.5"
+              style={{ backgroundColor: `${NAVY}1a`, color: NAVY }}
+            >
+              0 Sent
+            </span>
+            <span className="inline-flex items-center rounded-full bg-red-500/15 text-red-700 text-[11px] font-semibold px-2 py-0.5">
+              0 Fail
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {campaignCount} Campaigns
+          </p>
+        </StatCard>
+
+        <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading}>
+          <p className="text-3xl font-bold text-foreground tracking-tight">
+            {planName}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Exp: -</p>
+        </StatCard>
+
+        <StatCard label="Messages Sent" icon={MessageSquare} tile="#1a2a5e" loading={loading}>
+          <p className="text-3xl font-bold text-foreground tracking-tight">
+            {messagesTotal !== null ? messagesTotal.toLocaleString("id-ID") : "-"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">From histories</p>
+        </StatCard>
       </div>
 
       {/* Error */}
@@ -198,240 +403,178 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Chart + Device status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">
-              Pesan 14 Hari Terakhir
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-40 flex items-end gap-1.5">
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-t bg-muted animate-pulse"
-                    style={{ height: `${20 + ((i * 37) % 60)}%` }}
-                  />
-                ))}
-              </div>
-            ) : perDay.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-10 text-center">
-                Belum ada data statistik harian.
-              </p>
-            ) : (
-              <div>
-                <div className="h-40 flex items-end gap-1.5">
-                  {perDay.map((d) => (
-                    <div
-                      key={d.date}
-                      className="flex-1 flex flex-col items-center justify-end h-full group"
-                      title={`${d.date}: ${d.count} pesan`}
-                    >
-                      <span className="text-[9px] text-muted-foreground mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {d.count}
-                      </span>
-                      <div
-                        className="w-full rounded-t bg-primary/80 hover:bg-primary transition-colors min-h-[2px]"
-                        style={{ height: `${Math.max(3, (d.count / maxCount) * 100)}%` }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-1.5 mt-2">
-                  {perDay.map((d) => (
-                    <div key={d.date} className="flex-1 text-center">
-                      <span className="text-[8px] text-muted-foreground">
-                        {new Date(d.date + "T00:00:00").getDate()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">
-              Status Perangkat
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-8 rounded bg-muted animate-pulse" />
-                ))}
-              </div>
-            ) : deviceEntries.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                Belum ada data perangkat.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {deviceEntries.map(([status, count]) => (
-                  <div
-                    key={status}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          status === "connected"
-                            ? "bg-green-600"
-                            : status === "connecting"
-                              ? "bg-amber-500"
-                              : "bg-muted-foreground"
-                        }`}
-                      />
-                      <span className="text-sm text-foreground">
-                        {deviceStatusLabel[status] || status}
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      {count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Grafik pesan 7 hari (recharts) */}
+      {/* WhatsApp Accounts */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">
-            Pesan 7 Hari Terakhir
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dailyLoading ? (
-            <div className="h-48 rounded bg-muted animate-pulse" />
-          ) : dailyError ? (
-            <p className="text-sm text-muted-foreground py-10 text-center">
-              Gagal memuat grafik.
-            </p>
-          ) : daily.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-10 text-center">
-              Belum ada data pengiriman 7 hari terakhir.
-            </p>
-          ) : (
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={daily}
-                  margin={{ top: 4, right: 8, left: -8, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={fmtDay}
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={36}
-                  />
-                  <Tooltip
-                    labelFormatter={fmtDay}
-                    formatter={(value, name) => [
-                      Number(value).toLocaleString("id-ID"),
-                      name === "sent" ? "Terkirim" : "Gagal",
-                    ]}
-                    contentStyle={{
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="sent"
-                    name="sent"
-                    stroke="#059669"
-                    strokeWidth={2}
-                    fill="#059669"
-                    fillOpacity={0.15}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="failed"
-                    name="failed"
-                    stroke="#dc2626"
-                    strokeWidth={2}
-                    fill="#dc2626"
-                    fillOpacity={0.08}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent Messages */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">
-            Pesan Terakhir
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">
+              WhatsApp Accounts
+            </CardTitle>
+            <Link href="/devices">
+              <Button size="sm" className="gap-1.5">
+                <Plus className="w-4 h-4" /> Add Device
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 py-2">
-                  <div className="w-8 h-8 rounded-full bg-muted animate-pulse shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-32 rounded bg-muted animate-pulse" />
-                    <div className="h-3 w-full rounded bg-muted animate-pulse" />
-                  </div>
-                </div>
+                <div key={i} className="h-10 rounded bg-muted animate-pulse" />
               ))}
             </div>
-          ) : messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">
-              Belum ada pesan. Kirim pesan pertama dari menu Kirim Pesan.
-            </p>
+          ) : devices.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Belum ada perangkat terhubung.
+              </p>
+              <Link href="/devices">
+                <Button size="sm" className="mt-3 gap-1.5">
+                  <Plus className="w-4 h-4" /> Tambah Perangkat
+                </Button>
+              </Link>
+            </div>
           ) : (
-            <div className="space-y-0">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className="flex items-center justify-between py-3 border-b border-border last:border-0"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
-                      <Send className="w-3.5 h-3.5 text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground font-mono">
-                        {msg.to}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {msg.content}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <StatusDot status={msg.status} />
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {timeAgo(msg.createdAt)}
-                    </span>
-                  </div>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[920px]">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Number
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Webhook URL
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Read
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Reject Call
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Online
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Typing
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Sent
+                      </th>
+                      <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Status
+                      </th>
+                      <th className="py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleDevices.map((d) => (
+                      <tr
+                        key={d.id}
+                        className="border-b border-border last:border-0"
+                      >
+                        <td className="py-3 pr-4 font-mono text-[13px] text-foreground whitespace-nowrap">
+                          {d.phone || "-"}
+                        </td>
+                        <td
+                          className="py-3 pr-4 text-xs text-muted-foreground max-w-[160px] truncate"
+                          title={d.webhookUrl || ""}
+                        >
+                          {d.webhookUrl || "-"}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Toggle
+                            checked={!!d.readReceipts}
+                            label={`Read receipts ${d.name}`}
+                            disabled={!!toggling[`${d.id}:readReceipts`]}
+                            onToggle={(v) => handleToggle(d, "readReceipts", v)}
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Toggle
+                            checked={!!d.rejectCall}
+                            label={`Reject call ${d.name}`}
+                            disabled={!!toggling[`${d.id}:rejectCall`]}
+                            onToggle={(v) => handleToggle(d, "rejectCall", v)}
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Toggle
+                            checked={!!d.autoOnline}
+                            label={`Auto online ${d.name}`}
+                            disabled={!!toggling[`${d.id}:autoOnline`]}
+                            onToggle={(v) => handleToggle(d, "autoOnline", v)}
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Toggle
+                            checked={!!d.typingIndicator}
+                            label={`Typing indicator ${d.name}`}
+                            disabled={!!toggling[`${d.id}:typingIndicator`]}
+                            onToggle={(v) => handleToggle(d, "typingIndicator", v)}
+                          />
+                        </td>
+                        <td className="py-3 pr-4 text-foreground font-medium">
+                          {(d.sentCount ?? 0).toLocaleString("id-ID")}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={d.status} />
+                        </td>
+                        <td className="py-3 text-right whitespace-nowrap">
+                          {d.status === "connected" ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={busyId === d.id}
+                              onClick={() => handleDisconnect(d)}
+                              aria-label="Putuskan"
+                              title="Putuskan"
+                            >
+                              <WifiOff className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleConnect(d)}
+                              aria-label="Hubungkan"
+                              title="Hubungkan (QR)"
+                            >
+                              <QrCode className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => setDeleting(d)}
+                            aria-label="Hapus"
+                            title="Hapus"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {devices.length > MAX_TABLE_ROWS && (
+                <div className="mt-3 text-center">
+                  <Link
+                    href="/devices"
+                    className="text-sm text-primary hover:underline font-medium"
+                  >
+                    Lihat semua ({devices.length})
+                  </Link>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -445,25 +588,78 @@ export default function Dashboard() {
           }}
         />
       )}
-    </div>
-  );
-}
 
-function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    sent: "bg-foreground",
-    delivered: "bg-foreground",
-    read: "bg-foreground",
-    failed: "bg-destructive",
-    pending: "bg-muted-foreground",
-  };
+      {/* Dialog QR */}
+      {qrDevice && (
+        <Modal title={`Hubungkan ${qrDevice.name}`} onClose={() => setQrDevice(null)}>
+          <div className="flex flex-col items-center space-y-3">
+            {qrLoading && (
+              <p className="text-sm text-muted-foreground">Menyiapkan kode QR...</p>
+            )}
+            {!qrLoading && qrError && (
+              <>
+                <p className="text-sm text-destructive text-center">{qrError}</p>
+                <Button size="sm" variant="outline" onClick={() => handleConnect(qrDevice)}>
+                  Coba lagi
+                </Button>
+              </>
+            )}
+            {!qrLoading && !qrError && qrCode && (
+              <>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(
+                    qrCode
+                  )}`}
+                  alt="Kode QR WhatsApp"
+                  className="w-60 h-60 rounded-lg border border-border"
+                />
+                <p className="text-xs text-muted-foreground text-center">
+                  Pindai dengan WhatsApp di HP kamu.
+                  <br />
+                  Kode diperbarui otomatis, menunggu hingga 60 detik.
+                </p>
+              </>
+            )}
+            {!qrLoading && !qrError && !qrCode && (
+              <p className="text-sm text-muted-foreground">
+                Menunggu kode QR dari WhatsApp...
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
 
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className={`w-1.5 h-1.5 rounded-full ${colors[status] || colors.pending}`} />
-      <span className="text-[10px] text-muted-foreground">
-        {statusLabel[status] || status}
-      </span>
+      {/* Dialog konfirmasi hapus */}
+      {deleting && (
+        <Modal title="Hapus Perangkat" onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground">
+            Hapus perangkat{" "}
+            <span className="font-semibold text-foreground">{deleting.name}</span>
+            {deleting.phone ? (
+              <span className="font-mono"> ({deleting.phone})</span>
+            ) : null}
+            ? Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <div className="flex justify-end gap-2 mt-5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleting(null)}
+              disabled={deletingBusy}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deletingBusy}
+            >
+              {deletingBusy ? "Menghapus..." : "Hapus"}
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

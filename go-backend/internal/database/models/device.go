@@ -13,7 +13,11 @@ type Device struct {
 	Phone       string         `gorm:"size:20" json:"phone"`
 	Status      string         `gorm:"size:30;default:disconnected" json:"status"` // connected, connecting, disconnected
 	IsDefault   bool           `gorm:"default:false" json:"isDefault"`
-	AutoOnline  bool           `gorm:"default:false" json:"autoOnline"`
+	AutoOnline      bool           `gorm:"default:false" json:"autoOnline"`
+	ReadReceipts    bool           `gorm:"default:false" json:"readReceipts"`
+	RejectCall      bool           `gorm:"default:false" json:"rejectCall"`
+	TypingIndicator bool           `gorm:"default:false" json:"typingIndicator"`
+	SentCount       int64          `gorm:"-" json:"sentCount"`
 	WebhookURL  string         `gorm:"size:500" json:"webhookUrl"`
 	MaxRetries  int            `gorm:"default:3" json:"maxRetries"`
 	RetryDelay  int            `gorm:"default:5" json:"retryDelay"` // seconds
