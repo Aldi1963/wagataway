@@ -196,6 +196,7 @@ export default function Dashboard() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState("");
+  const [addWebhook, setAddWebhook] = useState("");
   const [savingAdd, setSavingAdd] = useState(false);
 
   const [editing, setEditing] = useState<Device | null>(null);
@@ -415,7 +416,7 @@ export default function Dashboard() {
     try {
       const created = await apiPost<{ device?: Device; id?: number }>(
         "/devices",
-        { name }
+        { name, webhookUrl: addWebhook.trim() }
       );
       const res = await apiGet<{ devices: Device[] }>("/devices");
       const list = res.devices || [];
@@ -423,6 +424,7 @@ export default function Dashboard() {
       toast.success("Perangkat ditambahkan");
       setShowAdd(false);
       setAddName("");
+      setAddWebhook("");
       const id = created.device?.id ?? created.id;
       const dev = id
         ? list.find((d) => d.id === id)
@@ -698,6 +700,20 @@ export default function Dashboard() {
                 onChange={(e) => setAddName(e.target.value)}
                 placeholder="cth: CS Bot"
                 maxLength={60}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAdd();
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">
+                Webhook URL <span className="text-muted-foreground">(opsional)</span>
+              </label>
+              <Input
+                value={addWebhook}
+                onChange={(e) => setAddWebhook(e.target.value)}
+                placeholder="cth: https://contoh.com/webhook"
+                maxLength={500}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAdd();
                 }}

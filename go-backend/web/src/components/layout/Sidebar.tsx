@@ -10,11 +10,10 @@ import {
   MessagesSquare,
   Clock,
   Link2,
-  Webhook,
   BarChart3,
   CreditCard,
   LayoutTemplate,
-  UserRound,
+  Settings,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -68,7 +67,6 @@ const sections: NavSection[] = [
     label: "Integrasi",
     items: [
       { label: "Links", href: "/links", icon: Link2 },
-      { label: "Webhook", href: "/webhook", icon: Webhook },
       { label: "API Developer", href: "/api-docs", icon: KeyRound },
     ],
   },
@@ -76,7 +74,7 @@ const sections: NavSection[] = [
     label: "Akun",
     items: [
       { label: "Langganan", href: "/billing", icon: CreditCard },
-      { label: "Profil", href: "/profile", icon: UserRound },
+      { label: "Setting", href: "/settings", icon: Settings },
     ],
   },
 ];
@@ -276,7 +274,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4" onClick={onClose}>
+      <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-4" onClick={onClose}>
         {collapsed ? (
           // Mode collapsed (ikon saja): tampilkan semua item langsung, tanpa accordion
           sections.map((section) => (

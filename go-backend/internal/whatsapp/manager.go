@@ -55,6 +55,10 @@ type Manager struct {
 	db           *gorm.DB
 	onMessage    func(deviceID, userID uint, msg *events.Message)
 	shuttingDown atomic.Bool
+	// Retry reconnect berulang dengan backoff: retryGen membatalkan loop lama,
+	// manualStop menandai device yang sengaja diputus / logout (jangan di-retry).
+	retryGen   map[uint]int
+	manualStop map[uint]bool
 }
 
 // NewManager creates a new WhatsApp session manager
@@ -67,6 +71,8 @@ func NewManager(sessionDir string, db *gorm.DB) *Manager {
 		sessions:   make(map[uint]*SessionState),
 		sessionDir: sessionDir,
 		db:         db,
+		retryGen:   make(map[uint]int),
+		manualStop: make(map[uint]bool),
 	}
 
 	// Auto-reconnect previously connected devices
@@ -84,6 +90,9 @@ func (m *Manager) SetMessageHandler(handler func(deviceID, userID uint, msg *eve
 func (m *Manager) Connect(deviceID, userID uint) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Pengguna (atau retry loop) meminta konek: batalkan tanda stop manual
+	delete(m.manualStop, deviceID)
 
 	// Check if already connecting/connected
 	if sess, exists := m.sessions[deviceID]; exists {
@@ -121,6 +130,12 @@ func (m *Manager) Disconnect(deviceID uint) {
 	if !exists {
 		return
 	}
+
+	// Disconnect manual: hentikan semua retry loop yang sedang berjalan
+	m.mu.Lock()
+	m.manualStop[deviceID] = true
+	m.retryGen[deviceID]++
+	m.mu.Unlock()
 
 	sess.mu.Lock()
 	if sess.Client != nil {
@@ -557,6 +572,8 @@ func (m *Manager) reconnectExisting(sess *SessionState, client *whatsmeow.Client
 		sess.Status = "disconnected"
 		sess.mu.Unlock()
 		m.db.Model(&models.Device{}).Where("id = ?", deviceID).Update("status", "disconnected")
+		// Jangan menyerah: coba lagi dengan backoff
+		go m.reconnectWithBackoff(deviceID, sess.UserID)
 		return
 	}
 
@@ -580,6 +597,49 @@ func (m *Manager) reconnectExisting(sess *SessionState, client *whatsmeow.Client
 	})
 
 	log.Info().Uint("deviceID", deviceID).Str("phone", phone).Msg("WhatsApp reconnected")
+}
+
+// reconnectWithBackoff mencoba menyambung ulang BERULANG dengan backoff
+// eksponensial (5 dtk, 10 dtk, 20 dtk, ... maks 5 mnt) sampai berhasil.
+// Berhenti bila: device terhubung, disconnect manual, logout (sesi invalid),
+// ada loop retry yang lebih baru, atau server shutdown.
+func (m *Manager) reconnectWithBackoff(deviceID, userID uint) {
+	m.mu.Lock()
+	m.retryGen[deviceID]++
+	gen := m.retryGen[deviceID]
+	m.mu.Unlock()
+
+	backoff := 5 * time.Second
+	const maxBackoff = 5 * time.Minute
+
+	stopped := func() bool {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		return m.retryGen[deviceID] != gen || m.manualStop[deviceID]
+	}
+
+	for {
+		if stopped() || m.shuttingDown.Load() {
+			return
+		}
+
+		time.Sleep(backoff)
+
+		if stopped() || m.shuttingDown.Load() {
+			return
+		}
+		if m.GetStatus(deviceID) == "connected" {
+			return
+		}
+
+		log.Info().Uint("deviceID", deviceID).Dur("backoff", backoff).Msg("Retrying WhatsApp connection")
+		m.Connect(deviceID, userID)
+
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
 }
 
 // handleEvent processes whatsmeow events
@@ -613,17 +673,20 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 		m.db.Model(&models.Device{}).Where("id = ?", sess.DeviceID).Update("status", "disconnected")
 		log.Warn().Uint("deviceID", sess.DeviceID).Msg("Disconnected from WhatsApp")
 
-		// Auto-reconnect after a delay
-		go func() {
-			time.Sleep(5 * time.Second)
-			m.Connect(sess.DeviceID, sess.UserID)
-		}()
+		// Auto-reconnect dengan retry berulang + backoff (bukan sekali coba)
+		go m.reconnectWithBackoff(sess.DeviceID, sess.UserID)
 
 	case *events.LoggedOut:
 		sess.mu.Lock()
 		sess.Status = "disconnected"
 		sess.Client = nil
 		sess.mu.Unlock()
+
+		// Sesi di-invalidasi WhatsApp: butuh scan QR ulang, jangan di-retry
+		m.mu.Lock()
+		m.manualStop[sess.DeviceID] = true
+		m.retryGen[sess.DeviceID]++
+		m.mu.Unlock()
 
 		m.db.Model(&models.Device{}).Where("id = ?", sess.DeviceID).Updates(map[string]interface{}{
 			"status": "disconnected",

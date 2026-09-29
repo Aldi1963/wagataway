@@ -31,12 +31,10 @@ const routeLabels: Record<string, string> = {
   "/analytics": "Analytics",
   "/anti-banned": "Anti-Banned",
   "/billing": "Langganan",
-  "/settings": "Pengaturan",
-  "/profile": "Profil",
+  "/settings": "Setting",
   "/templates": "Templates",
   "/contact-groups": "Grup Kontak",
   "/blacklist": "Blacklist",
-  "/webhook": "Webhook",
   "/api-docs": "API Developer",
   "/notifications": "Notifikasi",
 };
@@ -229,13 +227,8 @@ export function TopBar({ onMenu }: TopBarProps) {
                 {/* Menu */}
                 <div className="p-1.5">
                   <ProfileMenuItem
-                    icon={User}
-                    label="Profil saya"
-                    onClick={() => go("/profile")}
-                  />
-                  <ProfileMenuItem
                     icon={Settings}
-                    label="Pengaturan"
+                    label="Setting"
                     onClick={() => go("/settings")}
                   />
                   {user?.role === "admin" && (

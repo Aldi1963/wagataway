@@ -66,7 +66,8 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 		userID := middleware.GetUserID(c)
 
 		var req struct {
-			Name string `json:"name" binding:"required"`
+			Name       string `json:"name" binding:"required"`
+			WebhookURL string `json:"webhookUrl"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Nama perangkat wajib diisi", "code": "VALIDATION_ERROR"})
@@ -74,9 +75,10 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		device := models.Device{
-			UserID: userID,
-			Name:   req.Name,
-			Status: "disconnected",
+			UserID:     userID,
+			Name:       req.Name,
+			WebhookURL: req.WebhookURL,
+			Status:     "disconnected",
 		}
 
 		if err := db.Create(&device).Error; err != nil {

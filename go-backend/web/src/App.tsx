@@ -20,11 +20,9 @@ const LiveChat = lazy(() => import("@/pages/LiveChat"));
 const Links = lazy(() => import("@/pages/Links"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Billing = lazy(() => import("@/pages/Billing"));
-const Webhooks = lazy(() => import("@/pages/Webhooks"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
-const Profile = lazy(() => import("@/pages/Profile"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Landing = lazy(() => import("@/pages/Landing"));
 
@@ -155,9 +153,6 @@ function AppRouter() {
         <Route path="/billing">
           <ProtectedRoute><Billing /></ProtectedRoute>
         </Route>
-        <Route path="/webhook">
-          <ProtectedRoute><Webhooks /></ProtectedRoute>
-        </Route>
         <Route path="/api-docs">
           <ApiDocs />
         </Route>
@@ -165,7 +160,7 @@ function AppRouter() {
           <ProtectedRoute><Notifications /></ProtectedRoute>
         </Route>
         <Route path="/profile">
-          <ProtectedRoute><Profile /></ProtectedRoute>
+          <Redirect to="/settings" />
         </Route>
         <Route path="/settings">
           <ProtectedRoute><Settings /></ProtectedRoute>
