@@ -181,10 +181,10 @@ function HeroArt() {
 function Hero() {
   return (
     <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-20">
-      <div aria-hidden className="absolute -top-40 left-1/2 -translate-x-1/2 w-[135vw] max-w-[780px] aspect-square bg-slate-100 rounded-full" />
+      <div aria-hidden className="absolute -top-56 left-1/2 -translate-x-1/2 w-[200vw] max-w-[1100px] aspect-square bg-slate-100 rounded-full" />
       <div className="relative max-w-6xl mx-auto px-4 text-center">
         <Reveal>
-          <h1 className="text-6xl md:text-8xl font-extrabold tracking-tight text-[#1e2a5c] leading-none">
+          <h1 className="text-6xl md:text-8xl font-black tracking-tight text-[#1e2a5c] leading-none">
             CLIDI
           </h1>
           <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#1e2a5c] mt-3">
