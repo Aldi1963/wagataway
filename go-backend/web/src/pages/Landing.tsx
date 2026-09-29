@@ -97,10 +97,7 @@ function Navbar() {
     <header className={`fixed top-0 inset-x-0 z-50 transition-all ${scrolled ? "bg-white/90 backdrop-blur-md shadow-sm" : "bg-transparent"}`}>
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         <a href="#top" className="flex items-center gap-2">
-          <span className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center">
-            <Send className="w-5 h-5 text-white" />
-          </span>
-          <span className="text-lg font-extrabold tracking-tight text-slate-900">WaGataway</span>
+          <span className="text-xl font-extrabold tracking-tight text-emerald-600">WaGataway</span>
         </a>
         <nav className="hidden md:flex items-center gap-8">
           {navLinks.map((l) => (
@@ -171,17 +168,17 @@ function Hero() {
     <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-20">
       <div className="relative max-w-6xl mx-auto px-4">
         <Reveal>
-          <h1 className="text-7xl md:text-8xl font-extrabold tracking-tight text-[#1e2a5c] leading-none">
+          <h1 className="text-7xl md:text-8xl font-extrabold tracking-tight text-emerald-600 leading-none">
             CLIDI
           </h1>
-          <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#1e2a5c] mt-3">
+          <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-emerald-600 mt-3">
             WHATSAPP API
           </p>
           <p className="text-slate-600 text-lg mt-4">
             Kirim pesan WhatsApp secara otomatis.
           </p>
           <div className="mt-8">
-            <Link href="/register" className="inline-flex items-center gap-2 bg-[#1e2a5c] hover:bg-[#16224a] text-white font-semibold px-8 py-4 rounded-2xl transition-colors">
+            <Link href="/register" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-8 py-4 rounded-2xl transition-colors">
               <Send className="w-5 h-5" /> Coba Gratis
             </Link>
           </div>
@@ -693,7 +690,7 @@ function Harga() {
               Bulanan
             </button>
             <button onClick={() => setTahunan(true)} className={`px-5 py-2 rounded-full transition-all ${tahunan ? "bg-emerald-500 text-white shadow" : "text-slate-500"}`}>
-              Tahunan <span className="text-xs opacity-80">hemat 2 bulan</span>
+              Tahunan
             </button>
           </div>
         </Reveal>
@@ -702,24 +699,25 @@ function Harga() {
             const harga = tahunan ? p.harga * 10 : p.harga;
             return (
               <Reveal key={p.nama} delay={i * 60}>
-                <div className={`relative h-full rounded-2xl p-6 flex flex-col ${p.populer ? "bg-slate-900 text-white shadow-2xl lg:scale-105 border-2 border-emerald-400" : "bg-white border border-slate-200"}`}>
+                <div className={`relative h-full rounded-2xl p-6 flex flex-col bg-white ${p.populer ? "border-2 border-emerald-500 shadow-xl" : "border border-slate-200"}`}>
                   {p.populer && (
                     <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">PALING LARIS</span>
                   )}
-                  <h3 className={`font-extrabold text-lg ${p.populer ? "text-white" : "text-slate-900"}`}>{p.nama}</h3>
-                  <p className={`text-2xl font-extrabold mt-2 ${p.populer ? "text-emerald-400" : "text-emerald-600"}`}>{rp(harga)}</p>
-                  <p className={`text-xs mt-1 ${p.populer ? "text-slate-400" : "text-slate-400"}`}>{tahunan ? "per tahun" : "per bulan"}</p>
-                  <div className={`text-xs font-semibold mt-4 px-3 py-1.5 rounded-lg w-fit ${p.populer ? "bg-white/10 text-emerald-300" : "bg-emerald-50 text-emerald-700"}`}>
+                  <h3 className="font-extrabold text-lg text-slate-900 text-center">{p.nama}</h3>
+                  <p className="text-3xl font-extrabold mt-2 text-slate-900 text-center">{rp(harga)}</p>
+                  <p className="text-xs mt-1 text-slate-400 text-center">{tahunan ? "per tahun" : "per bulan"}</p>
+                  <p className="text-xs font-semibold mt-4 text-emerald-700 text-center">
                     {p.pesan} · {p.device} device
-                  </div>
-                  <ul className="mt-4 space-y-2 flex-1">
+                  </p>
+                  <hr className="my-4 border-slate-100" />
+                  <ul className="space-y-2 flex-1">
                     {p.fitur.map((f) => (
-                      <li key={f} className={`text-[13px] flex gap-2 ${p.populer ? "text-slate-300" : "text-slate-600"}`}>
+                      <li key={f} className="text-[13px] flex gap-2 text-slate-600">
                         <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {f}
                       </li>
                     ))}
                   </ul>
-                  <Link href="/register" className={`mt-6 text-center text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors ${p.populer ? "bg-emerald-500 hover:bg-emerald-400 text-white" : "bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700"}`}>
+                  <Link href="/register" className="mt-6 text-center text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors bg-emerald-500 hover:bg-emerald-600 text-white">
                     {p.harga === 0 ? "Mulai Gratis" : "Pilih Paket"}
                   </Link>
                 </div>
