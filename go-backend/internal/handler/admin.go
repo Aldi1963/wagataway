@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
@@ -26,6 +27,7 @@ func registerAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, w
 	rg.GET("/settings", adminGetSettings(db))
 	rg.PUT("/settings", adminUpdateSettings(db))
 	rg.GET("/analytics", adminAnalytics(db))
+	rg.GET("/trends", adminTrends(db))
 	rg.GET("/transactions", adminTransactions(db))
 	rg.POST("/notifications", adminSendNotification(db))
 	rg.PUT("/maintenance", adminToggleMaintenance())
@@ -246,5 +248,48 @@ func adminToggleMaintenance() gin.HandlerFunc {
 			"maintenance": req.Enabled,
 			"message":     "Maintenance mode diperbarui",
 		})
+	}
+}
+
+func adminTrends(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+		if days < 1 {
+			days = 30
+		}
+		if days > 90 {
+			days = 90
+		}
+
+		type dayPoint struct {
+			Date    string `json:"date"`
+			Signups int64  `json:"signups"`
+			Revenue int64  `json:"revenue"`
+		}
+
+		now := time.Now()
+		points := make([]dayPoint, 0, days)
+		for i := days - 1; i >= 0; i-- {
+			dateStr := now.AddDate(0, 0, -i).Format("2006-01-02")
+
+			var signups int64
+			db.Model(&models.User{}).
+				Where("DATE(created_at) = ?", dateStr).
+				Count(&signups)
+
+			var revenue int64
+			db.Model(&models.Transaction{}).
+				Where("status = ?", "paid").
+				Where("DATE(created_at) = ?", dateStr).
+				Select("COALESCE(SUM(amount), 0)").Row().Scan(&revenue)
+
+			points = append(points, dayPoint{
+				Date:    dateStr,
+				Signups: signups,
+				Revenue: revenue,
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{"days": points})
 	}
 }

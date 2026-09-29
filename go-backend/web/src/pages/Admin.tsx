@@ -21,7 +21,19 @@ import {
   ChevronRight,
   Wrench,
   Send,
+  Download,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +91,12 @@ interface Analytics {
   totalDevices: number;
   totalMessages: number;
   totalRevenue: number;
+}
+
+interface TrendPoint {
+  date: string;
+  signups: number;
+  revenue: number;
 }
 
 /* ── Helper ─────────────────────────────────────────── */
@@ -195,6 +213,39 @@ function LoadingRows({ n = 3 }: { n?: number }) {
 const errMsg = (e: unknown, fallback: string) =>
   e instanceof Error ? e.message : fallback;
 
+/* ── Helper CSV ─────────────────────────────────────── */
+
+const csvDate = () => new Date().toISOString().slice(0, 10);
+
+const toCsv = (rows: (string | number | null | undefined)[][]) =>
+  rows
+    .map((r) =>
+      r
+        .map((v) => {
+          const s = v === null || v === undefined ? "" : String(v);
+          return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(",")
+    )
+    .join("\r\n");
+
+const downloadCsv = (filename: string, rows: (string | number | null | undefined)[][]) => {
+  const blob = new Blob(["\uFEFF" + toCsv(rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+const fmtDayShort = (iso: string) => {
+  const d = new Date(iso + "T00:00:00");
+  return isNaN(d.getTime()) ? iso : `${d.getDate()}/${d.getMonth() + 1}`;
+};
+
 /* ── Tab: Ringkasan ─────────────────────────────────── */
 
 function OverviewTab() {
@@ -203,6 +254,7 @@ function OverviewTab() {
   const [error, setError] = useState<string | null>(null);
   const [maintenance, setMaintenance] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [trends, setTrends] = useState<TrendPoint[]>([]);
 
   const load = () => {
     setLoading(true);
@@ -212,11 +264,15 @@ function OverviewTab() {
       apiGet<{ settings: Record<string, string> }>("/admin/settings").catch(() => ({
         settings: {} as Record<string, string>,
       })),
+      apiGet<{ days: TrendPoint[] }>("/admin/trends?days=30").catch(() => ({
+        days: [] as TrendPoint[],
+      })),
     ])
-      .then(([a, s]) => {
+      .then(([a, s, t]) => {
         setData(a);
         const v = s.settings?.["maintenance"] ?? s.settings?.["maintenance_mode"];
         setMaintenance(v === "true" || v === "1");
+        setTrends(t.days || []);
       })
       .catch((e) => setError(errMsg(e, "Gagal memuat ringkasan")))
       .finally(() => setLoading(false));
@@ -266,6 +322,92 @@ function OverviewTab() {
               </Card>
             ))}
           </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm font-semibold text-foreground mb-3">Pengguna baru / hari</p>
+                {trends.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-10 text-center">Belum ada data tren.</p>
+                ) : (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={trends} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={fmtDayShort}
+                          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                          axisLine={false}
+                          tickLine={false}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={36}
+                        />
+                        <Tooltip
+                          labelFormatter={(d) => fmtDayShort(String(d))}
+                          formatter={(value) => [fmtNum(Number(value)), "Pengguna"]}
+                          contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                        />
+                        <Bar dataKey="signups" name="Pengguna" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm font-semibold text-foreground mb-3">Pendapatan / hari</p>
+                {trends.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-10 text-center">Belum ada data tren.</p>
+                ) : (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={trends} margin={{ top: 4, right: 8, left: -4, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={fmtDayShort}
+                          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                          axisLine={false}
+                          tickLine={false}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}rb` : `${v}`)}
+                          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={44}
+                        />
+                        <Tooltip
+                          labelFormatter={(d) => fmtDayShort(String(d))}
+                          formatter={(value) => [fmtRp(Number(value)), "Pendapatan"]}
+                          contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="revenue"
+                          name="Pendapatan"
+                          stroke="#059669"
+                          strokeWidth={2}
+                          fill="#059669"
+                          fillOpacity={0.15}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           <Card className={maintenance ? "border-amber-500/50" : ""}>
             <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
@@ -388,6 +530,20 @@ function UsersTab() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
 
+  const exportCsv = async () => {
+    try {
+      const res = await apiGet<{ users: AdminUser[] }>("/admin/users?limit=1000&page=1");
+      const rows: (string | number | null | undefined)[][] = [
+        ["id", "name", "email", "role", "plan", "status", "createdAt"],
+        ...(res.users || []).map((u) => [u.id, u.name, u.email, u.role, u.plan, u.status, u.createdAt]),
+      ];
+      downloadCsv(`pengguna-${csvDate()}.csv`, rows);
+      toast.success("CSV pengguna diunduh");
+    } catch (e) {
+      toast.error(errMsg(e, "Gagal mengekspor CSV"));
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -403,6 +559,9 @@ function UsersTab() {
         </div>
         <Button size="sm" variant="outline" onClick={doSearch} className="h-10">
           Cari
+        </Button>
+        <Button size="sm" variant="outline" onClick={exportCsv} className="h-10 gap-1.5">
+          <Download className="w-4 h-4" /> Export CSV
         </Button>
       </div>
 
@@ -982,8 +1141,35 @@ function TransactionsTab() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
 
+  const exportCsv = async () => {
+    try {
+      const res = await apiGet<{ transactions: Txn[] }>("/admin/transactions?limit=1000&page=1");
+      const rows: (string | number | null | undefined)[][] = [
+        ["id", "tanggal", "nama", "email", "paket", "amount", "status"],
+        ...(res.transactions || []).map((t) => [
+          t.id,
+          t.createdAt,
+          t.user?.name || "",
+          t.user?.email || "",
+          t.plan?.name || "",
+          t.amount,
+          t.status,
+        ]),
+      ];
+      downloadCsv(`transaksi-${csvDate()}.csv`, rows);
+      toast.success("CSV transaksi diunduh");
+    } catch (e) {
+      toast.error(errMsg(e, "Gagal mengekspor CSV"));
+    }
+  };
+
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={exportCsv} className="gap-1.5">
+          <Download className="w-4 h-4" /> Export CSV
+        </Button>
+      </div>
       {loading && <LoadingRows />}
       {!loading && error && <ErrorCard message={error} onRetry={() => load()} />}
 

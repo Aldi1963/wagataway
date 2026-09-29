@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X } from "lucide-react";
+import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,12 @@ interface Conversation {
   lastMessage: string;
   unreadCount: number;
   lastActivity: string;
+  deviceId: number;
+}
+
+interface Device {
+  id: number;
+  name: string;
 }
 
 interface ChatMsg {
@@ -40,6 +46,9 @@ export default function LiveChat() {
   const [aiMode, setAiMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceFilter, setDeviceFilter] = useState<number | null>(null);
+  const [devicesFailed, setDevicesFailed] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -62,12 +71,32 @@ export default function LiveChat() {
     setShowQuickReplies(false);
   };
 
-  // Load conversations
-  useEffect(() => {
-    apiGet<{ conversations: Conversation[] }>("/chat/conversations")
+  const loadConversations = (devId: number | null) => {
+    const q = devId != null ? `?deviceId=${devId}` : "";
+    apiGet<{ conversations: Conversation[] }>(`/chat/conversations${q}`)
       .then((d) => setConversations(d.conversations || []))
       .catch(() => {});
+  };
+
+  // Load conversations (awal: semua perangkat)
+  useEffect(() => {
+    loadConversations(null);
   }, []);
+
+  // Load daftar device untuk filter per-perangkat
+  useEffect(() => {
+    apiGet<{ devices: Device[] }>("/devices")
+      .then((d) => setDevices(d.devices || []))
+      .catch(() => setDevicesFailed(true));
+  }, []);
+
+  const handleDeviceChange = (val: string) => {
+    const devId = val === "all" ? null : Number(val);
+    setDeviceFilter(devId);
+    loadConversations(devId);
+  };
+
+  const deviceName = (id: number) => devices.find((d) => d.id === id)?.name;
 
   // Load messages when active phone changes
   useEffect(() => {
@@ -183,6 +212,21 @@ export default function LiveChat() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          {!devicesFailed && devices.length > 0 && (
+            <select
+              aria-label="Filter perangkat"
+              value={deviceFilter == null ? "all" : String(deviceFilter)}
+              onChange={(e) => handleDeviceChange(e.target.value)}
+              className="mt-2 w-full h-8 text-xs rounded-md border border-input bg-background px-2 text-foreground"
+            >
+              <option value="all">Semua Perangkat</option>
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* List */}
@@ -220,6 +264,12 @@ export default function LiveChat() {
                   <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                     {convo.lastMessage}
                   </p>
+                  {deviceName(convo.deviceId) && (
+                    <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5 flex items-center gap-1">
+                      <Smartphone className="w-2.5 h-2.5 shrink-0" />
+                      {deviceName(convo.deviceId)}
+                    </p>
+                  )}
                 </div>
               </button>
             ))

@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useState, type ReactNode } from "react";
-import { Plus, Copy, Trash2, FileText, Pencil, X, RefreshCw } from "lucide-react";
+import { Plus, Copy, Trash2, FileText, Pencil, X, RefreshCw, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,48 @@ function Modal({
 const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
+// ── Preview helpers ─────────────────────────────────────────────────────────
+const varRegex = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;
+
+function extractVars(content: string): string[] {
+  const out: string[] = [];
+  varRegex.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = varRegex.exec(content)) !== null) {
+    if (!out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+function exampleFor(name: string): string {
+  const known: Record<string, string> = { nama: "Budi" };
+  if (known[name]) return known[name];
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function renderPreview(
+  content: string,
+  values: Record<string, string>
+): ReactNode[] {
+  const parts: ReactNode[] = [];
+  varRegex.lastIndex = 0;
+  let last = 0;
+  let i = 0;
+  let m: RegExpExecArray | null;
+  while ((m = varRegex.exec(content)) !== null) {
+    if (m.index > last) parts.push(content.slice(last, m.index));
+    const val = values[m[1]] ?? m[0];
+    parts.push(
+      <strong key={i++} className="text-foreground font-semibold">
+        {val}
+      </strong>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < content.length) parts.push(content.slice(last));
+  return parts;
+}
+
 export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +112,20 @@ export default function Templates() {
 
   const [deleting, setDeleting] = useState<Template | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+
+  const [previewing, setPreviewing] = useState<Template | null>(null);
+  const [previewValues, setPreviewValues] = useState<Record<string, string>>(
+    {}
+  );
+
+  const openPreview = (t: Template) => {
+    const values: Record<string, string> = {};
+    for (const v of extractVars(t.content)) values[v] = exampleFor(v);
+    setPreviewValues(values);
+    setPreviewing(t);
+  };
+
+  const previewVars = previewing ? extractVars(previewing.content) : [];
 
   const load = () => {
     setLoading(true);
@@ -257,6 +313,15 @@ export default function Templates() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
+                    onClick={() => openPreview(tpl)}
+                    aria-label="Preview template"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
                     onClick={() => openEdit(tpl)}
                     aria-label="Edit template"
                   >
@@ -365,6 +430,74 @@ export default function Templates() {
               </Button>
               <Button size="sm" onClick={handleEdit} disabled={savingEdit}>
                 {savingEdit ? "Menyimpan..." : "Simpan"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {previewing && (
+        <Modal title="Preview Template" onClose={() => setPreviewing(null)}>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {previewing.name}
+              </p>
+              {previewing.category && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Kategori: {previewing.category}
+                </p>
+              )}
+            </div>
+
+            {previewVars.length === 0 ? (
+              <>
+                <div className="rounded-md border border-border bg-secondary/40 p-3 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                  {previewing.content}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Template ini tidak memakai variabel.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {previewVars.map((v) => (
+                    <div key={v}>
+                      <label className="text-xs font-medium text-foreground">
+                        {`{{${v}}}`}
+                      </label>
+                      <Input
+                        className="mt-1"
+                        value={previewValues[v] ?? ""}
+                        onChange={(e) =>
+                          setPreviewValues((p) => ({
+                            ...p,
+                            [v]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-1.5">
+                    Hasil preview
+                  </p>
+                  <div className="rounded-md border border-border bg-secondary/40 p-3 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                    {renderPreview(previewing.content, previewValues)}
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewing(null)}
+              >
+                Tutup
               </Button>
             </div>
           </div>
