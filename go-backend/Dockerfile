@@ -1,7 +1,7 @@
 # ── Build stage ─────────────────────────────────────────────────────────
 FROM golang:1.26-alpine AS builder
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git gcc musl-dev
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 
 # ── Frontend build stage ───────────────────────────────────────────────
 FROM node:22-alpine AS frontend
