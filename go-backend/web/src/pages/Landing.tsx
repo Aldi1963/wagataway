@@ -34,6 +34,9 @@ import {
   Timer,
   Play,
   FlaskConical,
+  ChevronRight,
+  MapPin,
+  CircleHelp,
 } from "lucide-react";
 
 /* ── Util: reveal on scroll ─────────────────────────── */
@@ -692,59 +695,51 @@ function CTA() {
 }
 
 function Footer() {
-  const [health, setHealth] = useState<boolean | null>(null);
-  useEffect(() => {
-    fetch("/health")
-      .then((r) => setHealth(r.ok))
-      .catch(() => setHealth(false));
-  }, []);
   return (
-    <footer className="bg-slate-950 text-slate-400 py-12">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="grid md:grid-cols-4 gap-8 mb-10">
+    <footer className="bg-[#192b4c] text-white">
+      <div className="max-w-6xl mx-auto px-4 py-12">
+        <div className="grid md:grid-cols-4 gap-8">
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-8 h-8 rounded-lg bg-[#243370] flex items-center justify-center"><Send className="w-4 h-4 text-white" /></span>
-              <span className="font-extrabold text-white">WaGataway</span>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center"><Send className="w-4 h-4 text-white" /></span>
+              <span className="font-extrabold text-xl text-white">WaGataway</span>
             </div>
-            <p className="text-sm">WhatsApp API Gateway Indonesia. Kirim pesan otomatis dengan mudah.</p>
+            <p className="text-sm text-white/90 leading-relaxed">
+              WaGataway bukanlah sebuah layanan yang berjalan diatas official API whatsapp. WaGataway
+              menggunakan whatsapp web untuk melakukan otomatisasi pengiriman dan membalas pesan
+              whatsapp baik menggunakan API maupun webhook.
+            </p>
           </div>
           <div>
-            <p className="font-bold text-white text-sm mb-3">Produk</p>
-            <div className="space-y-2 text-sm">
-              <a href="#fitur" className="block hover:text-[#3d4f96]">Fitur</a>
-              <a href="#harga" className="block hover:text-[#3d4f96]">Harga</a>
-              <Link href="/api-docs" className="block hover:text-[#3d4f96]">Dokumentasi API</Link>
+            <h2 className="text-lg font-bold text-white mb-4">Informasi</h2>
+            <div className="space-y-2.5 text-sm">
+              <a href="#fitur" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> Fitur</a>
+              <a href="#harga" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> Harga</a>
+              <a href="#faq" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> FAQ</a>
+              <Link href="/api-docs" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> Dokumentasi</Link>
+              <a href="#demo" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> Demo</a>
             </div>
           </div>
           <div>
-            <p className="font-bold text-white text-sm mb-3">Perusahaan</p>
-            <div className="space-y-2 text-sm">
-              <a href="#faq" className="block hover:text-[#3d4f96]">FAQ</a>
-              <Link href="/login" className="block hover:text-[#3d4f96]">Masuk</Link>
+            <h2 className="text-lg font-bold text-white mb-4">Tentang</h2>
+            <div className="space-y-2.5 text-sm">
+              <a href="#" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> Disclaimer</a>
+              <a href="#" className="flex items-center gap-1 text-white hover:text-white/70"><ChevronRight className="w-3.5 h-3.5" /> Terms &amp; Conditions</a>
             </div>
           </div>
           <div>
-            <p className="font-bold text-white text-sm mb-3">Mulai</p>
-            <div className="space-y-2 text-sm">
-              <Link href="/register" className="block hover:text-[#3d4f96]">Daftar Gratis</Link>
-              <Link href="/api-docs" className="block hover:text-[#3d4f96]">Coba API</Link>
+            <h2 className="text-lg font-bold text-white mb-4">Contact Us</h2>
+            <div className="space-y-2.5 text-sm">
+              <p className="flex items-start gap-2 text-white"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /> Indonesia</p>
+              <a href="#" className="flex items-center gap-2 text-white hover:text-white/70"><CircleHelp className="w-4 h-4 shrink-0" /> Support</a>
             </div>
           </div>
         </div>
-        <div className="border-t border-white/10 pt-6 flex flex-col md:flex-row justify-between gap-2 text-xs">
-          <p>© 2026 WaGataway. Layanan unofficial, tidak berafiliasi dengan WhatsApp Inc.</p>
-          <span className="inline-flex items-center gap-2 font-semibold">
-            <span className="relative flex w-2.5 h-2.5">
-              {health && <span className="absolute inline-flex h-full w-full rounded-full bg-[#3d4f96] opacity-75 animate-ping" />}
-              <span className={`relative inline-flex rounded-full w-2.5 h-2.5 ${health === false ? "bg-red-500" : "bg-[#243370]"}`} />
-            </span>
-            <span className={health === false ? "text-red-400" : "text-[#3d4f96]"}>
-              {health === null ? "Memeriksa status…" : health ? "Semua sistem normal" : "Gangguan sistem"}
-            </span>
-          </span>
-          <p>Gunakan nomor sekunder untuk keamanan.</p>
-        </div>
+      </div>
+      <div className="bg-[#040f35]">
+        <p className="max-w-6xl mx-auto px-4 py-4 text-center text-sm text-white">
+          Made with <span className="text-red-500">❤</span> in Indonesia by WaGataway
+        </p>
       </div>
     </footer>
   );
