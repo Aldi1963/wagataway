@@ -150,8 +150,6 @@ function Navbar() {
 function HeroArt() {
   return (
     <div className="relative mx-auto w-full max-w-[440px]">
-      {/* glow */}
-      <div className="absolute -inset-8 bg-emerald-400/20 blur-3xl rounded-full" />
       <img
         src="/illustrations/messaging-fun.svg"
         alt="Ilustrasi pengiriman pesan WhatsApp otomatis"
@@ -183,11 +181,7 @@ function HeroArt() {
 
 function Hero() {
   return (
-    <section id="top" className="relative overflow-hidden bg-gradient-to-b from-emerald-50 via-white to-white pt-28 pb-16 md:pt-36 md:pb-24">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-emerald-200/40 rounded-full blur-3xl" />
-        <div className="absolute top-64 -left-32 w-96 h-96 bg-teal-100/60 rounded-full blur-3xl" />
-      </div>
+    <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-24">
       <div className="relative max-w-6xl mx-auto px-4 grid md:grid-cols-2 gap-12 items-center">
         <Reveal>
           <div className="inline-flex items-center gap-2 bg-white border border-emerald-200 rounded-full px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm mb-6">
@@ -621,15 +615,11 @@ function FAQ() {
 function CTA() {
   return (
     <section className="relative py-20 overflow-hidden bg-slate-900">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-24 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
-      </div>
-      <div className="relative max-w-5xl mx-auto px-4 grid md:grid-cols-2 gap-10 items-center">
-        <Reveal className="text-center md:text-left">
+      <div className="relative max-w-3xl mx-auto px-4 text-center">
+        <Reveal>
           <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Siap mengotomatisasi WhatsApp bisnis Anda?</h2>
           <p className="text-slate-400 mt-4">Daftar gratis hari ini — 1.000 pesan pertama tiap bulan, tanpa kartu kredit.</p>
-          <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-8">
+          <div className="flex flex-wrap justify-center gap-3 mt-8">
             <Link href="/register" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors shadow-lg shadow-emerald-500/25">
               Coba Gratis Sekarang <ArrowRight className="w-4 h-4" />
             </Link>
@@ -637,14 +627,6 @@ function CTA() {
               Baca Dokumentasi
             </Link>
           </div>
-        </Reveal>
-        <Reveal delay={150}>
-          <img
-            src="/illustrations/chatting.svg"
-            alt="Ilustrasi chatting WhatsApp"
-            className="w-full max-w-[380px] h-auto mx-auto hero-float"
-            loading="lazy"
-          />
         </Reveal>
       </div>
     </section>
