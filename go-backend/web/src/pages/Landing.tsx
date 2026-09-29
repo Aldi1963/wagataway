@@ -28,7 +28,6 @@ import {
   Check,
   ChevronDown,
   Star,
-  ArrowRight,
   Menu,
   X,
   BellRing,
@@ -80,7 +79,6 @@ function SectionHead({ kicker, title, desc }: { kicker: string; title: string; d
 /* ── Navbar ─────────────────────────────────────────── */
 const navLinks = [
   { label: "Fitur", href: "#fitur" },
-  { label: "Cara Kerja", href: "#cara-kerja" },
   { label: "Harga", href: "#harga" },
   { label: "FAQ", href: "#faq" },
 ];
@@ -329,54 +327,6 @@ function Fitur() {
             </Reveal>
           ))}
         </div>
-      </div>
-    </section>
-  );
-}
-
-/* ── Cara kerja ─────────────────────────────────────── */
-function CaraKerja() {
-  const steps = [
-    { n: "1", t: "Daftar Gratis", d: "Buat akun dalam hitungan detik, tanpa kartu kredit." },
-    { n: "2", t: "Hubungkan Device", d: "Scan QR dari dashboard untuk menautkan nomor WhatsApp Anda." },
-    { n: "3", t: "Kirim via API", d: "Dapatkan API key dan mulai kirim pesan dari aplikasi Anda." },
-  ];
-  return (
-    <section id="cara-kerja" className="py-20 bg-white scroll-mt-16">
-      <div className="max-w-6xl mx-auto px-4">
-        <SectionHead kicker="Cara Kerja" title="Mulai dalam 3 langkah" />
-        <div className="grid md:grid-cols-3 gap-6">
-          {steps.map((s, i) => (
-            <Reveal key={s.n} delay={i * 100}>
-              <div className="relative bg-slate-50 border border-slate-100 rounded-2xl p-8 text-center h-full">
-                <span className="inline-flex w-12 h-12 rounded-full bg-[#243370] text-white font-extrabold text-lg items-center justify-center mb-4">{s.n}</span>
-                <h3 className="font-bold text-slate-900 text-lg mb-2">{s.t}</h3>
-                <p className="text-sm text-slate-500">{s.d}</p>
-                {i < 2 && <ArrowRight className="hidden md:block absolute top-1/2 -right-5 -translate-y-1/2 w-6 h-6 text-[#7c8cc4]" />}
-              </div>
-            </Reveal>
-          ))}
-        </div>
-        {/* code sample */}
-        <Reveal delay={150} className="mt-14">
-          <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-2xl">
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-white/10">
-              <span className="w-3 h-3 rounded-full bg-red-400" />
-              <span className="w-3 h-3 rounded-full bg-amber-400" />
-              <span className="w-3 h-3 rounded-full bg-[#3d4f96]" />
-              <span className="ml-3 text-xs text-slate-400 font-mono">kirim-pesan.sh</span>
-            </div>
-            <pre className="p-5 md:p-7 text-[13px] md:text-sm font-mono leading-relaxed overflow-x-auto">
-              <code>
-                <span className="text-slate-500"># Kirim pesan WhatsApp semudah ini</span>{"\n"}
-                <span className="text-[#3d4f96]">curl</span> <span className="text-slate-300">-X POST https://wa.clipku.com/api/messages/send \</span>{"\n"}
-                {"  "}<span className="text-sky-400">-H</span> <span className="text-amber-300">"X-API-Key: wg_anda_disini"</span> <span className="text-slate-300">\</span>{"\n"}
-                {"  "}<span className="text-sky-400">-H</span> <span className="text-amber-300">"Content-Type: application/json"</span> <span className="text-slate-300">\</span>{"\n"}
-                {"  "}<span className="text-sky-400">-d</span> <span className="text-amber-300">'{"{"}"deviceId": 1, "to": "6281234567890", "message": "Halo {"{nama}"}!"{"}"}'</span>
-              </code>
-            </pre>
-          </div>
-        </Reveal>
       </div>
     </section>
   );
@@ -721,16 +671,17 @@ function FAQ() {
 /* ── CTA + Footer ───────────────────────────────────── */
 function CTA() {
   return (
-    <section className="relative py-20 overflow-hidden bg-slate-900">
+    <section className="relative py-20 overflow-hidden bg-white">
+      <div aria-hidden className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] max-w-[170vw] aspect-square bg-slate-100" style={{ borderRadius: "42% 58% 61% 39% / 45% 42% 58% 55%" }} />
       <div className="relative max-w-3xl mx-auto px-4 text-center">
         <Reveal>
-          <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Siap mengotomatisasi WhatsApp bisnis Anda?</h2>
-          <p className="text-slate-400 mt-4">Daftar gratis hari ini — 1.000 pesan pertama tiap bulan, tanpa kartu kredit.</p>
+          <h2 className="text-3xl md:text-4xl font-black text-[#1e2a5c] tracking-tight">Siap mengotomatisasi WhatsApp bisnis Anda?</h2>
+          <p className="text-slate-500 mt-4">Daftar gratis hari ini — 1.000 pesan pertama tiap bulan, tanpa kartu kredit.</p>
           <div className="flex flex-wrap justify-center gap-3 mt-8">
             <Link href="/register" className="inline-flex items-center gap-2 bg-[#243370] hover:bg-[#3d4f96] text-white font-semibold px-8 py-3.5 rounded-xl transition-colors shadow-lg shadow-[#243370]/25">
-              Coba Gratis Sekarang <ArrowRight className="w-4 h-4" />
+              <Send className="w-4 h-4" /> Coba Gratis Sekarang
             </Link>
-            <Link href="/api-docs" className="inline-flex items-center gap-2 border border-white/20 hover:border-[#3d4f96] text-white font-semibold px-8 py-3.5 rounded-xl transition-colors">
+            <Link href="/api-docs" className="inline-flex items-center gap-2 border border-[#1e2a5c]/20 hover:border-[#3d4f96] text-[#1e2a5c] font-semibold px-8 py-3.5 rounded-xl transition-colors bg-white/60">
               Baca Dokumentasi
             </Link>
           </div>
@@ -769,7 +720,6 @@ function Footer() {
           <div>
             <p className="font-bold text-white text-sm mb-3">Perusahaan</p>
             <div className="space-y-2 text-sm">
-              <a href="#cara-kerja" className="block hover:text-[#3d4f96]">Cara Kerja</a>
               <a href="#faq" className="block hover:text-[#3d4f96]">FAQ</a>
               <Link href="/login" className="block hover:text-[#3d4f96]">Masuk</Link>
             </div>
@@ -835,7 +785,6 @@ export default function Landing() {
       <Hero />
       <Kelebihan />
       <Fitur />
-      <CaraKerja />
       <DemoSimulasi />
       <Integrasi />
       <Testimoni />
