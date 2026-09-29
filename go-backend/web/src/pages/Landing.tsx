@@ -471,7 +471,7 @@ const vsRows = [
   { prov: "wag", paket: "Lite", harga: "Rp 25.000", kuota: "1.000/bln", device: "2", plus: "Attachment & broadcast CSV" },
   { prov: "fonnte", paket: "Regular", harga: "Rp 66.000", kuota: "10.000/bln", device: "—", plus: "—" },
   { prov: "wag", paket: "Regular", harga: "Rp 66.000", kuota: "10.000/bln", device: "3", plus: "Drip campaign + analitik" },
-  { prov: "fonnte", paket: "Regular Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "—", plus: "—" },
+  { prov: "fonnte", paket: "Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "—", plus: "—" },
   { prov: "wag", paket: "Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "5", plus: "Multi device + webhook retry" },
   { prov: "fonnte", paket: "Master", harga: "Rp 175.000", kuota: "unlimited", device: "—", plus: "—" },
   { prov: "wag", paket: "Master", harga: "Rp 175.000", kuota: "unlimited", device: "10", plus: "Pesan tanpa batas" },

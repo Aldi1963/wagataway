@@ -54,8 +54,12 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const [sending, setSending] = useState(false);
 
   const skip = () => {
-    markDone();
-    onDone();
+    if (step < 3) {
+      setStep(step + 1);
+    } else {
+      markDone();
+      onDone();
+    }
   };
 
   const finish = () => {
