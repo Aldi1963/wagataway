@@ -6,15 +6,17 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB) {
+func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
 	contacts := rg.Group("/contacts")
 	{
 		contacts.GET("", listContacts(db))
 		contacts.POST("", createContact(db))
+		contacts.POST("/sync", syncContactsFromWA(db, wm))
 		contacts.PUT("/:id", updateContact(db))
 		contacts.DELETE("/bulk", bulkDeleteContacts(db))
 		contacts.DELETE("/:id", deleteContact(db))

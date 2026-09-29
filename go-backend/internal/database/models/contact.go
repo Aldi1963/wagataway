@@ -28,6 +28,8 @@ type ContactGroup struct {
 	Description string         `gorm:"type:text" json:"description"`
 	Color       string         `gorm:"size:20" json:"color"`
 	MemberCount int            `gorm:"default:0" json:"memberCount"`
+	// WAJID: JID grup WhatsApp sumber sync (unik per user). Kosong untuk grup manual.
+	WAJID       string         `gorm:"size:64;index" json:"waJid"`
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`

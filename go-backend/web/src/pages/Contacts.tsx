@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
+import SyncWAButton from "@/components/contacts/SyncWAButton";
 
 interface ContactGroup {
   id: number;
@@ -374,6 +375,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
         <div className="flex gap-2">
+          <SyncWAButton kind="contacts" onDone={() => load(search)} />
           <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5">
             <Upload className="w-4 h-4" />
             Import

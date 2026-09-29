@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import SyncWAButton from "@/components/contacts/SyncWAButton";
 
 interface Group {
   id: number;
@@ -219,10 +220,13 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
             </p>
           </div>
         )}
-        <Button onClick={openAdd} className="gap-1.5 self-start sm:self-auto">
-          <Plus className="w-4 h-4" />
-          Buat Grup
-        </Button>
+        <div className="flex gap-2 self-start sm:self-auto">
+          <SyncWAButton kind="groups" onDone={load} />
+          <Button onClick={openAdd} className="gap-1.5">
+            <Plus className="w-4 h-4" />
+            Buat Grup
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
