@@ -10,6 +10,7 @@ import {
   User,
   Settings,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -238,6 +239,13 @@ export function TopBar({ onMenu }: TopBarProps) {
                     label="Pengaturan"
                     onClick={() => go("/settings")}
                   />
+                  {user?.role === "admin" && (
+                    <ProfileMenuItem
+                      icon={ShieldCheck}
+                      label="Dashboard Admin"
+                      onClick={() => go("/admin")}
+                    />
+                  )}
                   <div className="my-1.5 border-t border-border" />
                   <ProfileMenuItem
                     icon={LogOut}

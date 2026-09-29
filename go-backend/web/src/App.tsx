@@ -22,6 +22,7 @@ const Analytics = lazy(() => import("@/pages/Analytics"));
 const LiveChat = lazy(() => import("@/pages/LiveChat"));
 const DripCampaign = lazy(() => import("@/pages/DripCampaign"));
 const Links = lazy(() => import("@/pages/Links"));
+const Admin = lazy(() => import("@/pages/Admin"));
 const Blacklist = lazy(() => import("@/pages/Blacklist"));
 const Billing = lazy(() => import("@/pages/Billing"));
 const Webhooks = lazy(() => import("@/pages/Webhooks"));
@@ -54,6 +55,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Redirect to="/login" />;
+
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return <Redirect to="/login" />;
+  if (user.role !== "admin") return <Redirect to="/" />;
 
   return <DashboardLayout>{children}</DashboardLayout>;
 }
@@ -159,6 +177,9 @@ function AppRouter() {
         </Route>
         <Route path="/settings">
           <ProtectedRoute><Settings /></ProtectedRoute>
+        </Route>
+        <Route path="/admin">
+          <AdminRoute><Admin /></AdminRoute>
         </Route>
         <Route component={NotFound} />
       </Switch>
