@@ -10,19 +10,15 @@ import { Toaster } from "sonner";
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const SendMessage = lazy(() => import("@/pages/SendMessage"));
-const BulkMessages = lazy(() => import("@/pages/BulkMessages"));
-const Schedule = lazy(() => import("@/pages/Schedule"));
-const Contacts = lazy(() => import("@/pages/Contacts"));
-const ContactGroups = lazy(() => import("@/pages/ContactGroups"));
+const Send = lazy(() => import("@/pages/Send"));
+const ScheduleHub = lazy(() => import("@/pages/ScheduleHub"));
+const ContactsHub = lazy(() => import("@/pages/ContactsHub"));
 const AutoReply = lazy(() => import("@/pages/AutoReply"));
 const Templates = lazy(() => import("@/pages/Templates"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const LiveChat = lazy(() => import("@/pages/LiveChat"));
-const DripCampaign = lazy(() => import("@/pages/DripCampaign"));
 const Links = lazy(() => import("@/pages/Links"));
 const Admin = lazy(() => import("@/pages/Admin"));
-const Blacklist = lazy(() => import("@/pages/Blacklist"));
 const Billing = lazy(() => import("@/pages/Billing"));
 const Webhooks = lazy(() => import("@/pages/Webhooks"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
@@ -121,19 +117,19 @@ function AppRouter() {
           <HomeRoute />
         </Route>
         <Route path="/send">
-          <ProtectedRoute><SendMessage /></ProtectedRoute>
+          <ProtectedRoute><Send /></ProtectedRoute>
         </Route>
         <Route path="/contacts">
-          <ProtectedRoute><Contacts /></ProtectedRoute>
+          <ProtectedRoute><ContactsHub /></ProtectedRoute>
         </Route>
         <Route path="/contact-groups">
-          <ProtectedRoute><ContactGroups /></ProtectedRoute>
+          <ProtectedRoute><ContactsHub /></ProtectedRoute>
         </Route>
         <Route path="/bulk">
-          <ProtectedRoute><BulkMessages /></ProtectedRoute>
+          <ProtectedRoute><Send /></ProtectedRoute>
         </Route>
         <Route path="/schedule">
-          <ProtectedRoute><Schedule /></ProtectedRoute>
+          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
         </Route>
         <Route path="/auto-reply">
           <ProtectedRoute><AutoReply /></ProtectedRoute>
@@ -148,13 +144,13 @@ function AppRouter() {
           <ProtectedRoute><LiveChat /></ProtectedRoute>
         </Route>
         <Route path="/drip">
-          <ProtectedRoute><DripCampaign /></ProtectedRoute>
+          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
         </Route>
         <Route path="/links">
           <ProtectedRoute><Links /></ProtectedRoute>
         </Route>
         <Route path="/blacklist">
-          <ProtectedRoute><Blacklist /></ProtectedRoute>
+          <ProtectedRoute><ContactsHub /></ProtectedRoute>
         </Route>
         <Route path="/billing">
           <ProtectedRoute><Billing /></ProtectedRoute>

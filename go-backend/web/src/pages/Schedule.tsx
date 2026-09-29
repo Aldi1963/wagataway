@@ -263,7 +263,7 @@ function ScheduleRow({
   );
 }
 
-export default function Schedule() {
+export default function Schedule({ embedded = false }: { embedded?: boolean }) {
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -365,11 +365,13 @@ export default function Schedule() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Jadwal Pesan</h2>
-          <p className="text-sm text-muted-foreground">Kirim pesan di waktu tertentu</p>
-        </div>
+      <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Jadwal Pesan</h2>
+            <p className="text-sm text-muted-foreground">Kirim pesan di waktu tertentu</p>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-border p-0.5">
             <Button

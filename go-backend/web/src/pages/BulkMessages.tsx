@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function BulkMessages() {
+export default function BulkMessages({ embedded = false }: { embedded?: boolean }) {
   const [recipients, setRecipients] = useState("");
   const [message, setMessage] = useState("");
   const [minDelay, setMinDelay] = useState("3");
@@ -12,10 +12,12 @@ export default function BulkMessages() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Blast Pesan</h2>
-        <p className="text-sm text-muted-foreground">Kirim pesan ke banyak nomor sekaligus</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Blast Pesan</h2>
+          <p className="text-sm text-muted-foreground">Kirim pesan ke banyak nomor sekaligus</p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

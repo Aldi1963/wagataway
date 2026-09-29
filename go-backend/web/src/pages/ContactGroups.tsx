@@ -66,7 +66,7 @@ function Modal({
   );
 }
 
-export default function ContactGroups() {
+export default function ContactGroups({ embedded = false }: { embedded?: boolean }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,13 +210,15 @@ export default function ContactGroups() {
 
   return (
     <div className="space-y-4 sm:space-y-6"> {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Grup Kontak</h1>
-          <p className="text-sm text-muted-foreground">
-            Kelompokkan kontak untuk broadcast yang lebih tepat sasaran
-          </p>
-        </div>
+      <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold">Grup Kontak</h1>
+            <p className="text-sm text-muted-foreground">
+              Kelompokkan kontak untuk broadcast yang lebih tepat sasaran
+            </p>
+          </div>
+        )}
         <Button onClick={openAdd} className="gap-1.5 self-start sm:self-auto">
           <Plus className="w-4 h-4" />
           Buat Grup

@@ -76,7 +76,7 @@ function StatusBadge({ status }: { status: string }) {
 const selectCls =
   "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
-export default function SendMessage() {
+export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [history, setHistory] = useState<Message[]>([]);
@@ -156,9 +156,11 @@ export default function SendMessage() {
   return (
     <div className="max-w-2xl space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Kirim Pesan</CardTitle>
-        </CardHeader>
+        {!embedded && (
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Kirim Pesan</CardTitle>
+          </CardHeader>
+        )}
         <CardContent>
           {loading ? (
             <div className="space-y-4 animate-pulse">

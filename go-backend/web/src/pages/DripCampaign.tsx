@@ -80,7 +80,7 @@ function Modal({
 
 const emptyForm = { name: "", description: "", deviceId: "", triggerType: "manual", triggerVal: "" };
 
-export default function DripCampaign() {
+export default function DripCampaign({ embedded = false }: { embedded?: boolean }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,11 +253,13 @@ export default function DripCampaign() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Drip Campaign</h2>
-          <p className="text-sm text-muted-foreground">Kirim pesan bertahap secara otomatis</p>
-        </div>
+      <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Drip Campaign</h2>
+            <p className="text-sm text-muted-foreground">Kirim pesan bertahap secara otomatis</p>
+          </div>
+        )}
         <Button size="sm" className="gap-1.5" onClick={openAdd}>
           <Plus className="w-3.5 h-3.5" />
           Buat Campaign

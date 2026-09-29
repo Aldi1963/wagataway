@@ -38,7 +38,13 @@ type SessionState struct {
 	Client    *whatsmeow.Client
 	Container *sqlstore.Container
 	cancel    context.CancelFunc
-	mu        sync.RWMutex
+	// Flag perilaku device, di-cache dari DB (lihat deviceflags.go).
+	// Dibaca ulang saat sesi terhubung dan saat diubah via API.
+	AutoOnline      bool
+	ReadReceipts    bool
+	RejectCall      bool
+	TypingIndicator bool
+	mu              sync.RWMutex
 }
 
 // Manager coordinates all WhatsApp sessions
@@ -241,6 +247,20 @@ func (m *Manager) SendMessage(deviceID uint, to, msgType, content, mediaURL stri
 	jid, err := parseJID(to)
 	if err != nil {
 		return fmt.Errorf("nomor tidak valid: %w", err)
+	}
+
+	// Indikator "mengetik..." bila flag typingIndicator aktif.
+	// Dikirim sebelum pesan (composing), dihentikan setelah pesan terkirim (paused).
+	sess.mu.RLock()
+	typing := sess.TypingIndicator
+	sess.mu.RUnlock()
+	if typing {
+		tpCtx, tpCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer tpCancel()
+		_ = sess.Client.SendChatPresence(tpCtx, jid, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+		defer func() {
+			_ = sess.Client.SendChatPresence(context.Background(), jid, types.ChatPresencePaused, types.ChatPresenceMediaText)
+		}()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -581,6 +601,10 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 		})
 		log.Info().Uint("deviceID", sess.DeviceID).Msg("Connection established event")
 
+		// Muat flag perilaku device lalu terapkan presence
+		m.loadDeviceFlags(sess)
+		go m.applyPresence(sess)
+
 	case *events.Disconnected:
 		sess.mu.Lock()
 		sess.Status = "disconnected"
@@ -618,6 +642,10 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 	case *events.Presence:
 		// Online/offline presence updates
 		log.Debug().Uint("deviceID", sess.DeviceID).Str("from", v.From.String()).Msg("Presence update")
+
+	case *events.CallOffer:
+		// Panggilan WhatsApp masuk — tolak otomatis bila flag rejectCall aktif
+		go m.handleCallOffer(sess, v)
 	}
 }
 
@@ -675,6 +703,9 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	if m.onMessage != nil {
 		m.onMessage(sess.DeviceID, sess.UserID, msg)
 	}
+
+	// Tandai sudah dibaca bila flag readReceipts aktif (non-blocking)
+	go m.maybeMarkRead(sess, msg)
 }
 
 // handleReceipt processes message delivery receipts

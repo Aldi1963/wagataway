@@ -85,7 +85,7 @@ function Modal({
   );
 }
 
-export default function Contacts() {
+export default function Contacts({ embedded = false }: { embedded?: boolean }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -364,13 +364,15 @@ export default function Contacts() {
 
   return (
     <div className="space-y-4 sm:space-y-6"> {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Kontak</h1>
-          <p className="text-sm text-muted-foreground">
-            {total} kontak tersimpan
-          </p>
-        </div>
+      <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold">Kontak</h1>
+            <p className="text-sm text-muted-foreground">
+              {total} kontak tersimpan
+            </p>
+          </div>
+        )}
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5">
             <Upload className="w-4 h-4" />

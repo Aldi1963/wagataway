@@ -11,6 +11,7 @@ import {
   WifiOff,
   X,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -197,6 +198,18 @@ export default function Dashboard() {
   const [addName, setAddName] = useState("");
   const [savingAdd, setSavingAdd] = useState(false);
 
+  const [editing, setEditing] = useState<Device | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editWebhook, setEditWebhook] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Tab dialog hubungkan: "qr" (scan) atau "pair" (kode pairing 8 digit)
+  const [connectTab, setConnectTab] = useState<"qr" | "pair">("qr");
+  const [pairPhone, setPairPhone] = useState("");
+  const [pairCode, setPairCode] = useState("");
+  const [pairLoading, setPairLoading] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
+
   const loadDevices = () => {
     return apiGet<{ devices: Device[] }>("/devices")
       .then((res) => setDevices(res.devices || []))
@@ -298,6 +311,10 @@ export default function Dashboard() {
     setQrCode("");
     setQrError(null);
     setQrLoading(true);
+    setConnectTab("qr");
+    setPairPhone(d.phone || "");
+    setPairCode("");
+    setPairError(null);
     try {
       await apiPost(`/devices/${d.id}/connect`);
       await new Promise((r) => setTimeout(r, 1500));
@@ -309,6 +326,54 @@ export default function Dashboard() {
       setQrError(e instanceof Error ? e.message : "Gagal memulai koneksi");
     } finally {
       setQrLoading(false);
+    }
+  };
+
+  const requestPairCode = async () => {
+    if (!qrDevice || !pairPhone.trim() || pairLoading) return;
+    setPairLoading(true);
+    setPairError(null);
+    setPairCode("");
+    try {
+      const res = await apiPost<{ code: string; expiresIn: number }>(
+        `/devices/${qrDevice.id}/pair-code`,
+        { phone: pairPhone.trim() }
+      );
+      setPairCode(res.code || "");
+      if (!res.code) setPairError("Kode tidak diterima dari server");
+    } catch (e) {
+      setPairError(e instanceof Error ? e.message : "Gagal meminta kode pairing");
+    } finally {
+      setPairLoading(false);
+    }
+  };
+
+  const openEdit = (d: Device) => {
+    setEditing(d);
+    setEditName(d.name || "");
+    setEditWebhook(d.webhookUrl || "");
+  };
+
+  const handleEditSave = async () => {
+    if (!editing || savingEdit) return;
+    const name = editName.trim();
+    if (!name) {
+      toast.error("Nama perangkat wajib diisi");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await apiPut(`/devices/${editing.id}`, {
+        name,
+        webhookUrl: editWebhook.trim(),
+      });
+      toast.success("Perangkat diperbarui");
+      setEditing(null);
+      loadDevices();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memperbarui perangkat");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -574,11 +639,21 @@ export default function Dashboard() {
                               className="h-8 w-8"
                               onClick={() => handleConnect(d)}
                               aria-label="Hubungkan"
-                              title="Hubungkan (QR)"
+                              title="Hubungkan"
                             >
                               <QrCode className="w-4 h-4" />
                             </Button>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEdit(d)}
+                            aria-label="Ubah"
+                            title="Ubah"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -645,43 +720,169 @@ export default function Dashboard() {
         </Modal>
       )}
 
-      {/* Dialog QR */}
+      {/* Dialog ubah perangkat */}
+      {editing && (
+        <Modal title="Ubah Perangkat" onClose={() => setEditing(null)}>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">
+                Nama perangkat
+              </label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="cth: CS Bot"
+                maxLength={60}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleEditSave();
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">
+                Webhook URL
+              </label>
+              <Input
+                value={editWebhook}
+                onChange={(e) => setEditWebhook(e.target.value)}
+                placeholder="cth: https://contoh.com/webhook"
+                maxLength={500}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleEditSave();
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditing(null)}
+                disabled={savingEdit}
+              >
+                Batal
+              </Button>
+              <Button size="sm" onClick={handleEditSave} disabled={savingEdit}>
+                {savingEdit ? "Menyimpan..." : "Simpan"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Dialog hubungkan: Scan QR / Kode Pairing */}
       {qrDevice && (
         <Modal title={`Hubungkan ${qrDevice.name}`} onClose={() => setQrDevice(null)}>
-          <div className="flex flex-col items-center space-y-3">
-            {qrLoading && (
-              <p className="text-sm text-muted-foreground">Menyiapkan kode QR...</p>
-            )}
-            {!qrLoading && qrError && (
-              <>
-                <p className="text-sm text-destructive text-center">{qrError}</p>
-                <Button size="sm" variant="outline" onClick={() => handleConnect(qrDevice)}>
-                  Coba lagi
-                </Button>
-              </>
-            )}
-            {!qrLoading && !qrError && qrCode && (
-              <>
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(
-                    qrCode
-                  )}`}
-                  alt="Kode QR WhatsApp"
-                  className="w-60 h-60 rounded-lg border border-border"
-                />
-                <p className="text-xs text-muted-foreground text-center">
-                  Pindai dengan WhatsApp di HP kamu.
-                  <br />
-                  Kode diperbarui otomatis, menunggu hingga 60 detik.
-                </p>
-              </>
-            )}
-            {!qrLoading && !qrError && !qrCode && (
-              <p className="text-sm text-muted-foreground">
-                Menunggu kode QR dari WhatsApp...
-              </p>
-            )}
+          <div className="flex gap-2 mb-4">
+            <Button
+              size="sm"
+              variant={connectTab === "qr" ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setConnectTab("qr")}
+            >
+              Scan QR
+            </Button>
+            <Button
+              size="sm"
+              variant={connectTab === "pair" ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setConnectTab("pair")}
+            >
+              Kode Pairing
+            </Button>
           </div>
+
+          {connectTab === "qr" ? (
+            <div className="flex flex-col items-center space-y-3">
+              {qrLoading && (
+                <p className="text-sm text-muted-foreground">Menyiapkan kode QR...</p>
+              )}
+              {!qrLoading && qrError && (
+                <>
+                  <p className="text-sm text-destructive text-center">{qrError}</p>
+                  <Button size="sm" variant="outline" onClick={() => handleConnect(qrDevice)}>
+                    Coba lagi
+                  </Button>
+                </>
+              )}
+              {!qrLoading && !qrError && qrCode && (
+                <>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(
+                      qrCode
+                    )}`}
+                    alt="Kode QR WhatsApp"
+                    className="w-60 h-60 rounded-lg border border-border"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Pindai dengan WhatsApp di HP kamu.
+                    <br />
+                    Kode diperbarui otomatis, menunggu hingga 60 detik.
+                  </p>
+                </>
+              )}
+              {!qrLoading && !qrError && !qrCode && (
+                <p className="text-sm text-muted-foreground">
+                  Menunggu kode QR dari WhatsApp...
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center space-y-3">
+              {!pairCode ? (
+                <>
+                  <div className="w-full space-y-2">
+                    <label className="text-xs font-medium text-foreground">
+                      Nomor WhatsApp HP kamu
+                    </label>
+                    <Input
+                      value={pairPhone}
+                      onChange={(e) => setPairPhone(e.target.value)}
+                      placeholder="cth: 62812xxxxxxx"
+                      inputMode="tel"
+                      maxLength={20}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") requestPairCode();
+                      }}
+                    />
+                  </div>
+                  {pairError && (
+                    <p className="text-sm text-destructive text-center">{pairError}</p>
+                  )}
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={requestPairCode}
+                    disabled={pairLoading || !pairPhone.trim()}
+                  >
+                    {pairLoading ? "Meminta kode..." : "Minta Kode Pairing"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="font-mono text-4xl font-bold tracking-[0.3em] text-foreground">
+                    {pairCode}
+                  </p>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Buka WhatsApp di HP → Perangkat Tertaut → Tautkan Perangkat
+                    → “Tautkan dengan nomor telepon”, lalu masukkan kode di atas.
+                    <br />
+                    Kode berlaku 120 detik.
+                  </p>
+                  {pairError && (
+                    <p className="text-sm text-destructive text-center">{pairError}</p>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={requestPairCode}
+                    disabled={pairLoading}
+                  >
+                    {pairLoading ? "Meminta kode..." : "Minta Kode Baru"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 

@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Send,
   Users,
-  UsersRound,
   MessageSquare,
   MessagesSquare,
   Clock,
@@ -14,9 +13,6 @@ import {
   Webhook,
   BarChart3,
   CreditCard,
-  Ban,
-  Zap,
-  Mail,
   LayoutTemplate,
   UserRound,
   ChevronLeft,
@@ -56,9 +52,7 @@ const sections: NavSection[] = [
     label: "Pesan",
     items: [
       { label: "Kirim Pesan", href: "/send", icon: Send },
-      { label: "Blast Pesan", href: "/bulk", icon: Mail },
       { label: "Jadwal", href: "/schedule", icon: Clock },
-      { label: "Drip Campaign", href: "/drip", icon: Zap },
       { label: "Templates", href: "/templates", icon: LayoutTemplate },
       { label: "Auto Reply", href: "/auto-reply", icon: MessageSquare },
       { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
@@ -68,8 +62,6 @@ const sections: NavSection[] = [
     label: "Kontak",
     items: [
       { label: "Kontak", href: "/contacts", icon: Users },
-      { label: "Grup Kontak", href: "/contact-groups", icon: UsersRound },
-      { label: "Blacklist", href: "/blacklist", icon: Ban },
     ],
   },
   {
@@ -91,8 +83,18 @@ const sections: NavSection[] = [
 
 const STORAGE_KEY = "wag-sidebar-sections";
 
+// URL lama tetap valid dan menandai menu gabungan sebagai aktif
+const ACTIVE_ALIASES: Record<string, string[]> = {
+  "/send": ["/send", "/bulk"],
+  "/contacts": ["/contacts", "/contact-groups", "/blacklist"],
+  "/schedule": ["/schedule", "/drip"],
+};
+
 function isItemActive(location: string, href: string) {
-  return location === href || (href !== "/" && location.startsWith(href));
+  if (location === href) return true;
+  const aliases = ACTIVE_ALIASES[href];
+  if (aliases && aliases.includes(location)) return true;
+  return href !== "/" && location.startsWith(href);
 }
 
 function loadOpenSections(): string[] {

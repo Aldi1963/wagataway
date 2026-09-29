@@ -17,7 +17,7 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 		devices.GET("", listDevices(db))
 		devices.POST("", createDevice(db))
 		devices.GET("/:id", getDevice(db))
-		devices.PUT("/:id", updateDevice(db))
+		devices.PUT("/:id", updateDevice(db, wm))
 		devices.DELETE("/:id", deleteDevice(db, wm))
 		devices.POST("/:id/connect", connectDevice(db, wm))
 		devices.POST("/:id/disconnect", disconnectDevice(db, wm))
@@ -103,7 +103,7 @@ func getDevice(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func updateDevice(db *gorm.DB) gin.HandlerFunc {
+func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -152,6 +152,11 @@ func updateDevice(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		db.Model(&device).Updates(updates)
+
+		// Terapkan perubahan flag ke sesi WhatsApp aktif tanpa restart
+		if req.AutoOnline != nil || req.ReadReceipts != nil || req.RejectCall != nil || req.TypingIndicator != nil {
+			wm.RefreshDeviceFlags(uint(id))
+		}
 
 		c.JSON(http.StatusOK, gin.H{"device": device, "message": "Perangkat berhasil diperbarui"})
 	}
