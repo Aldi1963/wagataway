@@ -10,7 +10,6 @@ import {
   BellRing,
   ScrollText,
   HeartPulse,
-  Menu,
   Smartphone,
   MessageSquareText,
   Wallet,
@@ -574,7 +573,7 @@ function UsersTab() {
 
       {!loading && !error && (
         <>
-          <Card className="hidden md:block">
+          <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[760px]">
                 <thead>
@@ -631,58 +630,6 @@ function UsersTab() {
               </table>
             </div>
           </Card>
-          {/* Kartu mobile */}
-          <div className="md:hidden space-y-3">
-            {users.map((u) => (
-              <Card key={u.id}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">{u.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                    </div>
-                    {statusBadge(u.status)}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Role</p>
-                      <Select value={u.role} onChange={(v) => updateField(u, "role", v)} options={ROLE_OPTS} ariaLabel="Ubah role" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Paket</p>
-                      <Select value={u.plan} onChange={(v) => updateField(u, "plan", v)} options={PLAN_OPTS} ariaLabel="Ubah paket" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Status</p>
-                      <Select value={u.status} onChange={(v) => updateField(u, "status", v)} options={STATUS_OPTS} ariaLabel="Ubah status" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Terdaftar</p>
-                      <p className="text-xs text-foreground">{fmtDate(u.createdAt)}</p>
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive gap-1"
-                      onClick={() => setDeleting(u)}
-                      aria-label="Hapus pengguna"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Hapus
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            {users.length === 0 && (
-              <Card>
-                <CardContent className="p-8 text-center text-sm text-muted-foreground">
-                  Tidak ada pengguna ditemukan
-                </CardContent>
-              </Card>
-            )}
-          </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <p>
               {total} pengguna · Halaman {page} dari {totalPages}
@@ -1883,13 +1830,7 @@ function AdminNav({
 
 export default function Admin() {
   const [tab, setTab] = useState("ringkasan");
-  const [mobileOpen, setMobileOpen] = useState(false);
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
-
-  const selectTab = (id: string) => {
-    setTab(id);
-    setMobileOpen(false);
-  };
 
   return (
     <div className="flex gap-6">
@@ -1902,52 +1843,38 @@ export default function Admin() {
               Kelola pengguna, paket, voucher, transaksi, dan pengaturan sistem
             </p>
           </div>
-          <AdminNav activeTab={tab} onSelect={selectTab} />
+          <AdminNav activeTab={tab} onSelect={setTab} />
         </div>
       </aside>
 
-      {/* Drawer — mobile */}
-      <div className={cn("fixed inset-0 z-50 lg:hidden", !mobileOpen && "pointer-events-none")}>
-        <div
-          onClick={() => setMobileOpen(false)}
-          className={cn(
-            "absolute inset-0 bg-black/50 transition-opacity duration-200",
-            mobileOpen ? "opacity-100" : "opacity-0"
-          )}
-        />
-        <aside
-          className={cn(
-            "absolute inset-y-0 left-0 w-64 bg-background border-r border-border p-4 transition-transform duration-200",
-            mobileOpen ? "translate-x-0" : "-translate-x-full"
-          )}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-foreground">Dashboard Admin</h2>
-            <button
-              onClick={() => setMobileOpen(false)}
-              aria-label="Tutup menu"
-              className="p-2 -mr-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <AdminNav activeTab={tab} onSelect={selectTab} />
-        </aside>
-      </div>
-
       {/* Konten */}
-      <div className="flex-1 min-w-0 space-y-6">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMobileOpen(true)}
-            aria-label="Buka menu admin"
-            className="lg:hidden p-2 -ml-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{active.label}</h2>
-            <p className="text-sm text-muted-foreground">{SECTION_DESC[tab]}</p>
+      <div className="flex-1 min-w-0 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">{active.label}</h2>
+          <p className="text-sm text-muted-foreground">{SECTION_DESC[tab]}</p>
+        </div>
+
+        {/* Pill navigasi — mobile */}
+        <div className="lg:hidden overflow-x-auto">
+          <div className="flex gap-2 w-max pb-1">
+            {TABS.map((t) => {
+              const isActive = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap border transition-colors",
+                    isActive
+                      ? "bg-primary text-primary-foreground border-primary font-medium"
+                      : "bg-background text-muted-foreground border-border hover:text-foreground"
+                  )}
+                >
+                  <t.icon className="w-3.5 h-3.5 shrink-0" />
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
