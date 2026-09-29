@@ -1,6 +1,7 @@
 package whatsapp
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,7 +49,6 @@ func extractMessageText(msg *events.Message) string {
 	}
 	return ""
 }
-
 
 // getMessageType determines the type of an incoming message
 func getMessageType(msg *events.Message) string {
@@ -148,4 +148,37 @@ func downloadFile(url string) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+// DeliverWebhookPayload POSTs a raw JSON payload to a webhook URL with the
+// standard headers (Content-Type, X-Webhook-Event, X-Webhook-Secret).
+// Timeout 10 detik. Mengembalikan HTTP status, sukses/tidak, pesan error,
+// dan durasi pengiriman dalam milidetik.
+func DeliverWebhookPayload(url, secret, event string, raw []byte) (statusCode int, success bool, errMsg string, durationMs int64) {
+	start := time.Now()
+	defer func() { durationMs = time.Since(start).Milliseconds() }()
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
+	if err != nil {
+		return 0, false, err.Error(), 0
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Webhook-Event", event)
+	if secret != "" {
+		req.Header.Set("X-Webhook-Secret", secret)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, false, err.Error(), 0
+	}
+	defer resp.Body.Close()
+
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	msg := ""
+	if !ok {
+		msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
+	}
+	return resp.StatusCode, ok, msg, 0
 }

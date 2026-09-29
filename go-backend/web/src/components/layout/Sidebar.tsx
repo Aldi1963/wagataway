@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  KeyRound,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -75,6 +76,7 @@ const sections: NavSection[] = [
     items: [
       { label: "Links", href: "/links", icon: Link2 },
       { label: "Webhook", href: "/webhook", icon: Webhook },
+      { label: "API Developer", href: "/api-docs", icon: KeyRound },
     ],
   },
   {

@@ -2,11 +2,14 @@ package whatsapp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
@@ -40,11 +43,12 @@ type SessionState struct {
 
 // Manager coordinates all WhatsApp sessions
 type Manager struct {
-	sessions   map[uint]*SessionState
-	mu         sync.RWMutex
-	sessionDir string
-	db         *gorm.DB
-	onMessage  func(deviceID, userID uint, msg *events.Message)
+	sessions     map[uint]*SessionState
+	mu           sync.RWMutex
+	sessionDir   string
+	db           *gorm.DB
+	onMessage    func(deviceID, userID uint, msg *events.Message)
+	shuttingDown atomic.Bool
 }
 
 // NewManager creates a new WhatsApp session manager
@@ -124,14 +128,39 @@ func (m *Manager) Disconnect(deviceID uint) {
 	sess.Client = nil
 	sess.mu.Unlock()
 
+	// Baca status sebelumnya dulu: hanya notifikasi jika transisi nyata
+	// (bukan disconnect berulang) dan bukan saat graceful shutdown.
+	var device models.Device
+	wasDisconnected := true
+	if err := m.db.Where("id = ?", deviceID).First(&device).Error; err == nil {
+		wasDisconnected = device.Status == "disconnected"
+	}
+
 	// Update DB
 	m.db.Model(&models.Device{}).Where("id = ?", deviceID).Update("status", "disconnected")
+
+	if !wasDisconnected && !m.shuttingDown.Load() {
+		name := device.Name
+		if name == "" {
+			name = fmt.Sprintf("perangkat #%d", deviceID)
+		}
+		uid := sess.UserID
+		m.db.Create(&models.Notification{
+			UserID:  &uid,
+			Type:    "device",
+			Title:   "Perangkat terputus",
+			Message: fmt.Sprintf("Perangkat %s terputus dari WhatsApp", name),
+			Link:    "/devices",
+		})
+	}
 
 	log.Info().Uint("deviceID", deviceID).Msg("WhatsApp session disconnected")
 }
 
 // DisconnectAll disconnects all active sessions (for graceful shutdown)
 func (m *Manager) DisconnectAll() {
+	// Tekan notifikasi per-device saat shutdown agar tidak spam
+	m.shuttingDown.Store(true)
 	m.mu.RLock()
 	ids := make([]uint, 0, len(m.sessions))
 	for id := range m.sessions {
@@ -729,7 +758,8 @@ func (m *Manager) updateConversation(sess *SessionState, phone, pushName, lastMs
 	}
 }
 
-// fireWebhooks fires all active webhooks for a user/device event
+// fireWebhooks fires all active webhooks for a user/device event.
+// Tiap hook dikirim via goroutine sendiri agar tidak memblokir pipeline pesan.
 func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[string]interface{}) {
 	var hooks []models.Webhook
 	m.db.Where("user_id = ? AND is_active = ?", userID, true).Find(&hooks)
@@ -740,12 +770,71 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 			continue
 		}
 
-		// TODO: Check if hook.Events contains this event
-		// TODO: Fire HTTP POST to hook.URL with payload + hook.Secret header
-		// This would use net/http with retries similar to the Node.js implementation
-		_ = hook
-		_ = event
-		_ = payload
+		// Check event filter (events kosong = langganan semua event)
+		if !webhookWantsEvent(hook.Events, event) {
+			continue
+		}
+
+		go m.deliverWebhook(hook, deviceID, event, payload)
+	}
+}
+
+// webhookWantsEvent: true jika event ada di JSON array events milik hook,
+// atau jika events kosong / tidak bisa di-parse (anggap semua event).
+func webhookWantsEvent(eventsJSON, event string) bool {
+	eventsJSON = strings.TrimSpace(eventsJSON)
+	if eventsJSON == "" {
+		return true
+	}
+	var events []string
+	if err := json.Unmarshal([]byte(eventsJSON), &events); err != nil {
+		return true
+	}
+	if len(events) == 0 {
+		return true
+	}
+	for _, e := range events {
+		if e == event {
+			return true
+		}
+	}
+	return false
+}
+
+// deliverWebhook mengirim satu webhook dan mencatat hasilnya ke webhook_deliveries.
+func (m *Manager) deliverWebhook(hook models.Webhook, deviceID uint, event string, payload map[string]interface{}) {
+	body := map[string]interface{}{
+		"event":     event,
+		"device_id": deviceID,
+		"payload":   payload,
+		"sent_at":   time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		log.Error().Err(err).Uint("webhookID", hook.ID).Msg("Failed to marshal webhook payload")
+		return
+	}
+
+	statusCode, success, errMsg, durationMs := DeliverWebhookPayload(hook.URL, hook.Secret, event, raw)
+
+	m.db.Create(&models.WebhookDelivery{
+		WebhookID:  hook.ID,
+		Event:      event,
+		StatusCode: statusCode,
+		Success:    success,
+		ErrorMsg:   errMsg,
+		DurationMs: durationMs,
+		Payload:    string(raw),
+	})
+
+	now := time.Now()
+	m.db.Model(&models.Webhook{}).Where("id = ?", hook.ID).Updates(map[string]interface{}{
+		"trigger_count":  gorm.Expr("trigger_count + 1"),
+		"last_triggered": now,
+	})
+
+	if !success {
+		log.Warn().Uint("webhookID", hook.ID).Str("event", event).Str("error", errMsg).Msg("Webhook delivery failed")
 	}
 }
 

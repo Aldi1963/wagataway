@@ -47,6 +47,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Transaction{},
 		&models.ScheduledMessage{},
 		&models.Webhook{},
+		&models.WebhookDelivery{},
 		&models.Plugin{},
 		&models.CsBot{},
 		&models.CsBotFaq{},

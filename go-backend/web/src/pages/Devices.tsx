@@ -96,6 +96,13 @@ export default function Devices() {
   const [qrCode, setQrCode] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
+  const [pairTab, setPairTab] = useState<"qr" | "code">("qr");
+  const [pairPhone, setPairPhone] = useState("");
+  const [pairCode, setPairCode] = useState("");
+  const [pairExpiry, setPairExpiry] = useState<number | null>(null);
+  const [pairCountdown, setPairCountdown] = useState(0);
+  const [pairLoading, setPairLoading] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = () => {
@@ -142,6 +149,19 @@ export default function Devices() {
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrDevice]);
+
+  // Hitung mundur masa berlaku kode pairing
+  useEffect(() => {
+    if (!pairExpiry) {
+      setPairCountdown(0);
+      return;
+    }
+    const tick = () =>
+      setPairCountdown(Math.max(0, Math.ceil((pairExpiry - Date.now()) / 1000)));
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [pairExpiry]);
 
   const handleAdd = async () => {
     if (!addName.trim()) {
@@ -207,6 +227,29 @@ export default function Devices() {
     }
   };
 
+  const requestPairCode = async () => {
+    if (!qrDevice) return;
+    const digits = pairPhone.replace(/\D/g, "");
+    if (digits.length < 9) {
+      toast.error("Nomor HP tidak valid, gunakan format 62812xxxxxxx");
+      return;
+    }
+    setPairLoading(true);
+    setPairError(null);
+    try {
+      const res = await apiPost<{ code: string; expiresIn: number }>(
+        `/devices/${qrDevice.id}/pair-code`,
+        { phone: pairPhone }
+      );
+      setPairCode(res.code);
+      setPairExpiry(Date.now() + (res.expiresIn || 120) * 1000);
+    } catch (e) {
+      setPairError(e instanceof Error ? e.message : "Gagal meminta kode pairing");
+    } finally {
+      setPairLoading(false);
+    }
+  };
+
   const fetchQr = async (id: number) => {
     const q = await apiGet<{ qr: string }>(`/devices/${id}/qr`);
     setQrCode(q.qr || "");
@@ -217,6 +260,11 @@ export default function Devices() {
     setQrDevice(d);
     setQrCode("");
     setQrError(null);
+    setPairTab("qr");
+    setPairCode("");
+    setPairExpiry(null);
+    setPairError(null);
+    setPairPhone("");
     setQrLoading(true);
     try {
       await apiPost(`/devices/${d.id}/connect`);
@@ -533,6 +581,25 @@ export default function Devices() {
           title={`Hubungkan ${qrDevice.name}`}
           onClose={() => setQrDevice(null)}
         >
+          <div className="flex gap-1 p-1 rounded-lg bg-muted mb-3">
+            <Button
+              size="sm"
+              variant={pairTab === "qr" ? "default" : "ghost"}
+              className="flex-1"
+              onClick={() => setPairTab("qr")}
+            >
+              QR Code
+            </Button>
+            <Button
+              size="sm"
+              variant={pairTab === "code" ? "default" : "ghost"}
+              className="flex-1"
+              onClick={() => setPairTab("code")}
+            >
+              Kode Pairing
+            </Button>
+          </div>
+          {pairTab === "qr" ? (
           <div className="flex flex-col items-center space-y-3">
             {qrLoading && (
               <p className="text-sm text-muted-foreground">
@@ -580,6 +647,71 @@ export default function Devices() {
               </p>
             )}
           </div>
+          ) : (
+          <div className="flex flex-col items-center space-y-3 w-full">
+            {!pairCode ? (
+              <>
+                <p className="text-sm text-muted-foreground text-center">
+                  Masukkan nomor WhatsApp yang akan ditautkan.
+                </p>
+                <Input
+                  value={pairPhone}
+                  onChange={(e) => setPairPhone(e.target.value)}
+                  placeholder="62812xxxxxxx"
+                  inputMode="tel"
+                  className="text-center max-w-xs"
+                />
+                {pairError && (
+                  <p className="text-sm text-destructive text-center">{pairError}</p>
+                )}
+                <Button size="sm" onClick={requestPairCode} disabled={pairLoading}>
+                  {pairLoading ? "Meminta kode..." : "Minta Kode"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground text-center">
+                  Masukkan kode ini di WhatsApp HP kamu:
+                </p>
+                <p className="font-mono text-4xl font-bold tracking-[0.2em] select-all">
+                  {pairCode}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Berlaku {pairCountdown} detik
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(pairCode);
+                      toast.success("Kode disalin");
+                    }}
+                  >
+                    Salin Kode
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPairCode("");
+                      setPairExpiry(null);
+                    }}
+                  >
+                    Kode Baru
+                  </Button>
+                </div>
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside w-full max-w-xs">
+                  <li>Buka WhatsApp di HP</li>
+                  <li>Pengaturan → Perangkat tertaut</li>
+                  <li>Tautkan perangkat</li>
+                  <li>Pilih "Tautkan dengan nomor telepon"</li>
+                  <li>Masukkan kode di atas</li>
+                </ol>
+              </>
+            )}
+          </div>
+          )}
         </Modal>
       )}
     </div>

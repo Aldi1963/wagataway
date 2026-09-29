@@ -22,6 +22,7 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 		devices.POST("/:id/connect", connectDevice(db, wm))
 		devices.POST("/:id/disconnect", disconnectDevice(db, wm))
 		devices.GET("/:id/qr", getDeviceQR(wm))
+		devices.POST("/:id/pair-code", requestPairCode(db, wm))
 		devices.GET("/:id/status", getDeviceStatus(db, wm))
 	}
 }

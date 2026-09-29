@@ -62,6 +62,22 @@ type Webhook struct {
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }
 
+// ── Webhook Deliveries ────────────────────────────────────────────────────────
+
+type WebhookDelivery struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	WebhookID  uint      `gorm:"index;not null" json:"webhookId"`
+	Event      string    `gorm:"size:50;not null" json:"event"`
+	StatusCode int       `json:"statusCode"`
+	Success    bool      `gorm:"index" json:"success"`
+	ErrorMsg   string    `gorm:"type:text" json:"errorMsg"`
+	DurationMs int64     `json:"durationMs"`
+	Payload    string    `gorm:"type:text" json:"payload"` // JSON body yang dikirim
+	CreatedAt  time.Time `json:"createdAt"`
+
+	Webhook Webhook `gorm:"foreignKey:WebhookID" json:"-"`
+}
+
 // ── Plugins ───────────────────────────────────────────────────────────────────
 
 type Plugin struct {

@@ -78,6 +78,9 @@ export default function Contacts() {
 
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
+  const [importTab, setImportTab] = useState<"file" | "text">("file");
+  const [importFileName, setImportFileName] = useState("");
+  const [importParsed, setImportParsed] = useState<{ name: string; phone: string; email?: string }[]>([]);
   const [deleting, setDeleting] = useState<Contact | null>(null);
 
   const firstRun = useRef(true);
@@ -164,8 +167,8 @@ export default function Contacts() {
     }
   };
 
-  const doImport = async () => {
-    const lines = importText.split("\n").map((l) => l.trim()).filter(Boolean);
+  const parseImportLines = (text: string) => {
+    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     const parsed: { name: string; phone: string; email?: string }[] = [];
     for (const line of lines) {
       const parts = line.split(",").map((p) => p.trim());
@@ -178,6 +181,32 @@ export default function Contacts() {
         parsed.push(item);
       }
     }
+    return parsed;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      setImportParsed(parseImportLines(text));
+    };
+    reader.onerror = () => toast.error("Gagal membaca file");
+    reader.readAsText(file);
+  };
+
+  const resetImport = () => {
+    setShowImport(false);
+    setImportText("");
+    setImportParsed([]);
+    setImportFileName("");
+    setImportTab("file");
+  };
+
+  const doImport = async () => {
+    const parsed = importTab === "file" ? importParsed : parseImportLines(importText);
     if (parsed.length === 0) {
       toast.error("Tidak ada baris valid. Format: nama,nomor[,email]");
       return;
@@ -189,8 +218,7 @@ export default function Contacts() {
         { contacts: parsed }
       );
       toast.success(res.message || `${res.imported} kontak diimpor`);
-      setShowImport(false);
-      setImportText("");
+      resetImport();
       load(search);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal mengimpor kontak");
@@ -402,26 +430,99 @@ export default function Contacts() {
 
       {/* Import dialog */}
       {showImport && (
-        <Modal title="Import Kontak" onClose={() => setShowImport(false)}>
+        <Modal title="Import Kontak" onClose={resetImport}>
           <div className="space-y-4">
+            {/* Tabs */}
+            <div className="flex rounded-md border border-border p-0.5 bg-secondary/50">
+              <button
+                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                  importTab === "file" ? "bg-card shadow text-foreground" : "text-muted-foreground"
+                }`}
+                onClick={() => setImportTab("file")}
+              >
+                File CSV
+              </button>
+              <button
+                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                  importTab === "text" ? "bg-card shadow text-foreground" : "text-muted-foreground"
+                }`}
+                onClick={() => setImportTab("text")}
+              >
+                Tempel Teks
+              </button>
+            </div>
+
             <p className="text-sm text-muted-foreground">
-              Satu kontak per baris dengan format:{" "}
+              Format per baris:{" "}
               <code className="bg-secondary px-1.5 py-0.5 rounded text-xs">
                 nama,nomor[,email]
               </code>
             </p>
-            <textarea
-              className="w-full min-h-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder={"Budi Santoso,6281234567890\nSiti Aminah,6289876543210,siti@contoh.com"}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-            />
+
+            {importTab === "file" ? (
+              <div className="space-y-3">
+                <label className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-4 py-8 cursor-pointer hover:bg-secondary/50 transition-colors">
+                  <Upload className="w-5 h-5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {importFileName || "Pilih file CSV..."}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </label>
+                {importParsed.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">
+                      Pratinjau ({importParsed.length} kontak ditemukan)
+                    </p>
+                    <div className="overflow-x-auto rounded-md border border-border">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border bg-secondary/50">
+                            <th className="text-left font-medium text-muted-foreground px-3 py-2">Nama</th>
+                            <th className="text-left font-medium text-muted-foreground px-3 py-2">Nomor</th>
+                            <th className="text-left font-medium text-muted-foreground px-3 py-2">Email</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importParsed.slice(0, 5).map((c, i) => (
+                            <tr key={i} className="border-b border-border last:border-0">
+                              <td className="px-3 py-2 font-medium">{c.name}</td>
+                              <td className="px-3 py-2 font-mono text-muted-foreground">{c.phone}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{c.email || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {importParsed.length > 5 && (
+                      <p className="text-[11px] text-muted-foreground">
+                        ...dan {importParsed.length - 5} baris lainnya
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <textarea
+                className="w-full min-h-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder={"Budi Santoso,6281234567890\nSiti Aminah,6289876543210,siti@contoh.com"}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+              />
+            )}
+
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowImport(false)}>
+              <Button variant="outline" onClick={resetImport}>
                 Batal
               </Button>
               <Button onClick={doImport} disabled={saving}>
-                {saving ? "Mengimpor..." : "Import"}
+                {saving
+                  ? "Mengimpor..."
+                  : `Import ${importTab === "file" ? importParsed.length : parseImportLines(importText).length} kontak`}
               </Button>
             </div>
           </div>

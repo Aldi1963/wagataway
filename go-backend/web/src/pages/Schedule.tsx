@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Clock, X, RefreshCw, Ban } from "lucide-react";
+import { Plus, Clock, X, RefreshCw, Ban, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +70,199 @@ function toDateTimeLocal(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function dateKey(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const MONTH_NAMES = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+function CalendarView({
+  schedules,
+  month,
+  onMonthChange,
+  selectedDate,
+  onSelectDate,
+  onCancel,
+  onDelete,
+}: {
+  schedules: ScheduleItem[];
+  month: Date;
+  onMonthChange: (d: Date) => void;
+  selectedDate: string | null;
+  onSelectDate: (k: string | null) => void;
+  onCancel: (item: ScheduleItem) => void;
+  onDelete: (item: ScheduleItem) => void;
+}) {
+  const year = month.getFullYear();
+  const mon = month.getMonth();
+  const firstDay = new Date(year, mon, 1).getDay();
+  const daysInMonth = new Date(year, mon + 1, 0).getDate();
+  const todayKey = dateKey(new Date());
+
+  const counts: Record<string, number> = {};
+  for (const s of schedules) {
+    const k = dateKey(new Date(s.sendAt));
+    counts[k] = (counts[k] || 0) + 1;
+  }
+
+  const cells: (number | null)[] = [
+    ...Array<null>(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const dayItems = selectedDate
+    ? schedules.filter((s) => dateKey(new Date(s.sendAt)) === selectedDate)
+    : [];
+
+  const prevMonth = () => onMonthChange(new Date(year, mon - 1, 1));
+  const nextMonth = () => onMonthChange(new Date(year, mon + 1, 1));
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth} aria-label="Bulan sebelumnya">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <p className="text-sm font-semibold text-foreground">
+              {MONTH_NAMES[mon]} {year}
+            </p>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={nextMonth} aria-label="Bulan berikutnya">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {DAY_NAMES.map((d) => (
+              <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">
+                {d}
+              </div>
+            ))}
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`e${i}`} />;
+              const k = `${year}-${String(mon + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const count = counts[k] || 0;
+              const isSelected = selectedDate === k;
+              const isToday = todayKey === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => onSelectDate(isSelected ? null : k)}
+                  className={`relative rounded-md border p-1.5 min-h-[52px] flex flex-col items-center justify-start transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-secondary/60"
+                  } ${isToday ? "ring-1 ring-primary" : ""}`}
+                >
+                  <span className={`text-xs ${isToday ? "font-bold text-primary" : "text-foreground"}`}>
+                    {day}
+                  </span>
+                  {count > 0 && (
+                    <span className="mt-1 text-[9px] font-semibold rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 min-w-[18px] text-center">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {selectedDate && (
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-foreground">
+            Jadwal {new Date(selectedDate + "T00:00:00").toLocaleDateString("id-ID", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}{" "}
+            <span className="text-muted-foreground font-normal">({dayItems.length})</span>
+          </p>
+          {dayItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Tidak ada jadwal pada tanggal ini.</p>
+          ) : (
+            dayItems.map((item) => (
+              <ScheduleRow key={item.id} item={item} onCancel={onCancel} onDelete={onDelete} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScheduleRow({
+  item,
+  onCancel,
+  onDelete,
+}: {
+  item: ScheduleItem;
+  onCancel: (item: ScheduleItem) => void;
+  onDelete: (item: ScheduleItem) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 text-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground line-clamp-1">{item.content}</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-xs text-muted-foreground font-mono">{item.to}</span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(item.sendAt).toLocaleString("id-ID")}
+                </span>
+              </div>
+              {item.status === "failed" && item.errorMsg && (
+                <p className="text-xs text-destructive mt-0.5 line-clamp-1">{item.errorMsg}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="outline" className={`text-[10px] ${statusStyle[item.status] || ""}`}>
+              {statusLabel[item.status] || item.status}
+            </Badge>
+            {item.status === "pending" && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onCancel(item)}
+                  aria-label="Batalkan"
+                  title="Batalkan jadwal"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive"
+                  onClick={() => onDelete(item)}
+                  aria-label="Hapus"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Schedule() {
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -82,6 +275,12 @@ export default function Schedule() {
   const [sendAt, setSendAt] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<ScheduleItem | null>(null);
+  const [view, setView] = useState<"list" | "calendar">("list");
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -171,10 +370,30 @@ export default function Schedule() {
           <h2 className="text-lg font-semibold text-foreground">Jadwal Pesan</h2>
           <p className="text-sm text-muted-foreground">Kirim pesan di waktu tertentu</p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openAdd}>
-          <Plus className="w-3.5 h-3.5" />
-          Jadwalkan Baru
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-md border border-border p-0.5">
+            <Button
+              variant={view === "list" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setView("list")}
+            >
+              <List className="w-3.5 h-3.5" /> Daftar
+            </Button>
+            <Button
+              variant={view === "calendar" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setView("calendar")}
+            >
+              <CalendarDays className="w-3.5 h-3.5" /> Kalender
+            </Button>
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={openAdd}>
+            <Plus className="w-3.5 h-3.5" />
+            Jadwalkan Baru
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -190,6 +409,16 @@ export default function Schedule() {
             <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
           </Button>
         </div>
+      ) : view === "calendar" ? (
+        <CalendarView
+          schedules={schedules}
+          month={month}
+          onMonthChange={setMonth}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          onCancel={cancel}
+          onDelete={setDeleting}
+        />
       ) : schedules.length === 0 ? (
         <div className="rounded-lg border border-border p-8 text-center">
           <Clock className="w-8 h-8 mx-auto text-muted-foreground" />
@@ -199,57 +428,7 @@ export default function Schedule() {
       ) : (
         <div className="space-y-3">
           {schedules.map((item) => (
-            <Card key={item.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4 text-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground line-clamp-1">{item.content}</p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-xs text-muted-foreground font-mono">{item.to}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(item.sendAt).toLocaleString("id-ID")}
-                        </span>
-                      </div>
-                      {item.status === "failed" && item.errorMsg && (
-                        <p className="text-xs text-destructive mt-0.5 line-clamp-1">{item.errorMsg}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className={`text-[10px] ${statusStyle[item.status] || ""}`}>
-                      {statusLabel[item.status] || item.status}
-                    </Badge>
-                    {item.status === "pending" && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => cancel(item)}
-                          aria-label="Batalkan"
-                          title="Batalkan jadwal"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => setDeleting(item)}
-                          aria-label="Hapus"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <ScheduleRow key={item.id} item={item} onCancel={cancel} onDelete={setDeleting} />
           ))}
         </div>
       )}

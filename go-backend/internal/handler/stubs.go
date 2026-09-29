@@ -42,15 +42,6 @@ func registerDashboardRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	rg.GET("/dashboard/stats", stubHandler("dashboard-stats"))
 }
 
-func registerApiKeyRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	keys := rg.Group("/api-keys")
-	{
-		keys.GET("", stubHandler("list-api-keys"))
-		keys.POST("", stubHandler("create-api-key"))
-		keys.DELETE("/:id", stubHandler("delete-api-key"))
-	}
-}
-
 func registerPluginRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	plugins := rg.Group("/plugins")
 	{

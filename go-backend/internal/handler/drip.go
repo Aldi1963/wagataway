@@ -23,6 +23,7 @@ func registerDripRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		d.PUT("/:id/steps/:stepId", updateDripStep(db))
 		d.DELETE("/:id/steps/:stepId", deleteDripStep(db))
 		d.POST("/:id/enroll", enrollDrip(db))
+		d.GET("/:id/analytics", dripAnalytics(db))
 	}
 }
 
@@ -229,6 +230,52 @@ func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"message":  "Berhasil enroll",
 			"enrolled": enrolled,
+		})
+	}
+}
+
+// dripAnalytics mengembalikan ringkasan performa satu campaign:
+// jumlah enrollment per status, progres tiap step, dan total enrollment.
+func dripAnalytics(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var campaign models.DripCampaign
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
+			return
+		}
+
+		type statusCount struct {
+			Status string
+			Count  int64
+		}
+		var rows []statusCount
+		db.Model(&models.DripEnrollment{}).Select("status, COUNT(*) AS count").
+			Where("campaign_id = ?", id).Group("status").Scan(&rows)
+		byStatus := gin.H{"active": int64(0), "completed": int64(0), "cancelled": int64(0)}
+		for _, r := range rows {
+			byStatus[r.Status] = r.Count
+		}
+
+		var steps []models.DripStep
+		db.Where("campaign_id = ?", id).Order("step_order ASC").Find(&steps)
+		progress := make([]gin.H, 0, len(steps))
+		for _, st := range steps {
+			var reached int64
+			db.Model(&models.DripEnrollment{}).
+				Where("campaign_id = ? AND current_step >= ?", id, st.StepOrder).
+				Count(&reached)
+			progress = append(progress, gin.H{"stepOrder": st.StepOrder, "reached": reached})
+		}
+
+		var total int64
+		db.Model(&models.DripEnrollment{}).Where("campaign_id = ?", id).Count(&total)
+
+		c.JSON(http.StatusOK, gin.H{
+			"enrollmentsByStatus": byStatus,
+			"stepProgress":        progress,
+			"totalEnrolled":       total,
 		})
 	}
 }

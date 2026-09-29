@@ -25,8 +25,12 @@ const Links = lazy(() => import("@/pages/Links"));
 const Blacklist = lazy(() => import("@/pages/Blacklist"));
 const Billing = lazy(() => import("@/pages/Billing"));
 const Webhooks = lazy(() => import("@/pages/Webhooks"));
+const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Notifications = lazy(() => import("@/pages/Notifications"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+const Landing = lazy(() => import("@/pages/Landing"));
 
 // ── Loading ───────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -52,6 +56,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!user) return <Redirect to="/login" />;
 
   return <DashboardLayout>{children}</DashboardLayout>;
+}
+
+function HomeRoute() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Landing />;
+  return (
+    <ProtectedRoute>
+      <Dashboard />
+    </ProtectedRoute>
+  );
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
@@ -80,7 +101,7 @@ function AppRouter() {
           <GuestRoute><Register /></GuestRoute>
         </Route>
         <Route path="/">
-          <ProtectedRoute><Dashboard /></ProtectedRoute>
+          <HomeRoute />
         </Route>
         <Route path="/devices">
           <ProtectedRoute><Devices /></ProtectedRoute>
@@ -127,8 +148,17 @@ function AppRouter() {
         <Route path="/webhook">
           <ProtectedRoute><Webhooks /></ProtectedRoute>
         </Route>
+        <Route path="/api-docs">
+          <ApiDocs />
+        </Route>
+        <Route path="/notifications">
+          <ProtectedRoute><Notifications /></ProtectedRoute>
+        </Route>
         <Route path="/profile">
           <ProtectedRoute><Profile /></ProtectedRoute>
+        </Route>
+        <Route path="/settings">
+          <ProtectedRoute><Settings /></ProtectedRoute>
         </Route>
         <Route component={NotFound} />
       </Switch>

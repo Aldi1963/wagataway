@@ -17,6 +17,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// DB untuk lookup X-API-Key di middleware auth
+	middleware.SetAPIKeyDB(db)
+
 	r := gin.New()
 
 	// ── Global Middleware ───────────────────────────────────────────────────
@@ -70,6 +73,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerUploadRoutes(protected)
 			registerChatRoutes(protected, db, waManager)
 			registerAnalyticsRoutes(protected, db)
+			registerStatsRoutes(protected, db)
 			registerDripRoutes(protected, db)
 			registerBlacklistRoutes(protected, db)
 			registerLinkManageRoutes(protected, db)
@@ -95,7 +99,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		r.NoRoute(func(c *gin.Context) {
 			// Don't serve frontend for /api or /uploads
 			path := c.Request.URL.Path
-			if len(path) >= 4 && path[:4] == "/api" {
+			if path == "/api" || (len(path) >= 5 && path[:5] == "/api/") {
 				c.JSON(http.StatusNotFound, gin.H{"message": "Route not found", "code": "NOT_FOUND"})
 				return
 			}

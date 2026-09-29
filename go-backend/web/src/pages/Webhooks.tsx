@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Plus, Globe, Trash2, Zap, X, RefreshCw, Pencil, Copy } from "lucide-react";
+import { Plus, Globe, Trash2, Zap, X, RefreshCw, Pencil, Copy, ChevronDown, ChevronUp, RotateCcw, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Webhook {
@@ -15,6 +15,16 @@ interface Webhook {
   deviceId: number | null;
   isActive: boolean;
   triggerCount: number;
+}
+
+interface Delivery {
+  id: number;
+  event: string;
+  statusCode: number;
+  success: boolean;
+  errorMsg: string;
+  durationMs: number;
+  createdAt: string;
 }
 
 interface Device {
@@ -74,6 +84,10 @@ export default function Webhooks() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Webhook | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [deliveries, setDeliveries] = useState<Record<number, Delivery[]>>({});
+  const [loadingDeliveries, setLoadingDeliveries] = useState<Record<number, boolean>>({});
+  const [retrying, setRetrying] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -189,6 +203,46 @@ export default function Webhooks() {
   const deviceName = (id: number | null) =>
     id == null ? "Semua perangkat" : devices.find((d) => d.id === id)?.name || `Perangkat #${id}`;
 
+  const toggleExpand = async (hook: Webhook) => {
+    if (expanded === hook.id) {
+      setExpanded(null);
+      return;
+    }
+    setExpanded(hook.id);
+    if (deliveries[hook.id]) return;
+    setLoadingDeliveries((p) => ({ ...p, [hook.id]: true }));
+    try {
+      const res = await apiGet<{ deliveries: Delivery[] }>(`/webhooks/${hook.id}/deliveries`);
+      setDeliveries((p) => ({ ...p, [hook.id]: res.deliveries || [] }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memuat riwayat pengiriman");
+      setExpanded(null);
+    } finally {
+      setLoadingDeliveries((p) => ({ ...p, [hook.id]: false }));
+    }
+  };
+
+  const retryDelivery = async (hookId: number, delivery: Delivery) => {
+    setRetrying(delivery.id);
+    try {
+      const res = await apiFetch(`/webhooks/${hookId}/deliveries/${delivery.id}/retry`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Gagal mengirim ulang");
+      const data = await res.json();
+      const updated: Delivery = data.delivery || { ...delivery, success: true };
+      setDeliveries((p) => ({
+        ...p,
+        [hookId]: (p[hookId] || []).map((d) => (d.id === delivery.id ? updated : d)),
+      }));
+      toast.success("Pengiriman ulang berhasil");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal mengirim ulang");
+    } finally {
+      setRetrying(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -225,6 +279,8 @@ export default function Webhooks() {
         <div className="space-y-3">
           {webhooks.map((hook) => {
             const events = parseEvents(hook.events);
+            const isOpen = expanded === hook.id;
+            const hookDeliveries = deliveries[hook.id] || [];
             return (
               <Card key={hook.id}>
                 <CardContent className="p-4">
@@ -262,6 +318,16 @@ export default function Webhooks() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
+                        onClick={() => toggleExpand(hook)}
+                        aria-label={isOpen ? "Tutup riwayat" : "Lihat riwayat pengiriman"}
+                        title="Riwayat pengiriman"
+                      >
+                        {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
                         onClick={() => copyUrl(hook.url)}
                         aria-label="Salin URL"
                       >
@@ -292,6 +358,79 @@ export default function Webhooks() {
                       </Button>
                     </div>
                   </div>
+
+                  {isOpen && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <p className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
+                        <History className="w-3.5 h-3.5" /> Riwayat Pengiriman
+                      </p>
+                      {loadingDeliveries[hook.id] ? (
+                        <div className="space-y-2">
+                          {[0, 1].map((i) => (
+                            <div key={i} className="h-9 rounded bg-secondary animate-pulse" />
+                          ))}
+                        </div>
+                      ) : hookDeliveries.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-3 text-center">
+                          Belum ada pengiriman tercatat.
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-md border border-border">
+                          <table className="w-full min-w-[560px] text-xs">
+                            <thead>
+                              <tr className="border-b border-border bg-secondary/50">
+                                <th className="text-left font-medium text-muted-foreground px-3 py-2">Waktu</th>
+                                <th className="text-left font-medium text-muted-foreground px-3 py-2">Event</th>
+                                <th className="text-left font-medium text-muted-foreground px-3 py-2">HTTP</th>
+                                <th className="text-left font-medium text-muted-foreground px-3 py-2">Durasi</th>
+                                <th className="text-left font-medium text-muted-foreground px-3 py-2">Status</th>
+                                <th className="w-24"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {hookDeliveries.map((d) => (
+                                <tr key={d.id} className="border-b border-border last:border-0">
+                                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                                    {new Date(d.createdAt).toLocaleString("id-ID")}
+                                  </td>
+                                  <td className="px-3 py-2 font-mono">{d.event}</td>
+                                  <td className="px-3 py-2 font-mono">{d.statusCode || "-"}</td>
+                                  <td className="px-3 py-2 text-muted-foreground">{d.durationMs} ms</td>
+                                  <td className="px-3 py-2">
+                                    <Badge
+                                      variant="outline"
+                                      className={d.success ? "text-green-600 border-green-600/50" : "text-destructive border-destructive/50"}
+                                    >
+                                      {d.success ? "Sukses" : "Gagal"}
+                                    </Badge>
+                                    {!d.success && d.errorMsg && (
+                                      <p className="text-[10px] text-destructive mt-0.5 max-w-[200px] truncate" title={d.errorMsg}>
+                                        {d.errorMsg}
+                                      </p>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    {!d.success && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 gap-1 text-[11px]"
+                                        disabled={retrying === d.id}
+                                        onClick={() => retryDelivery(hook.id, d)}
+                                      >
+                                        <RotateCcw className="w-3 h-3" />
+                                        {retrying === d.id ? "..." : "Kirim ulang"}
+                                      </Button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

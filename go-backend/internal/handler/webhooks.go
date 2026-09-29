@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -17,6 +18,64 @@ func registerWebhookRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		wh.POST("", createWebhook(db))
 		wh.PUT("/:id", updateWebhook(db))
 		wh.DELETE("/:id", deleteWebhook(db))
+		wh.GET("/:id/deliveries", listWebhookDeliveries(db))
+		wh.POST("/:id/deliveries/:deliveryId/retry", retryWebhookDelivery(db))
+	}
+}
+
+// getUserWebhook mengambil webhook milik user atau 404.
+func getUserWebhook(c *gin.Context, db *gorm.DB) (models.Webhook, bool) {
+	userID := middleware.GetUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+	var hook models.Webhook
+	if err := db.Where("id = ? AND user_id = ?", id, userID).First(&hook).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Webhook tidak ditemukan"})
+		return hook, false
+	}
+	return hook, true
+}
+
+// listWebhookDeliveries: 20 pengiriman terakhir sebuah webhook.
+func listWebhookDeliveries(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		hook, ok := getUserWebhook(c, db)
+		if !ok {
+			return
+		}
+		var deliveries []models.WebhookDelivery
+		db.Where("webhook_id = ?", hook.ID).Order("id DESC").Limit(20).Find(&deliveries)
+		c.JSON(http.StatusOK, gin.H{"deliveries": deliveries})
+	}
+}
+
+// retryWebhookDelivery: kirim ulang payload tersimpan dari satu delivery.
+// Hasil percobaan dicatat sebagai baris delivery baru.
+func retryWebhookDelivery(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		hook, ok := getUserWebhook(c, db)
+		if !ok {
+			return
+		}
+		did, _ := strconv.ParseUint(c.Param("deliveryId"), 10, 32)
+		var delivery models.WebhookDelivery
+		if err := db.Where("id = ? AND webhook_id = ?", did, hook.ID).First(&delivery).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Delivery tidak ditemukan"})
+			return
+		}
+		statusCode, success, errMsg, durationMs := whatsapp.DeliverWebhookPayload(
+			hook.URL, hook.Secret, delivery.Event, []byte(delivery.Payload),
+		)
+		retry := models.WebhookDelivery{
+			WebhookID:  hook.ID,
+			Event:      delivery.Event,
+			StatusCode: statusCode,
+			Success:    success,
+			ErrorMsg:   errMsg,
+			DurationMs: durationMs,
+			Payload:    delivery.Payload,
+		}
+		db.Create(&retry)
+		c.JSON(http.StatusOK, gin.H{"delivery": retry})
 	}
 }
 
@@ -28,7 +87,6 @@ func listWebhooks(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"webhooks": hooks})
 	}
 }
-
 
 func createWebhook(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

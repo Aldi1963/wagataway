@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   KeyRound,
@@ -11,12 +11,18 @@ import {
   ChevronDown,
   ShieldCheck,
   AlertTriangle,
+  Send,
+  FlaskConical,
+  Check,
 } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { toast } from "sonner";
 
 interface ApiKey {
@@ -98,6 +104,7 @@ interface EndpointDoc {
   curl: string;
   params?: Param[];
   note?: string;
+  bodyExample?: string;
 }
 
 interface GroupDoc {
@@ -114,83 +121,19 @@ const methodStyle: Record<HttpMethod, string> = {
   DELETE: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
 };
 
-function EndpointRow({ ep }: { ep: EndpointDoc }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-border overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 transition-colors"
-      >
-        <span
-          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 w-[52px] text-center ${methodStyle[ep.method]}`}
-        >
-          {ep.method}
-        </span>
-        <code className="text-xs font-mono text-foreground truncate flex-1">{ep.path}</code>
-        <span className="text-xs text-muted-foreground hidden md:block truncate max-w-[220px]">
-          {ep.title}
-        </span>
-        <ChevronDown
-          className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-      {open && (
-        <div className="border-t border-border p-3 space-y-3 bg-secondary/20">
-          <p className="text-xs text-muted-foreground md:hidden">{ep.title}</p>
-          {ep.params && ep.params.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left text-muted-foreground border-b border-border">
-                    <th className="py-1.5 pr-3 font-medium">Parameter</th>
-                    <th className="py-1.5 pr-3 font-medium">Tipe</th>
-                    <th className="py-1.5 pr-3 font-medium">Wajib</th>
-                    <th className="py-1.5 font-medium">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ep.params.map((p) => (
-                    <tr key={p.name} className="border-b border-border/50 last:border-0">
-                      <td className="py-1.5 pr-3 font-mono text-foreground">{p.name}</td>
-                      <td className="py-1.5 pr-3 text-muted-foreground">{p.type}</td>
-                      <td className="py-1.5 pr-3">
-                        {p.required ? (
-                          <Badge variant="default" className="text-[10px]">Ya</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px]">Tidak</Badge>
-                        )}
-                      </td>
-                      <td className="py-1.5 text-muted-foreground">{p.desc}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {ep.note && (
-            <p className="text-xs text-muted-foreground flex gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>{ep.note}</span>
-            </p>
-          )}
-          <CurlBlock title="Contoh curl" code={ep.curl} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 function buildGroups(baseUrl: string): GroupDoc[] {
-  const curl = (method: HttpMethod, path: string, body?: string) => {
+  const curl = (method: string, path: string, body?: string) => {
     const lines = [
-      `curl -X ${method} ${baseUrl}${path} \\`,
-      `  -H "Authorization: Bearer <API_KEY>" \\`,
-      `  -H "Content-Type: application/json"${body ? " \\" : ""}`,
+      `curl -X ${method} \\`,
+      `  ${baseUrl}${path} \\`,
+      `  -H "X-API-Key: YOUR_API_KEY" \\`,
+      `  -H "Content-Type: application/json"`,
     ];
     if (body) lines.push(`  -d '${body}'`);
     return lines.join("\n");
   };
+
+  const J = (o: object) => JSON.stringify(o, null, 4);
 
   return [
     {
@@ -209,11 +152,8 @@ function buildGroups(baseUrl: string): GroupDoc[] {
             { name: "mediaUrl", type: "string", required: false, desc: "URL media (untuk type selain text)" },
             { name: "caption", type: "string", required: false, desc: "Caption media" },
           ],
-          curl: curl(
-            "POST",
-            "/api/messages/send",
-            `{\n    "deviceId": 1,\n    "to": "6281234567890",\n    "type": "text",\n    "content": "Halo dari API WaGataway!"\n  }`
-          ),
+          bodyExample: J({ deviceId: 1, to: "6281234567890", type: "text", content: "Halo dari API WaGataway!" }),
+          curl: curl("POST", "/api/messages/send", `{\n    "deviceId": 1,\n    "to": "6281234567890",\n    "type": "text",\n    "content": "Halo dari API WaGataway!"\n  }`),
         },
         {
           method: "POST",
@@ -224,11 +164,8 @@ function buildGroups(baseUrl: string): GroupDoc[] {
             { name: "recipients", type: "string[]", required: true, desc: "Daftar nomor tujuan" },
             { name: "content", type: "string", required: true, desc: "Isi pesan" },
           ],
-          curl: curl(
-            "POST",
-            "/api/messages/send-bulk",
-            `{\n    "deviceId": 1,\n    "recipients": ["6281234567890", "6289876543210"],\n    "content": "Promo hari ini!"\n  }`
-          ),
+          bodyExample: J({ deviceId: 1, recipients: ["6281234567890", "6289876543210"], content: "Promo hari ini!" }),
+          curl: curl("POST", "/api/messages/send-bulk", `{\n    "deviceId": 1,\n    "recipients": ["6281234567890", "6289876543210"],\n    "content": "Promo hari ini!"\n  }`),
           note: "Pengiriman berjalan antre; nomor yang masuk blacklist otomatis dilewati.",
         },
       ],
@@ -243,6 +180,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           path: "/api/devices",
           title: "Tambah perangkat baru",
           params: [{ name: "name", type: "string", required: true, desc: "Nama perangkat" }],
+          bodyExample: J({ name: "CS Toko" }),
           curl: curl("POST", "/api/devices", `{\n    "name": "CS Toko"\n  }`),
         },
         { method: "GET", path: "/api/devices/:id", title: "Detail satu perangkat", curl: curl("GET", "/api/devices/1") },
@@ -250,6 +188,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           method: "PUT",
           path: "/api/devices/:id",
           title: "Ubah nama perangkat",
+          bodyExample: J({ name: "CS Toko Baru" }),
           curl: curl("PUT", "/api/devices/1", `{\n    "name": "CS Toko Baru"\n  }`),
         },
         { method: "DELETE", path: "/api/devices/:id", title: "Hapus perangkat", curl: curl("DELETE", "/api/devices/1") },
@@ -265,6 +204,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           path: "/api/devices/:id/pair-code",
           title: "Minta kode pairing 8 karakter",
           params: [{ name: "phone", type: "string", required: true, desc: "Nomor HP perangkat, format 62812xxxxxxx" }],
+          bodyExample: J({ phone: "6281234567890" }),
           curl: curl("POST", "/api/devices/1/pair-code", `{\n    "phone": "6281234567890"\n  }`),
           note: "Masukkan kode di WhatsApp > Perangkat Tertaut > Tautkan dengan nomor telepon.",
         },
@@ -286,20 +226,24 @@ function buildGroups(baseUrl: string): GroupDoc[] {
             { name: "phone", type: "string", required: true, desc: "Nomor HP" },
             { name: "email", type: "string", required: false, desc: "Email" },
           ],
+          bodyExample: J({ name: "Budi", phone: "6281234567890" }),
           curl: curl("POST", "/api/contacts", `{\n    "name": "Budi",\n    "phone": "6281234567890"\n  }`),
         },
-        { method: "PUT", path: "/api/contacts/:id", title: "Ubah kontak", curl: curl("PUT", "/api/contacts/1", `{\n    "name": "Budi Santoso"\n  }`) },
+        {
+          method: "PUT",
+          path: "/api/contacts/:id",
+          title: "Ubah kontak",
+          bodyExample: J({ name: "Budi Santoso" }),
+          curl: curl("PUT", "/api/contacts/1", `{\n    "name": "Budi Santoso"\n  }`),
+        },
         { method: "DELETE", path: "/api/contacts/:id", title: "Hapus kontak", curl: curl("DELETE", "/api/contacts/1") },
         {
           method: "POST",
           path: "/api/contacts/import",
           title: "Import banyak kontak sekaligus",
           params: [{ name: "contacts", type: "array", required: true, desc: "Array {name, phone, email?}" }],
-          curl: curl(
-            "POST",
-            "/api/contacts/import",
-            `{\n    "contacts": [\n      { "name": "Budi", "phone": "6281234567890" },\n      { "name": "Sari", "phone": "6289876543210" }\n    ]\n  }`
-          ),
+          bodyExample: J({ contacts: [{ name: "Budi", phone: "6281234567890" }, { name: "Sari", phone: "6289876543210" }] }),
+          curl: curl("POST", "/api/contacts/import", `{\n    "contacts": [\n      { "name": "Budi", "phone": "6281234567890" },\n      { "name": "Sari", "phone": "6289876543210" }\n    ]\n  }`),
         },
       ],
     },
@@ -316,9 +260,16 @@ function buildGroups(baseUrl: string): GroupDoc[] {
             { name: "name", type: "string", required: true, desc: "Nama template" },
             { name: "content", type: "string", required: true, desc: "Isi template" },
           ],
+          bodyExample: J({ name: "Salam pembuka", content: "Halo kak, ada yang bisa kami bantu?" }),
           curl: curl("POST", "/api/templates", `{\n    "name": "Salam pembuka",\n    "content": "Halo kak, ada yang bisa kami bantu?"\n  }`),
         },
-        { method: "PUT", path: "/api/templates/:id", title: "Ubah template", curl: curl("PUT", "/api/templates/1", `{\n    "content": "Halo kak..."\n  }`) },
+        {
+          method: "PUT",
+          path: "/api/templates/:id",
+          title: "Ubah template",
+          bodyExample: J({ content: "Halo kak, ada yang bisa kami bantu? (baru)" }),
+          curl: curl("PUT", "/api/templates/1", `{\n    "content": "Halo kak..."\n  }`),
+        },
         { method: "DELETE", path: "/api/templates/:id", title: "Hapus template", curl: curl("DELETE", "/api/templates/1") },
       ],
     },
@@ -337,11 +288,8 @@ function buildGroups(baseUrl: string): GroupDoc[] {
             { name: "content", type: "string", required: true, desc: "Isi pesan" },
             { name: "sendAt", type: "string", required: true, desc: "Waktu kirim, format ISO 8601" },
           ],
-          curl: curl(
-            "POST",
-            "/api/schedule",
-            `{\n    "deviceId": 1,\n    "to": "6281234567890",\n    "content": "Jangan lupa meeting jam 9!",\n    "sendAt": "2026-10-01T09:00:00+07:00"\n  }`
-          ),
+          bodyExample: J({ deviceId: 1, to: "6281234567890", content: "Jangan lupa meeting jam 9!", sendAt: "2026-10-01T09:00:00+07:00" }),
+          curl: curl("POST", "/api/schedule", `{\n    "deviceId": 1,\n    "to": "6281234567890",\n    "content": "Jangan lupa meeting jam 9!",\n    "sendAt": "2026-10-01T09:00:00+07:00"\n  }`),
         },
         { method: "PATCH", path: "/api/schedule/:id/cancel", title: "Batalkan jadwal", curl: curl("PATCH", "/api/schedule/1/cancel") },
         { method: "DELETE", path: "/api/schedule/:id", title: "Hapus jadwal", curl: curl("DELETE", "/api/schedule/1") },
@@ -360,6 +308,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
             { name: "name", type: "string", required: true, desc: "Nama campaign" },
             { name: "deviceId", type: "number", required: true, desc: "ID perangkat pengirim" },
           ],
+          bodyExample: J({ name: "Onboarding", deviceId: 1 }),
           curl: curl("POST", "/api/drip", `{\n    "name": "Onboarding",\n    "deviceId": 1\n  }`),
         },
         { method: "GET", path: "/api/drip/:id", title: "Detail campaign + step", curl: curl("GET", "/api/drip/1") },
@@ -368,6 +317,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           path: "/api/drip/:id/enroll",
           title: "Daftarkan kontak ke campaign",
           params: [{ name: "contactIds", type: "number[]", required: true, desc: "ID kontak peserta" }],
+          bodyExample: J({ contactIds: [1, 2, 3] }),
           curl: curl("POST", "/api/drip/1/enroll", `{\n    "contactIds": [1, 2, 3]\n  }`),
         },
         { method: "GET", path: "/api/drip/:id/analytics", title: "Analitik campaign", curl: curl("GET", "/api/drip/1/analytics") },
@@ -384,16 +334,19 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           title: "Daftarkan webhook",
           params: [
             { name: "url", type: "string", required: true, desc: "URL endpoint penerima" },
-            { name: "events", type: "string[]", required: true, desc: "cth: [\"message.received\", \"message.sent\"]" },
+            { name: "events", type: "string[]", required: true, desc: 'cth: ["message.received", "message.sent"]' },
             { name: "secret", type: "string", required: false, desc: "Secret untuk verifikasi signature" },
           ],
-          curl: curl(
-            "POST",
-            "/api/webhooks",
-            `{\n    "url": "https://toko.id/hook/wa",\n    "events": ["message.received", "message.sent"]\n  }`
-          ),
+          bodyExample: J({ url: "https://toko.id/hook/wa", events: ["message.received", "message.sent"] }),
+          curl: curl("POST", "/api/webhooks", `{\n    "url": "https://toko.id/hook/wa",\n    "events": ["message.received", "message.sent"]\n  }`),
         },
-        { method: "PUT", path: "/api/webhooks/:id", title: "Ubah webhook", curl: curl("PUT", "/api/webhooks/1", `{\n    "isActive": false\n  }`) },
+        {
+          method: "PUT",
+          path: "/api/webhooks/:id",
+          title: "Ubah webhook",
+          bodyExample: J({ isActive: false }),
+          curl: curl("PUT", "/api/webhooks/1", `{\n    "isActive": false\n  }`),
+        },
         { method: "DELETE", path: "/api/webhooks/:id", title: "Hapus webhook", curl: curl("DELETE", "/api/webhooks/1") },
         { method: "GET", path: "/api/webhooks/:id/deliveries", title: "Riwayat pengiriman webhook", curl: curl("GET", "/api/webhooks/1/deliveries") },
         {
@@ -428,7 +381,290 @@ const errorCodes = [
   { code: "500", desc: "Kesalahan server — hubungi dukungan bila berulang." },
 ];
 
-export default function ApiDocs() {
+/* ── Coba langsung ala Postman ──────────────────────── */
+
+interface TryResp {
+  status: number;
+  ms: number;
+  text: string;
+}
+
+function prettyJson(t: string): string {
+  try {
+    return JSON.stringify(JSON.parse(t), null, 2);
+  } catch {
+    return t;
+  }
+}
+
+function TryIt({
+  ep,
+  baseUrl,
+  apiKey,
+  setApiKey,
+}: {
+  ep: EndpointDoc;
+  baseUrl: string;
+  apiKey: string;
+  setApiKey: (v: string) => void;
+}) {
+  const pathParams = useMemo(
+    () => [...new Set([...ep.path.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1]))],
+    [ep.path]
+  );
+  const hasBody = ["POST", "PUT", "PATCH"].includes(ep.method);
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState("");
+  const [body, setBody] = useState(ep.bodyExample ?? "");
+  const [resp, setResp] = useState<TryResp | null>(null);
+  const [sending, setSending] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+
+  const send = async () => {
+    if (!apiKey.trim()) {
+      toast.error("Isi API key dulu di kolom atas");
+      return;
+    }
+    let p = ep.path;
+    for (const k of pathParams) {
+      const v = (vals[k] || "").trim();
+      if (!v) {
+        toast.error(`Isi parameter path "${k}"`);
+        return;
+      }
+      p = p.replace(":" + k, encodeURIComponent(v));
+    }
+    let json: string | undefined;
+    if (hasBody && body.trim()) {
+      try {
+        JSON.parse(body);
+        json = body;
+      } catch {
+        toast.error("Body bukan JSON yang valid");
+        return;
+      }
+    }
+    const q = query.trim().replace(/^\?/, "");
+    const url = baseUrl + p + (q ? "?" + q : "");
+    setSending(true);
+    setResp(null);
+    const t0 = performance.now();
+    try {
+      const r = await fetch(url, {
+        method: ep.method,
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey.trim(),
+        },
+        body: hasBody ? json : undefined,
+      });
+      const text = await r.text();
+      setResp({ status: r.status, ms: Math.round(performance.now() - t0), text });
+    } catch (e) {
+      setResp({
+        status: 0,
+        ms: 0,
+        text: "Gagal terhubung: " + (e instanceof Error ? e.message : String(e)),
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const statusColor =
+    resp == null
+      ? ""
+      : resp.status === 0
+        ? "bg-muted text-muted-foreground border-border"
+        : resp.status < 300
+          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+          : resp.status < 500
+            ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+            : "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-secondary/20 p-3">
+      <div>
+        <label className="text-xs">API Key</label>
+        <div className="relative mt-1">
+          <Input
+            type={showKey ? "text" : "password"}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Tempel API key Anda di sini"
+            className="pr-10 font-mono text-xs"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+            onClick={() => setShowKey((v) => !v)}
+            aria-label={showKey ? "Sembunyikan key" : "Tampilkan key"}
+          >
+            {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
+      {pathParams.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {pathParams.map((k) => (
+            <div key={k}>
+              <label className="text-xs">
+                <code className="font-mono">:{k}</code> <span className="text-destructive">*</span>
+              </label>
+              <Input
+                className="mt-1 font-mono text-xs"
+                placeholder={`cth: ${k === "id" || k === "deliveryId" ? "1" : "nilai"}`}
+                value={vals[k] || ""}
+                onChange={(e) => setVals((v) => ({ ...v, [k]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {ep.method === "GET" && (
+        <div>
+          <label className="text-xs">Query string (opsional)</label>
+          <Input
+            className="mt-1 font-mono text-xs"
+            placeholder="limit=20&search=budi"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      )}
+
+      {hasBody && (
+        <div>
+          <label className="text-xs">Body (JSON)</label>
+          <textarea className="mt-1 font-mono text-xs min-h-[120px] flex w-full rounded-md border border-input bg-background px-3 py-2 ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
+      )}
+
+      <Button onClick={send} disabled={sending} className="gap-2" size="sm">
+        {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        {sending ? "Mengirim..." : "Kirim permintaan"}
+      </Button>
+
+      {resp && (
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 bg-secondary/60 border-b border-border">
+            <span className="text-xs font-semibold">Respons</span>
+            <Badge variant="outline" className={`font-mono ${statusColor}`}>
+              {resp.status === 0 ? "ERR" : resp.status}
+            </Badge>
+            <span className="text-[11px] text-muted-foreground font-mono">{resp.ms} ms</span>
+          </div>
+          <pre className="p-3 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all bg-card max-h-72 overflow-y-auto">
+            {prettyJson(resp.text)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EndpointRow({
+  ep,
+  baseUrl,
+  apiKey,
+  setApiKey,
+}: {
+  ep: EndpointDoc;
+  baseUrl: string;
+  apiKey: string;
+  setApiKey: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"curl" | "try">("curl");
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 transition-colors"
+      >
+        <span
+          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 w-[52px] text-center ${methodStyle[ep.method]}`}
+        >
+          {ep.method}
+        </span>
+        <code className="text-xs font-mono text-foreground truncate flex-1">{ep.path}</code>
+        <span className="text-xs text-muted-foreground hidden md:block truncate max-w-[220px]">{ep.title}</span>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-border bg-card">
+          <p className="text-sm font-medium text-foreground pt-2">{ep.title}</p>
+          {ep.note && (
+            <p className="text-xs text-muted-foreground flex gap-1.5 items-start">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {ep.note}
+            </p>
+          )}
+          {ep.params && ep.params.length > 0 && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-secondary/60 text-left">
+                    <th className="px-3 py-1.5 font-semibold">Parameter</th>
+                    <th className="px-3 py-1.5 font-semibold">Tipe</th>
+                    <th className="px-3 py-1.5 font-semibold">Wajib</th>
+                    <th className="px-3 py-1.5 font-semibold">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ep.params.map((p) => (
+                    <tr key={p.name} className="border-t border-border">
+                      <td className="px-3 py-1.5 font-mono">{p.name}</td>
+                      <td className="px-3 py-1.5 font-mono text-muted-foreground">{p.type}</td>
+                      <td className="px-3 py-1.5">
+                        {p.required ? (
+                          <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">Ya</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-muted-foreground">{p.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex gap-1 border-b border-border">
+            {(["curl", "try"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1.5 text-xs font-semibold border-b-2 -mb-px transition-colors ${
+                  tab === t
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t === "curl" ? "Contoh cURL" : "Coba langsung"}
+              </button>
+            ))}
+          </div>
+          {tab === "curl" ? (
+            <CurlBlock title={`Contoh — ${ep.title}`} code={ep.curl} />
+          ) : (
+            <TryIt ep={ep} baseUrl={baseUrl} apiKey={apiKey} setApiKey={setApiKey} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Kelola API Key (khusus login) ──────────────────── */
+
+function KeyManager({ setTryKey }: { setTryKey: (v: string) => void }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -458,11 +694,12 @@ export default function ApiDocs() {
     }
     setSaving(true);
     try {
-      const res = await apiPost<{ apiKey: ApiKey; key: string }>("/api-keys", {
+      // Backend mengembalikan: { apiKey: "<key penuh>", key: <objek metadata> }
+      const res = await apiPost<{ apiKey: string; key: ApiKey }>("/api-keys", {
         name: name.trim(),
       });
-      setKeys((prev) => [res.apiKey, ...prev]);
-      setNewKey(res.key);
+      setKeys((prev) => [res.key, ...prev]);
+      setNewKey(res.apiKey);
       setNewKeyName(name.trim());
       setShowNewKey(true);
       setName("");
@@ -475,243 +712,349 @@ export default function ApiDocs() {
     }
   };
 
-  const confirmDelete = async () => {
+  const deleteKey = async () => {
     if (!deleting) return;
     try {
       await apiDelete(`/api-keys/${deleting.id}`);
       setKeys((prev) => prev.filter((k) => k.id !== deleting.id));
+      setDeleting(null);
       toast.success("API key dihapus");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus");
-    } finally {
-      setDeleting(null);
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus API key");
     }
   };
 
-  const copyNewKey = async () => {
-    if (!newKey) return;
+  const copyText = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(newKey);
-      toast.success("API key disalin");
+      await navigator.clipboard.writeText(text);
+      toast.success(label + " disalin");
     } catch {
       toast.error("Gagal menyalin");
     }
   };
 
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://wa.clipku.com";
-  const groups = buildGroups(baseUrl);
-
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">API Developer</h2>
-        <p className="text-sm text-muted-foreground">
-          Integrasikan WaGataway ke aplikasi Anda via REST API
-        </p>
-      </div>
-
-      {/* API Keys */}
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-semibold">API Key</CardTitle>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-            <Plus className="w-3.5 h-3.5" /> Buat Key
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {newKey && (
-            <div className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/5 p-3 space-y-2">
-              <p className="text-xs font-semibold text-foreground">
-                Key "{newKeyName}" berhasil dibuat — salin sekarang, key penuh hanya ditampilkan sekali.
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono bg-background border border-border rounded px-2 py-1.5 break-all">
-                  {showNewKey ? newKey : "•".repeat(32)}
-                </code>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setShowNewKey((v) => !v)} aria-label="Tampilkan/sembunyikan">
-                  {showNewKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={copyNewKey}>
-                  <Copy className="w-3.5 h-3.5" /> Salin
-                </Button>
-              </div>
-              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setNewKey(null)}>
-                Tutup peringatan ini
-              </Button>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="space-y-2">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-12 rounded bg-secondary animate-pulse" />
-              ))}
-            </div>
-          ) : error ? (
-            <div className="text-center py-6 space-y-3">
-              <p className="text-sm text-destructive">{error}</p>
-              <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
-              </Button>
-            </div>
-          ) : keys.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">
-              Belum ada API key. Buat key pertama untuk mulai integrasi.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {keys.map((k) => (
-                <div
-                  key={k.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border p-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center shrink-0">
-                      <KeyRound className="w-4 h-4 text-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground truncate">{k.name}</p>
-                        <Badge variant={k.isActive ? "default" : "outline"} className="text-[10px]">
-                          {k.isActive ? "Aktif" : "Nonaktif"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs font-mono text-muted-foreground">
-                        {k.keyPrefix}••••••••
-                        {k.lastUsed ? ` · terakhir dipakai ${new Date(k.lastUsed).toLocaleString("id-ID")}` : " · belum dipakai"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive shrink-0"
-                    onClick={() => setDeleting(k)}
-                    aria-label={`Hapus ${k.name}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound className="w-4 h-4" /> Kelola API Key
+        </CardTitle>
+        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1">
+          <Plus className="w-4 h-4" /> Buat Key
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
+          </div>
+        ) : error ? (
+          <div className="text-sm text-destructive flex items-center gap-2 py-4">
+            <AlertTriangle className="w-4 h-4" /> {error}
+            <Button variant="outline" size="sm" onClick={load}>Coba lagi</Button>
+          </div>
+        ) : keys.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            Belum ada API key. Buat satu untuk mulai memakai API.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {keys.map((k) => (
+              <div
+                key={k.id}
+                className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{k.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {k.keyPrefix}... {k.isActive ? "" : "· nonaktif"}
+                    {k.lastUsed ? ` · terakhir dipakai ${new Date(k.lastUsed).toLocaleDateString("id-ID")}` : " · belum pernah dipakai"}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Autentikasi */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4" /> Autentikasi
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Semua endpoint di bawah <code className="font-mono">/api</code> membutuhkan autentikasi.
-            Pilih salah satu dari dua cara berikut:
-          </p>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs font-semibold text-foreground mb-1">1. Header X-API-Key</p>
-              <p className="text-xs text-muted-foreground">
-                Disarankan untuk integrasi server. Buat key di kartu API Key di atas.
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs font-semibold text-foreground mb-1">2. Bearer Token (JWT)</p>
-              <p className="text-xs text-muted-foreground">
-                Token sesi dari <code className="font-mono">POST /api/auth/login</code>. Cocok untuk
-                skrip sekali jalan.
-              </p>
-            </div>
-          </div>
-          <CurlBlock
-            title="Contoh autentikasi"
-            code={`# Dengan API key\ncurl ${baseUrl}/api/devices \\\\\n  -H "X-API-Key: wg_xxxxxxxxxxxxxxxx"\n\n# Dengan JWT\ncurl ${baseUrl}/api/devices \\\\\n  -H "Authorization: Bearer eyJhbGciOi..."`}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Referensi endpoint */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Referensi Endpoint</h3>
-          <p className="text-xs text-muted-foreground">
-            Klik endpoint untuk melihat parameter dan contoh curl.
-          </p>
-        </div>
-        {groups.map((g) => (
-          <div key={g.title} className="space-y-2">
-            <div>
-              <p className="text-sm font-semibold text-foreground">{g.title}</p>
-              <p className="text-xs text-muted-foreground">{g.desc}</p>
-            </div>
-            <div className="space-y-2">
-              {g.endpoints.map((ep) => (
-                <EndpointRow key={`${ep.method}-${ep.path}`} ep={ep} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Kode error */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Kode Error</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-1.5">
-            {errorCodes.map((e) => (
-              <div key={e.code} className="flex items-start gap-3 text-xs">
-                <code className="font-mono font-bold text-foreground w-10 shrink-0">{e.code}</code>
-                <p className="text-muted-foreground">{e.desc}</p>
+                <Badge variant={k.isActive ? "default" : "secondary"} className="text-[10px]">
+                  {k.isActive ? "Aktif" : "Nonaktif"}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => setDeleting(k)}
+                  aria-label={`Hapus ${k.name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
             ))}
           </div>
+        )}
+
+        {showForm && (
+          <Modal title="Buat API Key Baru" onClose={() => setShowForm(false)}>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs">Nama key</label>
+                <Input
+                  className="mt-1"
+                  placeholder="cth: Integrasi Toko"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && createKey()}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Key penuh hanya ditampilkan sekali setelah dibuat. Simpan di tempat aman.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowForm(false)}>Batal</Button>
+                <Button onClick={createKey} disabled={saving}>
+                  {saving ? "Membuat..." : "Buat Key"}
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {newKey && (
+          <Modal title="API Key Baru Dibuat" onClose={() => setNewKey(null)}>
+            <div className="space-y-3">
+              <p className="text-sm">
+                Key <strong>{newKeyName}</strong> berhasil dibuat. Salin sekarang — key penuh tidak akan ditampilkan lagi.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2">
+                <code className="flex-1 font-mono text-xs break-all">
+                  {showNewKey ? newKey : "•".repeat(32)}
+                </code>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setShowNewKey((v) => !v)} aria-label="Tampilkan/sembunyikan">
+                  {showNewKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copyText(newKey, "API key")} aria-label="Salin key">
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setTryKey(newKey);
+                    setNewKey(null);
+                    toast.success("Key siap dipakai di panel Coba langsung");
+                    document.getElementById("docs-try")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <FlaskConical className="w-4 h-4 mr-1" /> Pakai untuk mencoba
+                </Button>
+                <Button onClick={() => setNewKey(null)}>Selesai</Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {deleting && (
+          <Modal title="Hapus API Key" onClose={() => setDeleting(null)}>
+            <p className="text-sm mb-4">
+              Hapus key <strong>{deleting.name}</strong>? Integrasi yang memakai key ini akan berhenti bekerja.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
+              <Button variant="destructive" onClick={deleteKey}>Hapus</Button>
+            </div>
+          </Modal>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Isi dokumentasi ────────────────────────────────── */
+
+function DocsContent({ isPublic }: { isPublic: boolean }) {
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const groups = useMemo(() => buildGroups(baseUrl), [baseUrl]);
+  const [tryKey, setTryKey] = useState(() => {
+    try {
+      return localStorage.getItem("wag_try_apikey") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [showTryKey, setShowTryKey] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("wag_try_apikey", tryKey);
+    } catch {
+      /* abaikan */
+    }
+  }, [tryKey]);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+          <FlaskConical className="w-5 h-5" /> Dokumentasi API
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Integrasikan WaGataway ke aplikasi Anda lewat REST API. Setiap endpoint bisa dicoba langsung dari halaman ini.
+        </p>
+      </div>
+
+      {!isPublic && <KeyManager setTryKey={setTryKey} />}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" /> Autentikasi
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-muted-foreground">
+            Semua endpoint memakai API key yang dikirim lewat header{" "}
+            <code className="font-mono text-foreground bg-secondary px-1 rounded">X-API-Key</code>.
+            {isPublic ? (
+              <>
+                {" "}Belum punya key? <Link href="/register" className="text-primary underline">Daftar gratis</Link>, lalu buat key di halaman ini setelah masuk.
+              </>
+            ) : (
+              <> Buat key di bagian "Kelola API Key" di atas.</>
+            )}
+          </p>
+          <CurlBlock
+            title="Contoh request terautentikasi"
+            code={`curl -X GET \\\n  ${baseUrl}/api/devices \\\n  -H "X-API-Key: YOUR_API_KEY"`}
+          />
+          <div className="rounded-lg border border-border p-3 text-xs text-muted-foreground">
+            Key terikat ke akun Anda — data yang bisa diakses hanya milik akun pemilik key. Key yang nonaktif atau kedaluwarsa akan ditolak (401).
+          </div>
         </CardContent>
       </Card>
 
-      {showForm && (
-        <Modal title="Buat API Key" onClose={() => setShowForm(false)}>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium">Nama key</label>
-              <Input
-                className="mt-1"
-                placeholder="cth: Integrasi Toko Online"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
-                Batal
-              </Button>
-              <Button onClick={createKey} disabled={saving}>
-                {saving ? "Membuat..." : "Buat Key"}
-              </Button>
-            </div>
+      <Card id="docs-try">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Send className="w-4 h-4" /> Coba langsung
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <label className="text-xs">API key untuk semua percobaan di halaman ini</label>
+          <div className="relative">
+            <Input
+              type={showTryKey ? "text" : "password"}
+              value={tryKey}
+              onChange={(e) => setTryKey(e.target.value)}
+              placeholder="Tempel API key Anda — tersimpan lokal di browser ini saja"
+              className="pr-10 font-mono text-xs"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+              onClick={() => setShowTryKey((v) => !v)}
+              aria-label={showTryKey ? "Sembunyikan" : "Tampilkan"}
+            >
+              {showTryKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </Button>
           </div>
-        </Modal>
-      )}
-
-      {deleting && (
-        <Modal title="Hapus API Key" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-muted-foreground">
-            Hapus API key <span className="font-semibold text-foreground">"{deleting.name}"</span>?
-            Aplikasi yang memakai key ini akan kehilangan akses.
+          <p className="text-[11px] text-muted-foreground">
+            Buka tab "Coba langsung" di endpoint mana pun, isi parameter, lalu tekan Kirim permintaan — respons tampil di bawahnya seperti Postman.
           </p>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              Batal
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Hapus
-            </Button>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <Card key={g.title}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">{g.title}</CardTitle>
+              <p className="text-xs text-muted-foreground">{g.desc}</p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {g.endpoints.map((ep) => (
+                <EndpointRow
+                  key={`${ep.method}-${ep.path}`}
+                  ep={ep}
+                  baseUrl={baseUrl}
+                  apiKey={tryKey}
+                  setApiKey={setTryKey}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Kode error umum</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-border overflow-hidden">
+            <table className="w-full text-xs">
+              <tbody>
+                {errorCodes.map((e) => (
+                  <tr key={e.code} className="border-t border-border first:border-t-0">
+                    <td className="px-3 py-2 font-mono font-bold w-16">{e.code}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{e.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </Modal>
-      )}
+        </CardContent>
+      </Card>
+
+      <p className="text-[11px] text-muted-foreground text-center pb-4 flex items-center justify-center gap-1">
+        <Check className="w-3 h-3" /> Base URL API: <code className="font-mono">{baseUrl}/api</code>
+      </p>
+    </div>
+  );
+}
+
+function PublicHeader() {
+  return (
+    <header className="border-b border-border bg-card/90 backdrop-blur sticky top-0 z-40">
+      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-bold tracking-tight">WaGataway</span>
+          <Badge variant="secondary" className="text-[10px]">Dokumentasi API</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/login">
+            <Button variant="ghost" size="sm">Masuk</Button>
+          </Link>
+          <Link href="/register">
+            <Button size="sm">Daftar</Button>
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export default function ApiDocs() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (user) {
+    return (
+      <DashboardLayout>
+        <DocsContent isPublic={false} />
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <PublicHeader />
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        <DocsContent isPublic={true} />
+      </main>
     </div>
   );
 }

@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import {Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft} from "lucide-react";
+import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/api";
+
+interface Template {
+  id: number;
+  name: string;
+  category: string;
+  content: string;
+}
 
 interface Conversation {
   id: number;
@@ -33,7 +40,27 @@ export default function LiveChat() {
   const [aiMode, setAiMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const toggleQuickReplies = () => {
+    const next = !showQuickReplies;
+    setShowQuickReplies(next);
+    if (next && templates.length === 0) {
+      setLoadingTemplates(true);
+      apiGet<{ templates: Template[] }>("/templates")
+        .then((d) => setTemplates(d.templates || []))
+        .catch(() => {})
+        .finally(() => setLoadingTemplates(false));
+    }
+  };
+
+  const insertTemplate = (t: Template) => {
+    setInput((prev) => (prev ? prev + "\n" + t.content : t.content));
+    setShowQuickReplies(false);
+  };
 
   // Load conversations
   useEffect(() => {
@@ -284,7 +311,51 @@ export default function LiveChat() {
             </div>
 
             {/* Input Area */}
-            <div className="p-3 border-t border-border bg-card flex items-center gap-2">
+            <div className="p-3 border-t border-border bg-card relative">
+              {/* Quick replies popover */}
+              {showQuickReplies && (
+                <div className="absolute left-3 right-3 bottom-full mb-2 z-20 rounded-lg border border-border bg-card shadow-xl max-h-64 overflow-y-auto">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border sticky top-0 bg-card">
+                    <p className="text-xs font-semibold text-foreground">Balasan cepat</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setShowQuickReplies(false)}
+                      aria-label="Tutup balasan cepat"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  {loadingTemplates ? (
+                    <div className="p-3 space-y-2">
+                      {[0, 1].map((i) => (
+                        <div key={i} className="h-10 rounded bg-secondary animate-pulse" />
+                      ))}
+                    </div>
+                  ) : templates.length === 0 ? (
+                    <p className="p-4 text-xs text-muted-foreground text-center">
+                      Belum ada template. Buat di menu Templates.
+                    </p>
+                  ) : (
+                    <div className="p-1.5">
+                      {templates.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => insertTemplate(t)}
+                          className="w-full text-left px-2.5 py-2 rounded-md hover:bg-secondary transition-colors"
+                        >
+                          <p className="text-xs font-medium text-foreground">{t.name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {t.content}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
               {aiMode ? (
                 <Button
                   onClick={handleAIReply}
@@ -296,6 +367,16 @@ export default function LiveChat() {
                 </Button>
               ) : (
                 <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={toggleQuickReplies}
+                    aria-label="Balasan cepat"
+                    title="Balasan cepat"
+                  >
+                    <Zap className="w-4 h-4" />
+                  </Button>
                   <Input
                     placeholder="Ketik pesan..."
                     value={input}
@@ -313,6 +394,7 @@ export default function LiveChat() {
                   </Button>
                 </>
               )}
+              </div>
             </div>
           </>
         ) : (

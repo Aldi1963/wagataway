@@ -32,6 +32,18 @@ interface Device {
   name: string;
 }
 
+interface DripAnalytics {
+  enrollmentsByStatus: Record<string, number>;
+  stepProgress: { stepOrder: number; count: number }[];
+  totalEnrolled: number;
+}
+
+const enrollmentStatusLabel: Record<string, string> = {
+  active: "Aktif",
+  completed: "Selesai",
+  cancelled: "Dibatalkan",
+};
+
 const triggerLabels: Record<string, string> = {
   manual: "Manual",
   keyword: "Keyword",
@@ -82,6 +94,8 @@ export default function DripCampaign() {
   const [stepContent, setStepContent] = useState("");
   const [stepDelay, setStepDelay] = useState("24");
   const [addingStep, setAddingStep] = useState(false);
+  const [analytics, setAnalytics] = useState<Record<number, DripAnalytics>>({});
+  const [loadingAnalytics, setLoadingAnalytics] = useState<Record<number, boolean>>({});
 
   const load = () => {
     setLoading(true);
@@ -180,7 +194,17 @@ export default function DripCampaign() {
   };
 
   const toggleExpand = (id: number) => {
-    setExpanded((prev) => (prev === id ? null : id));
+    setExpanded((prev) => {
+      const next = prev === id ? null : id;
+      if (next !== null && !analytics[next]) {
+        setLoadingAnalytics((p) => ({ ...p, [next]: true }));
+        apiGet<DripAnalytics>(`/drip/${next}/analytics`)
+          .then((a) => setAnalytics((p) => ({ ...p, [next]: a })))
+          .catch(() => {})
+          .finally(() => setLoadingAnalytics((p) => ({ ...p, [next]: false })));
+      }
+      return next;
+    });
     setStepContent("");
     setStepDelay("24");
   };
@@ -334,7 +358,49 @@ export default function DripCampaign() {
                   </div>
 
                   {isOpen && (
-                    <div className="mt-4 pt-4 border-t border-border space-y-2">
+                    <div className="mt-4 pt-4 border-t border-border space-y-3">
+                      {/* Analytics strip */}
+                      {loadingAnalytics[c.id] ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[0, 1, 2, 3].map((i) => (
+                            <div key={i} className="h-14 rounded-md bg-secondary animate-pulse" />
+                          ))}
+                        </div>
+                      ) : analytics[c.id] ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="rounded-md border border-border p-2.5">
+                              <p className="text-lg font-bold text-foreground">
+                                {analytics[c.id].totalEnrolled}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">Total Peserta</p>
+                            </div>
+                            {(["active", "completed", "cancelled"] as const).map((st) => (
+                              <div key={st} className="rounded-md border border-border p-2.5">
+                                <p className="text-lg font-bold text-foreground">
+                                  {analytics[c.id].enrollmentsByStatus[st] || 0}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {enrollmentStatusLabel[st]}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          {analytics[c.id].stepProgress.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {analytics[c.id].stepProgress
+                                .slice()
+                                .sort((a, b) => a.stepOrder - b.stepOrder)
+                                .map((sp) => (
+                                  <Badge key={sp.stepOrder} variant="outline" className="text-[10px]">
+                                    Step {sp.stepOrder}: {sp.count} kontak
+                                  </Badge>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+
                       {steps.length === 0 && (
                         <p className="text-xs text-muted-foreground">Belum ada step. Tambahkan step pertama di bawah.</p>
                       )}
