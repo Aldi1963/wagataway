@@ -70,7 +70,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
 function SectionHead({ kicker, title, desc }: { kicker: string; title: string; desc?: string }) {
   return (
     <Reveal className="text-center max-w-2xl mx-auto mb-12">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600 mb-3">{kicker}</p>
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#1e2a5c] mb-3">{kicker}</p>
       <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">{title}</h2>
       {desc && <p className="text-slate-500 mt-3">{desc}</p>}
     </Reveal>
@@ -97,23 +97,23 @@ function Navbar() {
     <header className={`fixed top-0 inset-x-0 z-50 transition-all ${scrolled ? "bg-white/90 backdrop-blur-md shadow-sm" : "bg-transparent"}`}>
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         <a href="#top" className="flex items-center gap-2">
-          <span className="text-xl font-extrabold tracking-tight text-emerald-600">WaGataway</span>
+          <span className="text-xl font-extrabold tracking-tight text-[#1e2a5c]">WaGataway</span>
         </a>
         <nav className="hidden md:flex items-center gap-8">
           {navLinks.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition-colors">
+            <a key={l.href} href={l.href} className="text-sm font-medium text-slate-600 hover:text-[#1e2a5c] transition-colors">
               {l.label}
             </a>
           ))}
-          <Link href="/api-docs" className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition-colors">
+          <Link href="/api-docs" className="text-sm font-medium text-slate-600 hover:text-[#1e2a5c] transition-colors">
             Dokumentasi
           </Link>
         </nav>
         <div className="hidden md:flex items-center gap-2">
-          <Link href="/login" className="text-sm font-semibold text-slate-700 hover:text-emerald-600 px-3 py-2">
+          <Link href="/login" className="text-sm font-semibold text-slate-700 hover:text-[#1e2a5c] px-3 py-2">
             Masuk
           </Link>
-          <Link href="/register" className="text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition-colors">
+          <Link href="/register" className="text-sm font-semibold bg-[#243370] hover:bg-[#1e2a5c] text-white px-4 py-2 rounded-lg transition-colors">
             Coba Gratis
           </Link>
         </div>
@@ -124,7 +124,7 @@ function Navbar() {
       {open && (
         <div className="md:hidden bg-white border-t border-slate-100 px-4 py-4 space-y-1 shadow-lg">
           {navLinks.map((l) => (
-            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block px-2 py-2 text-sm font-medium text-slate-700 hover:text-emerald-600">
+            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block px-2 py-2 text-sm font-medium text-slate-700 hover:text-[#1e2a5c]">
               {l.label}
             </a>
           ))}
@@ -135,7 +135,7 @@ function Navbar() {
             <Link href="/login" onClick={() => setOpen(false)} className="flex-1 text-center text-sm font-semibold border border-slate-200 rounded-lg px-3 py-2">
               Masuk
             </Link>
-            <Link href="/register" onClick={() => setOpen(false)} className="flex-1 text-center text-sm font-semibold bg-emerald-500 text-white rounded-lg px-3 py-2">
+            <Link href="/register" onClick={() => setOpen(false)} className="flex-1 text-center text-sm font-semibold bg-[#243370] text-white rounded-lg px-3 py-2">
               Coba Gratis
             </Link>
           </div>
@@ -166,19 +166,19 @@ function HeroArt() {
 function Hero() {
   return (
     <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-20">
-      <div className="relative max-w-6xl mx-auto px-4">
+      <div className="relative max-w-6xl mx-auto px-4 text-center">
         <Reveal>
-          <h1 className="text-7xl md:text-8xl font-extrabold tracking-tight text-emerald-600 leading-none">
+          <h1 className="text-6xl md:text-8xl font-extrabold tracking-tight text-[#1e2a5c] leading-none">
             CLIDI
           </h1>
-          <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-emerald-600 mt-3">
+          <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#1e2a5c] mt-3">
             WHATSAPP API
           </p>
           <p className="text-slate-600 text-lg mt-4">
             Kirim pesan WhatsApp secara otomatis.
           </p>
-          <div className="mt-8">
-            <Link href="/register" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-8 py-4 rounded-2xl transition-colors">
+          <div className="mt-8 flex justify-center">
+            <Link href="/register" className="inline-flex items-center gap-2 bg-[#243370] hover:bg-[#1e2a5c] text-white font-semibold px-8 py-4 rounded-2xl transition-colors">
               <Send className="w-5 h-5" /> Coba Gratis
             </Link>
           </div>
@@ -206,9 +206,9 @@ function Kelebihan() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {items.map((it, i) => (
             <Reveal key={it.t} delay={i * 80}>
-              <div className="h-full bg-slate-50 hover:bg-emerald-50/60 border border-slate-100 hover:border-emerald-200 rounded-2xl p-6 transition-colors">
-                <span className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4">
-                  <it.icon className="w-6 h-6 text-emerald-600" />
+              <div className="h-full bg-slate-50 hover:bg-[#eef1fb]/60 border border-slate-100 hover:border-[#b9c4e8] rounded-2xl p-6 transition-colors">
+                <span className="w-12 h-12 rounded-xl bg-[#243370]/10 flex items-center justify-center mb-4">
+                  <it.icon className="w-6 h-6 text-[#1e2a5c]" />
                 </span>
                 <h3 className="font-bold text-slate-900 mb-2">{it.t}</h3>
                 <p className="text-sm text-slate-500">{it.d}</p>
@@ -293,7 +293,7 @@ function Fitur() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                tab === t.id ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25" : "bg-white text-slate-600 border border-slate-200 hover:border-emerald-300"
+                tab === t.id ? "bg-[#243370] text-white shadow-lg shadow-[#243370]/25" : "bg-white text-slate-600 border border-slate-200 hover:border-[#7c8cc4]"
               }`}
             >
               {t.label}
@@ -304,8 +304,8 @@ function Fitur() {
           {active.items.map((it, i) => (
             <Reveal key={it.t} delay={Math.min(i, 5) * 60}>
               <div className="h-full bg-white border border-slate-100 rounded-2xl p-6 hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-1 transition-all">
-                <span className="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4">
-                  <it.icon className="w-5 h-5 text-emerald-600" />
+                <span className="w-11 h-11 rounded-xl bg-[#243370]/10 flex items-center justify-center mb-4">
+                  <it.icon className="w-5 h-5 text-[#1e2a5c]" />
                 </span>
                 <h3 className="font-bold text-slate-900 mb-1.5">{it.t}</h3>
                 <p className="text-sm text-slate-500">{it.d}</p>
@@ -333,10 +333,10 @@ function CaraKerja() {
           {steps.map((s, i) => (
             <Reveal key={s.n} delay={i * 100}>
               <div className="relative bg-slate-50 border border-slate-100 rounded-2xl p-8 text-center h-full">
-                <span className="inline-flex w-12 h-12 rounded-full bg-emerald-500 text-white font-extrabold text-lg items-center justify-center mb-4">{s.n}</span>
+                <span className="inline-flex w-12 h-12 rounded-full bg-[#243370] text-white font-extrabold text-lg items-center justify-center mb-4">{s.n}</span>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">{s.t}</h3>
                 <p className="text-sm text-slate-500">{s.d}</p>
-                {i < 2 && <ArrowRight className="hidden md:block absolute top-1/2 -right-5 -translate-y-1/2 w-6 h-6 text-emerald-300" />}
+                {i < 2 && <ArrowRight className="hidden md:block absolute top-1/2 -right-5 -translate-y-1/2 w-6 h-6 text-[#7c8cc4]" />}
               </div>
             </Reveal>
           ))}
@@ -347,13 +347,13 @@ function CaraKerja() {
             <div className="flex items-center gap-2 px-5 py-3 border-b border-white/10">
               <span className="w-3 h-3 rounded-full bg-red-400" />
               <span className="w-3 h-3 rounded-full bg-amber-400" />
-              <span className="w-3 h-3 rounded-full bg-emerald-400" />
+              <span className="w-3 h-3 rounded-full bg-[#3d4f96]" />
               <span className="ml-3 text-xs text-slate-400 font-mono">kirim-pesan.sh</span>
             </div>
             <pre className="p-5 md:p-7 text-[13px] md:text-sm font-mono leading-relaxed overflow-x-auto">
               <code>
                 <span className="text-slate-500"># Kirim pesan WhatsApp semudah ini</span>{"\n"}
-                <span className="text-emerald-400">curl</span> <span className="text-slate-300">-X POST https://wa.clipku.com/api/messages/send \</span>{"\n"}
+                <span className="text-[#3d4f96]">curl</span> <span className="text-slate-300">-X POST https://wa.clipku.com/api/messages/send \</span>{"\n"}
                 {"  "}<span className="text-sky-400">-H</span> <span className="text-amber-300">"X-API-Key: wg_anda_disini"</span> <span className="text-slate-300">\</span>{"\n"}
                 {"  "}<span className="text-sky-400">-H</span> <span className="text-amber-300">"Content-Type: application/json"</span> <span className="text-slate-300">\</span>{"\n"}
                 {"  "}<span className="text-sky-400">-d</span> <span className="text-amber-300">'{"{"}"deviceId": 1, "to": "6281234567890", "message": "Halo {"{nama}"}!"{"}"}'</span>
@@ -413,19 +413,19 @@ function DemoSimulasi() {
                 onChange={(e) => setNomor(e.target.value)}
                 placeholder="6281234567890"
                 inputMode="tel"
-                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 mb-4"
+                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#243370] focus:border-[#243370] mb-4"
               />
               <label className="block text-sm font-semibold text-slate-700 mb-2">Isi pesan</label>
               <textarea
                 value={pesan}
                 onChange={(e) => setPesan(e.target.value)}
                 rows={4}
-                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 mb-4 resize-y"
+                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#243370] focus:border-[#243370] mb-4 resize-y"
               />
               <button
                 onClick={kirim}
                 disabled={running}
-                className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+                className="inline-flex items-center gap-2 bg-[#243370] hover:bg-[#1e2a5c] disabled:opacity-60 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
               >
                 <Play className="w-4 h-4" /> {running ? "Mengirim…" : "Kirim simulasi"}
               </button>
@@ -444,10 +444,10 @@ function DemoSimulasi() {
               <div className="bg-slate-900 rounded-2xl overflow-hidden min-h-[190px]">
                 <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between">
                   <span className="text-xs text-slate-400 font-mono">Response</span>
-                  {resp !== null && !running && <span className="text-xs font-mono font-bold text-emerald-400">200 OK</span>}
+                  {resp !== null && !running && <span className="text-xs font-mono font-bold text-[#3d4f96]">200 OK</span>}
                 </div>
                 <pre className="p-5 text-[12.5px] font-mono leading-relaxed overflow-x-auto">
-                  <code className="text-emerald-300 whitespace-pre-wrap">
+                  <code className="text-[#7c8cc4] whitespace-pre-wrap">
                     {resp === null ? <span className="text-slate-500">// Tekan "Kirim simulasi" untuk melihat response</span> : resp + (running ? "▍" : "")}
                   </code>
                 </pre>
@@ -460,85 +460,15 @@ function DemoSimulasi() {
   );
 }
 
-/* ── WaGataway vs Fonnte ────────────────────────────── */
-const vsRows = [
-  { prov: "fonnte", paket: "Free", harga: "Rp 0", kuota: "1.000/bln", device: "—", plus: "—" },
-  { prov: "wag", paket: "Free", harga: "Rp 0", kuota: "1.000/bln", device: "1", plus: "Gratis selamanya" },
-  { prov: "fonnte", paket: "Lite", harga: "Rp 25.000", kuota: "1.000/bln", device: "—", plus: "—" },
-  { prov: "wag", paket: "Lite", harga: "Rp 25.000", kuota: "1.000/bln", device: "2", plus: "Attachment & broadcast CSV" },
-  { prov: "fonnte", paket: "Regular", harga: "Rp 66.000", kuota: "10.000/bln", device: "—", plus: "—" },
-  { prov: "wag", paket: "Regular", harga: "Rp 66.000", kuota: "10.000/bln", device: "3", plus: "Drip campaign + analitik" },
-  { prov: "fonnte", paket: "Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "—", plus: "—" },
-  { prov: "wag", paket: "Pro", harga: "Rp 110.000", kuota: "25.000/bln", device: "5", plus: "Multi device + webhook retry" },
-  { prov: "fonnte", paket: "Master", harga: "Rp 175.000", kuota: "unlimited", device: "—", plus: "—" },
-  { prov: "wag", paket: "Master", harga: "Rp 175.000", kuota: "unlimited", device: "10", plus: "Pesan tanpa batas" },
-];
-
-function VsFonnte() {
-  return (
-    <section id="perbandingan" className="py-20 bg-white scroll-mt-16">
-      <div className="max-w-5xl mx-auto px-4">
-        <SectionHead kicker="Perbandingan" title="WaGataway vs Fonnte" desc="Bandingkan harga dan kuota secara jujur — lalu putuskan sendiri." />
-        <Reveal>
-          <div className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-left">
-                  {["Paket", "Harga", "Kuota", "Device", "Nilai plus"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {vsRows.map((r, i) => {
-                  const wag = r.prov === "wag";
-                  return (
-                    <tr key={i} className={`border-t border-slate-100 ${wag ? "bg-emerald-50/70" : "bg-white"}`}>
-                      <td className="px-4 py-3">
-                        <span className="font-bold text-slate-900">{r.paket}</span>{" "}
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${wag ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>
-                          {wag ? "WaGataway" : "Fonnte"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{r.harga}</td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.kuota}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.device}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {wag ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                            {r.plus}
-                          </span>
-                        ) : (
-                          r.plus
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Reveal>
-        <Reveal className="mt-4">
-          <p className="text-xs text-slate-400 text-center">Harga Fonnte per fonnte.com (Sep 2026), dapat berubah sewaktu-waktu.</p>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
 /* ── Integrasi ──────────────────────────────────────── */
 function Integrasi() {
   const items = ["Toko Online", "CRM", "ERP", "Sistem Kasir", "Aplikasi Absensi", "Notifikasi OTP", "E-Commerce", "Helpdesk"];
   return (
-    <section className="py-16 bg-emerald-600 overflow-hidden">
+    <section className="py-16 bg-[#1e2a5c] overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 text-center mb-8">
         <Reveal>
           <h2 className="text-2xl md:text-3xl font-extrabold text-white">Terintegrasi dengan sistem Anda</h2>
-          <p className="text-emerald-100 mt-2">REST API + Webhook yang simpel — sambungkan ke aplikasi apa pun.</p>
+          <p className="text-[#dde3f7] mt-2">REST API + Webhook yang simpel — sambungkan ke aplikasi apa pun.</p>
         </Reveal>
       </div>
       <div className="relative">
@@ -580,7 +510,7 @@ function Testimoni() {
                 </div>
                 <p className="text-sm text-slate-600 flex-1">"{x.t}"</p>
                 <div className="flex items-center gap-3 mt-5">
-                  <span className="w-10 h-10 rounded-full bg-emerald-500/15 text-emerald-700 font-bold flex items-center justify-center">{x.n[0]}</span>
+                  <span className="w-10 h-10 rounded-full bg-[#243370]/15 text-[#1a2a5e] font-bold flex items-center justify-center">{x.n[0]}</span>
                   <div>
                     <p className="text-sm font-bold text-slate-900">{x.n}</p>
                     <p className="text-xs text-slate-400">{x.r}</p>
@@ -686,10 +616,10 @@ function Harga() {
         <SectionHead kicker="Paket" title="Harga yang ramah UMKM" desc="Mulai gratis. Upgrade kapan saja sesuai kebutuhan bisnis Anda." />
         <Reveal className="flex justify-center mb-10">
           <div className="bg-white border border-slate-200 rounded-full p-1 flex text-sm font-semibold">
-            <button onClick={() => setTahunan(false)} className={`px-5 py-2 rounded-full transition-all ${!tahunan ? "bg-emerald-500 text-white shadow" : "text-slate-500"}`}>
+            <button onClick={() => setTahunan(false)} className={`px-5 py-2 rounded-full transition-all ${!tahunan ? "bg-[#243370] text-white shadow" : "text-slate-500"}`}>
               Bulanan
             </button>
-            <button onClick={() => setTahunan(true)} className={`px-5 py-2 rounded-full transition-all ${tahunan ? "bg-emerald-500 text-white shadow" : "text-slate-500"}`}>
+            <button onClick={() => setTahunan(true)} className={`px-5 py-2 rounded-full transition-all ${tahunan ? "bg-[#243370] text-white shadow" : "text-slate-500"}`}>
               Tahunan
             </button>
           </div>
@@ -699,25 +629,25 @@ function Harga() {
             const harga = tahunan ? p.harga * 10 : p.harga;
             return (
               <Reveal key={p.nama} delay={i * 60}>
-                <div className={`relative h-full rounded-2xl p-6 flex flex-col bg-white ${p.populer ? "border-2 border-emerald-500 shadow-xl" : "border border-slate-200"}`}>
+                <div className={`relative h-full rounded-2xl p-6 flex flex-col bg-white ${p.populer ? "border-2 border-[#243370] shadow-xl" : "border border-slate-200"}`}>
                   {p.populer && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">PALING LARIS</span>
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#243370] text-white text-xs font-bold px-3 py-1 rounded-full">PALING LARIS</span>
                   )}
                   <h3 className="font-extrabold text-lg text-slate-900 text-center">{p.nama}</h3>
                   <p className="text-3xl font-extrabold mt-2 text-slate-900 text-center">{rp(harga)}</p>
                   <p className="text-xs mt-1 text-slate-400 text-center">{tahunan ? "per tahun" : "per bulan"}</p>
-                  <p className="text-xs font-semibold mt-4 text-emerald-700 text-center">
+                  <p className="text-xs font-semibold mt-4 text-[#1a2a5e] text-center">
                     {p.pesan} · {p.device} device
                   </p>
                   <hr className="my-4 border-slate-100" />
                   <ul className="space-y-2 flex-1">
                     {p.fitur.map((f) => (
                       <li key={f} className="text-[13px] flex gap-2 text-slate-600">
-                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {f}
+                        <Check className="w-4 h-4 text-[#243370] shrink-0 mt-0.5" /> {f}
                       </li>
                     ))}
                   </ul>
-                  <Link href="/register" className="mt-6 text-center text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors bg-emerald-500 hover:bg-emerald-600 text-white">
+                  <Link href="/register" className="mt-6 text-center text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors bg-[#243370] hover:bg-[#1e2a5c] text-white">
                     {p.harga === 0 ? "Mulai Gratis" : "Pilih Paket"}
                   </Link>
                 </div>
@@ -753,10 +683,10 @@ function FAQ() {
         <div className="space-y-3">
           {items.map((it, i) => (
             <Reveal key={i} delay={Math.min(i, 4) * 50}>
-              <div className={`border rounded-2xl overflow-hidden transition-colors ${open === i ? "border-emerald-300 bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
+              <div className={`border rounded-2xl overflow-hidden transition-colors ${open === i ? "border-[#7c8cc4] bg-[#eef1fb]/40" : "border-slate-200 bg-white"}`}>
                 <button onClick={() => setOpen(open === i ? null : i)} className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left">
                   <span className="font-semibold text-slate-900 text-[15px]">{it.q}</span>
-                  <ChevronDown className={`w-5 h-5 text-emerald-600 shrink-0 transition-transform ${open === i ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-5 h-5 text-[#1e2a5c] shrink-0 transition-transform ${open === i ? "rotate-180" : ""}`} />
                 </button>
                 <div className={`grid transition-all duration-300 ${open === i ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                   <div className="overflow-hidden">
@@ -781,10 +711,10 @@ function CTA() {
           <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Siap mengotomatisasi WhatsApp bisnis Anda?</h2>
           <p className="text-slate-400 mt-4">Daftar gratis hari ini — 1.000 pesan pertama tiap bulan, tanpa kartu kredit.</p>
           <div className="flex flex-wrap justify-center gap-3 mt-8">
-            <Link href="/register" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors shadow-lg shadow-emerald-500/25">
+            <Link href="/register" className="inline-flex items-center gap-2 bg-[#243370] hover:bg-[#3d4f96] text-white font-semibold px-8 py-3.5 rounded-xl transition-colors shadow-lg shadow-[#243370]/25">
               Coba Gratis Sekarang <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link href="/api-docs" className="inline-flex items-center gap-2 border border-white/20 hover:border-emerald-400 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors">
+            <Link href="/api-docs" className="inline-flex items-center gap-2 border border-white/20 hover:border-[#3d4f96] text-white font-semibold px-8 py-3.5 rounded-xl transition-colors">
               Baca Dokumentasi
             </Link>
           </div>
@@ -807,7 +737,7 @@ function Footer() {
         <div className="grid md:grid-cols-4 gap-8 mb-10">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center"><Send className="w-4 h-4 text-white" /></span>
+              <span className="w-8 h-8 rounded-lg bg-[#243370] flex items-center justify-center"><Send className="w-4 h-4 text-white" /></span>
               <span className="font-extrabold text-white">WaGataway</span>
             </div>
             <p className="text-sm">WhatsApp API Gateway Indonesia. Kirim pesan otomatis dengan mudah.</p>
@@ -815,24 +745,24 @@ function Footer() {
           <div>
             <p className="font-bold text-white text-sm mb-3">Produk</p>
             <div className="space-y-2 text-sm">
-              <a href="#fitur" className="block hover:text-emerald-400">Fitur</a>
-              <a href="#harga" className="block hover:text-emerald-400">Harga</a>
-              <Link href="/api-docs" className="block hover:text-emerald-400">Dokumentasi API</Link>
+              <a href="#fitur" className="block hover:text-[#3d4f96]">Fitur</a>
+              <a href="#harga" className="block hover:text-[#3d4f96]">Harga</a>
+              <Link href="/api-docs" className="block hover:text-[#3d4f96]">Dokumentasi API</Link>
             </div>
           </div>
           <div>
             <p className="font-bold text-white text-sm mb-3">Perusahaan</p>
             <div className="space-y-2 text-sm">
-              <a href="#cara-kerja" className="block hover:text-emerald-400">Cara Kerja</a>
-              <a href="#faq" className="block hover:text-emerald-400">FAQ</a>
-              <Link href="/login" className="block hover:text-emerald-400">Masuk</Link>
+              <a href="#cara-kerja" className="block hover:text-[#3d4f96]">Cara Kerja</a>
+              <a href="#faq" className="block hover:text-[#3d4f96]">FAQ</a>
+              <Link href="/login" className="block hover:text-[#3d4f96]">Masuk</Link>
             </div>
           </div>
           <div>
             <p className="font-bold text-white text-sm mb-3">Mulai</p>
             <div className="space-y-2 text-sm">
-              <Link href="/register" className="block hover:text-emerald-400">Daftar Gratis</Link>
-              <Link href="/api-docs" className="block hover:text-emerald-400">Coba API</Link>
+              <Link href="/register" className="block hover:text-[#3d4f96]">Daftar Gratis</Link>
+              <Link href="/api-docs" className="block hover:text-[#3d4f96]">Coba API</Link>
             </div>
           </div>
         </div>
@@ -840,10 +770,10 @@ function Footer() {
           <p>© 2026 WaGataway. Layanan unofficial, tidak berafiliasi dengan WhatsApp Inc.</p>
           <span className="inline-flex items-center gap-2 font-semibold">
             <span className="relative flex w-2.5 h-2.5">
-              {health && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
-              <span className={`relative inline-flex rounded-full w-2.5 h-2.5 ${health === false ? "bg-red-500" : "bg-emerald-500"}`} />
+              {health && <span className="absolute inline-flex h-full w-full rounded-full bg-[#3d4f96] opacity-75 animate-ping" />}
+              <span className={`relative inline-flex rounded-full w-2.5 h-2.5 ${health === false ? "bg-red-500" : "bg-[#243370]"}`} />
             </span>
-            <span className={health === false ? "text-red-400" : "text-emerald-400"}>
+            <span className={health === false ? "text-red-400" : "text-[#3d4f96]"}>
               {health === null ? "Memeriksa status…" : health ? "Semua sistem normal" : "Gangguan sistem"}
             </span>
           </span>
@@ -874,7 +804,7 @@ function StickyCTA() {
     >
       <div className="bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-slate-800">Siap otomatisasi WA bisnis?</p>
-        <Link href="/register" className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap">
+        <Link href="/register" className="bg-[#243370] hover:bg-[#1e2a5c] text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap">
           Coba Gratis
         </Link>
       </div>
@@ -891,7 +821,6 @@ export default function Landing() {
       <Fitur />
       <CaraKerja />
       <DemoSimulasi />
-      <VsFonnte />
       <Integrasi />
       <Testimoni />
       <Harga />
