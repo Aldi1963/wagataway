@@ -152,10 +152,25 @@ function HeroArt() {
       <img
         src="/illustrations/messaging-fun.svg"
         alt="Ilustrasi pengiriman pesan WhatsApp otomatis"
-        className="w-full h-auto hero-float"
+        className="relative w-full h-auto hero-float"
         loading="eager"
       />
+      {/* kartu melayang */}
+      <div className="float-card absolute left-0 top-8 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "0s" }}>
+        <span className="w-8 h-8 rounded-lg bg-[#eef1fb] flex items-center justify-center"><Zap className="w-4 h-4 text-[#1e2a5c]" /></span>
+        <div><p className="text-[11px] font-bold text-slate-800">API 200 OK</p><p className="text-[10px] text-slate-400">86 ms</p></div>
+      </div>
+      <div className="float-card absolute right-0 top-1/3 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "1.2s" }}>
+        <span className="w-8 h-8 rounded-lg bg-[#eef1fb] flex items-center justify-center"><Webhook className="w-4 h-4 text-[#1e2a5c]" /></span>
+        <div><p className="text-[11px] font-bold text-slate-800">Webhook</p><p className="text-[10px] text-slate-400">delivered</p></div>
+      </div>
+      <div className="float-card absolute left-4 bottom-6 bg-white rounded-xl shadow-xl border border-slate-100 px-3 py-2 flex items-center gap-2" style={{ animationDelay: "2.1s" }}>
+        <span className="w-8 h-8 rounded-lg bg-[#eef1fb] flex items-center justify-center"><BellRing className="w-4 h-4 text-[#1e2a5c]" /></span>
+        <div><p className="text-[11px] font-bold text-slate-800">1.240 pesan</p><p className="text-[10px] text-slate-400">terkirim hari ini</p></div>
+      </div>
       <style>{`
+        @keyframes floatY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .float-card { animation: floatY 4s ease-in-out infinite; }
         @keyframes heroFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         .hero-float { animation: heroFloat 6s ease-in-out infinite; }
       `}</style>
@@ -166,6 +181,7 @@ function HeroArt() {
 function Hero() {
   return (
     <section id="top" className="relative overflow-hidden bg-white pt-28 pb-16 md:pt-36 md:pb-20">
+      <div aria-hidden className="absolute -top-40 left-1/2 -translate-x-1/2 w-[135vw] max-w-[780px] aspect-square bg-slate-100 rounded-full" />
       <div className="relative max-w-6xl mx-auto px-4 text-center">
         <Reveal>
           <h1 className="text-6xl md:text-8xl font-extrabold tracking-tight text-[#1e2a5c] leading-none">
