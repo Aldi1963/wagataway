@@ -983,8 +983,8 @@ func (m *Manager) deliverWebhook(hook models.Webhook, deviceID uint, event strin
 
 // sendImageMessage uploads and sends an image
 func (m *Manager) sendImageMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL, caption string) error {
-	// Download image from URL
-	data, err := downloadFile(mediaURL)
+	// Download image dari URL, atau baca langsung bila path lokal (file://).
+	data, err := loadMediaData(mediaURL)
 	if err != nil {
 		return fmt.Errorf("gagal download image: %w", err)
 	}
@@ -1014,7 +1014,7 @@ func (m *Manager) sendImageMessage(ctx context.Context, client *whatsmeow.Client
 
 // sendDocumentMessage uploads and sends a document
 func (m *Manager) sendDocumentMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL, filename string) error {
-	data, err := downloadFile(mediaURL)
+	data, err := loadMediaData(mediaURL)
 	if err != nil {
 		return fmt.Errorf("gagal download document: %w", err)
 	}

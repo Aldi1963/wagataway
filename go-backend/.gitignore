@@ -2,3 +2,4 @@
 server
 web/dist/
 .env
+uploads/

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/api";
+import { useActiveDevice, type ActiveDevice } from "@/hooks/use-active-device";
 import {
   LayoutDashboard,
   Send,
@@ -19,6 +20,7 @@ import {
   ChevronDown,
   X,
   KeyRound,
+  FolderOpen,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -55,6 +57,7 @@ const sections: NavSection[] = [
       { label: "Templates", href: "/templates", icon: LayoutTemplate },
       { label: "Auto Reply", href: "/auto-reply", icon: MessageSquare },
       { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
+      { label: "File Manager", href: "/files", icon: FolderOpen },
     ],
   },
   {
@@ -116,6 +119,62 @@ function badgeColorFor(href: string): string {
   return href === "/live-chat"
     ? "bg-destructive text-destructive-foreground"
     : "bg-orange-500 text-white";
+}
+
+// ── Active Device selector (ala MPWA) ─────────────────────────────────────────
+function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
+  const { activeDevice, setActiveDevice } = useActiveDevice();
+  const [devices, setDevices] = useState<ActiveDevice[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiGet<{ devices: ActiveDevice[] }>("/devices");
+        const list = res.devices ?? [];
+        setDevices(list);
+        // Sinkronkan device tersimpan dengan data terbaru (status bisa berubah)
+        if (activeDevice) {
+          const fresh = list.find((d) => d.id === activeDevice.id);
+          if (fresh && JSON.stringify(fresh) !== JSON.stringify(activeDevice)) {
+            setActiveDevice(fresh);
+          } else if (!fresh) {
+            setActiveDevice(null);
+          }
+        }
+      } catch {
+        // gagal dimuat — biarkan kosong
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (collapsed) return null;
+
+  return (
+    <div className="px-3 pb-2 border-t border-border pt-3">
+      <p className="px-1 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+        Active Device
+      </p>
+      <select
+        aria-label="Pilih device aktif"
+        value={activeDevice?.id ?? ""}
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          setActiveDevice(devices.find((d) => d.id === id) ?? null);
+        }}
+        className="flex h-9 w-full rounded-md border border-border bg-accent/50 px-2.5 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        <option value="">Select Device</option>
+        {devices.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+            {d.phone ? ` (${d.phone})` : ""}
+            {d.status !== "connected" ? ` — ${d.status}` : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarProps) {
@@ -328,6 +387,9 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           </>
         )}
       </nav>
+
+      {/* Active Device — global, dipakai semua halaman kirim */}
+      <ActiveDeviceSelector collapsed={collapsed} />
 
       {/* Collapse Toggle — desktop only */}
       <div className="p-2 border-t border-border hidden lg:block">

@@ -43,6 +43,11 @@ func main() {
 
 	log.Info().Msg("Database connected and migrated")
 
+	// Direktori penyimpanan File Manager (dibuat bila belum ada).
+	if err := os.MkdirAll("./uploads", 0o755); err != nil {
+		log.Fatal().Err(err).Msg("Gagal membuat direktori uploads")
+	}
+
 	// Initialize WhatsApp manager
 	waManager := whatsapp.NewManager(cfg.WASessionsDir, db)
 

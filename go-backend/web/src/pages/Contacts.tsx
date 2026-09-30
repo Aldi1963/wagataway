@@ -111,6 +111,8 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
   const [bulkGroup, setBulkGroup] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showClearAll, setShowClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const firstRun = useRef(true);
 
@@ -252,15 +254,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
-  const exportCsv = () => {
-    const rows =
-      selected.size > 0
-        ? contacts.filter((c) => selected.has(c.id))
-        : contacts;
-    if (rows.length === 0) {
-      toast.error("Tidak ada kontak untuk diekspor");
-      return;
-    }
+  const buildAndDownloadCsv = (rows: Contact[]) => {
     const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
     const lines = [
       "nama,nomor,email,tag",
@@ -280,6 +274,68 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     a.remove();
     URL.revokeObjectURL(url);
     toast.success(`${rows.length} kontak diekspor ke CSV`);
+  };
+
+  const exportCsv = () => {
+    const rows =
+      selected.size > 0
+        ? contacts.filter((c) => selected.has(c.id))
+        : contacts;
+    if (rows.length === 0) {
+      toast.error("Tidak ada kontak untuk diekspor");
+      return;
+    }
+    buildAndDownloadCsv(rows);
+  };
+
+  // Ambil SEMUA kontak (paginasi, limit maks backend 200) untuk export/clear-all
+  const fetchAllContacts = async (): Promise<Contact[]> => {
+    const all: Contact[] = [];
+    let page = 1;
+    for (;;) {
+      const res = await apiGet<{ contacts: Contact[]; total: number }>(
+        `/contacts?limit=200&page=${page}`
+      );
+      const list = res.contacts || [];
+      all.push(...list);
+      if (all.length >= (res.total || 0) || list.length === 0) break;
+      page++;
+    }
+    return all;
+  };
+
+  const exportAllCsv = async () => {
+    try {
+      const all = await fetchAllContacts();
+      if (all.length === 0) {
+        toast.error("Tidak ada kontak untuk diekspor");
+        return;
+      }
+      buildAndDownloadCsv(all);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal mengekspor kontak");
+    }
+  };
+
+  const confirmClearAll = async () => {
+    setClearingAll(true);
+    try {
+      const all = await fetchAllContacts();
+      if (all.length === 0) {
+        toast.info("Tidak ada kontak untuk dihapus");
+        setShowClearAll(false);
+        return;
+      }
+      await apiDeleteWithBody("/contacts/bulk", { ids: all.map((c) => c.id) });
+      toast.success(`${all.length} kontak dihapus`);
+      setSelected(new Set());
+      setShowClearAll(false);
+      load(search);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus semua kontak");
+    } finally {
+      setClearingAll(false);
+    }
   };
 
   const bulkAddToGroup = async () => {
@@ -303,20 +359,26 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
+  // Buang semua karakter non-digit dari nomor (spasi, strip, +, dsb.)
+  const normalizePhone = (raw: string) => raw.replace(/[^\d]/g, "");
+
   const parseImportLines = (text: string) => {
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     const parsed: { name: string; phone: string; email?: string }[] = [];
-    for (const line of lines) {
+    lines.forEach((line, idx) => {
       const parts = line.split(",").map((p) => p.trim());
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        const item: { name: string; phone: string; email?: string } = {
-          name: parts[0],
-          phone: parts[1],
-        };
-        if (parts[2]) item.email = parts[2];
-        parsed.push(item);
-      }
-    }
+      if (parts.length < 2 || !parts[0] || !parts[1]) return;
+      // Lewati baris header (kolom nomor berisi huruf, mis. "nomor")
+      if (idx === 0 && !/\d/.test(parts[1])) return;
+      const phone = normalizePhone(parts[1]);
+      if (!phone) return;
+      const item: { name: string; phone: string; email?: string } = {
+        name: parts[0],
+        phone,
+      };
+      if (parts[2]) item.email = parts[2];
+      parsed.push(item);
+    });
     return parsed;
   };
 
@@ -353,7 +415,9 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
         "/contacts/import",
         { contacts: parsed }
       );
-      toast.success(res.message || `${res.imported} kontak diimpor`);
+      const ok = res.imported || 0;
+      const failed = parsed.length - ok;
+      toast.success(`Import selesai: ${ok} berhasil, ${failed} gagal`);
       resetImport();
       load(search);
     } catch (e) {
@@ -379,6 +443,14 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
           <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5">
             <Upload className="w-4 h-4" />
             Import
+          </Button>
+          <Button variant="outline" onClick={exportAllCsv} className="gap-1.5">
+            <Download className="w-4 h-4" />
+            Export
+          </Button>
+          <Button variant="destructive" onClick={() => setShowClearAll(true)} className="gap-1.5">
+            <Trash2 className="w-4 h-4" />
+            Clear All
           </Button>
           <Button onClick={openAdd} className="gap-1.5">
             <Plus className="w-4 h-4" />
@@ -787,6 +859,28 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
               disabled={bulkBusy}
             >
               {bulkBusy ? "Menghapus..." : "Hapus Semua"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Clear All confirm */}
+      {showClearAll && (
+        <Modal title="Hapus Semua Kontak" onClose={() => setShowClearAll(false)}>
+          <p className="text-sm text-muted-foreground mb-5">
+            Hapus <span className="font-medium text-foreground">seluruh kontak</span>{" "}
+            Anda? Tindakan ini tidak bisa dibatalkan.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowClearAll(false)}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmClearAll}
+              disabled={clearingAll}
+            >
+              {clearingAll ? "Menghapus..." : "Ya, hapus semua"}
             </Button>
           </div>
         </Modal>

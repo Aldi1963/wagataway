@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { ActiveDeviceProvider } from "@/hooks/use-active-device";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Toaster } from "sonner";
@@ -17,6 +18,7 @@ const ScheduleHub = lazy(() => import("@/pages/ScheduleHub"));
 const ContactsHub = lazy(() => import("@/pages/ContactsHub"));
 const AutoReply = lazy(() => import("@/pages/AutoReply"));
 const Templates = lazy(() => import("@/pages/Templates"));
+const FileManager = lazy(() => import("@/pages/FileManager"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const LiveChat = lazy(() => import("@/pages/LiveChat"));
 const Links = lazy(() => import("@/pages/Links"));
@@ -143,6 +145,9 @@ function AppRouter() {
         <Route path="/templates">
           <ProtectedRoute><Templates /></ProtectedRoute>
         </Route>
+        <Route path="/files">
+          <ProtectedRoute><FileManager /></ProtectedRoute>
+        </Route>
         <Route path="/analytics">
           <ProtectedRoute><Analytics /></ProtectedRoute>
         </Route>
@@ -188,10 +193,12 @@ export default function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <ActiveDeviceProvider>
           <WouterRouter>
             <AppRouter />
             <Toaster position="top-center" richColors />
           </WouterRouter>
+          </ActiveDeviceProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

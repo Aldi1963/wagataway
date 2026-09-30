@@ -8,11 +8,15 @@ import {
   History,
   Inbox,
   FileText,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiGet, apiPost } from "@/lib/api";
+import { useActiveDevice } from "@/hooks/use-active-device";
+import FilePickerModal, { type PickedFile } from "@/components/FilePickerModal";
 
 interface Device {
   id: number;
@@ -77,6 +81,7 @@ const selectCls =
   "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
+  const { activeDeviceId } = useActiveDevice();
   const [devices, setDevices] = useState<Device[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [history, setHistory] = useState<Message[]>([]);
@@ -86,6 +91,8 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
   const [content, setContent] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [sending, setSending] = useState(false);
+  const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const loadHistory = async () => {
     try {
@@ -106,8 +113,15 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
         const devs = d.devices ?? [];
         setDevices(devs);
         setTemplates(t.templates ?? []);
+        // Prioritas: Active Device global (sidebar) > device terhubung > pertama
+        const active =
+          activeDeviceId != null
+            ? devs.find((x) => x.id === activeDeviceId)
+            : undefined;
         const preferred =
-          devs.find((x) => x.status === "connected") ?? devs[0];
+          active ??
+          devs.find((x) => x.status === "connected") ??
+          devs[0];
         if (preferred) setDeviceId(preferred.id);
       } catch (e) {
         toast.error(
@@ -135,12 +149,25 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
     if (!canSend) return;
     setSending(true);
     try {
-      await apiPost("/messages/send", {
+      const body: Record<string, unknown> = {
         deviceId,
         to: to.trim(),
         content: content.trim(),
-        type: "text",
-      });
+      };
+      if (pickedFile) {
+        const mime = pickedFile.mime ?? "";
+        body.type = mime.startsWith("image/")
+          ? "image"
+          : mime.startsWith("video/")
+            ? "video"
+            : mime.startsWith("audio/")
+              ? "audio"
+              : "document";
+        body.fileId = pickedFile.id;
+      } else {
+        body.type = "text";
+      }
+      await apiPost("/messages/send", body);
       toast.success("Pesan terkirim");
       setTo("");
       setContent("");
@@ -267,6 +294,40 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                 </p>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">
+                  Lampiran <span className="text-muted-foreground">(opsional)</span>
+                </label>
+                {pickedFile ? (
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                    <Paperclip className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                      {pickedFile.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPickedFile(null)}
+                      aria-label="Hapus lampiran"
+                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setPickerOpen(true)}
+                    disabled={sending}
+                  >
+                    <Paperclip className="w-4 h-4" />
+                    Pilih dari File Manager
+                  </Button>
+                )}
+              </div>
+
               <Button type="submit" className="gap-2" disabled={!canSend}>
                 {sending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -334,6 +395,12 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
           untuk pengiriman lebih cepat.
         </p>
       )}
+
+      <FilePickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(f) => setPickedFile(f)}
+      />
     </div>
   );
 }

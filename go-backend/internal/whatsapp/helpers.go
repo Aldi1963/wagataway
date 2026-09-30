@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +14,10 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
+
+// UploadsDir adalah direktori penyimpanan file upload File Manager,
+// relatif terhadap CWD server. Dibuat otomatis saat startup.
+const UploadsDir = "./uploads"
 
 // parseJID converts a phone number string to a WhatsApp JID
 func parseJID(phone string) (types.JID, error) {
@@ -129,6 +135,36 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen]
+}
+
+// loadMediaData membaca data media dari URL http(s) atau dari file lokal.
+// File lokal ditandai prefix "file://" dan hanya boleh berada di dalam
+// UploadsDir — prefix ini hanya dibuat server-side dari record File milik
+// user (handler File Manager), bukan dari input mentah.
+func loadMediaData(source string) ([]byte, error) {
+	if strings.HasPrefix(source, "file://") {
+		p := filepath.Clean(strings.TrimPrefix(source, "file://"))
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, fmt.Errorf("path file tidak valid: %w", err)
+		}
+		base, err := filepath.Abs(UploadsDir)
+		if err != nil {
+			return nil, fmt.Errorf("direktori upload tidak valid: %w", err)
+		}
+		if abs != base && !strings.HasPrefix(abs, base+string(os.PathSeparator)) {
+			return nil, fmt.Errorf("file di luar direktori upload")
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return nil, fmt.Errorf("gagal baca file lokal: %w", err)
+		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("file kosong")
+		}
+		return data, nil
+	}
+	return downloadFile(source)
 }
 
 // downloadFile downloads a file from a URL. URL divalidasi anti-SSRF dulu

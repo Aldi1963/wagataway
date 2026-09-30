@@ -56,6 +56,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Type     string `json:"type"`
 			Content  string `json:"content" binding:"required"`
 			MediaURL string `json:"mediaUrl"`
+			FileID   *uint  `json:"fileId"`
 			Caption  string `json:"caption"`
 		}
 
@@ -80,6 +81,17 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// File dari File Manager menggantikan mediaUrl (dibaca langsung dari disk).
+		mediaURL := req.MediaURL
+		if req.FileID != nil {
+			var err error
+			mediaURL, err = resolveFileMediaURL(db, userID, *req.FileID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"message": "File tidak ditemukan", "code": "NOT_FOUND"})
+				return
+			}
+		}
+
 		// Create message record
 		msg := models.Message{
 			UserID:   userID,
@@ -87,7 +99,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			To:       req.To,
 			Type:     req.Type,
 			Content:  req.Content,
-			MediaURL: req.MediaURL,
+			MediaURL: mediaURL,
 			Caption:  req.Caption,
 			Status:   "pending",
 		}
@@ -99,7 +111,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Send via WhatsApp
 		go func() {
-			err := wm.SendMessage(req.DeviceID, req.To, req.Type, req.Content, req.MediaURL)
+			err := wm.SendMessage(req.DeviceID, req.To, req.Type, req.Content, mediaURL)
 			if err != nil {
 				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
 			} else {
@@ -121,6 +133,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Type       string   `json:"type"`
 			Content    string   `json:"content" binding:"required"`
 			MediaURL   string   `json:"mediaUrl"`
+			FileID     *uint    `json:"fileId"`
 			MinDelay   int      `json:"minDelay"`
 			MaxDelay   int      `json:"maxDelay"`
 		}
@@ -164,13 +177,24 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// File dari File Manager menggantikan mediaUrl (dibaca langsung dari disk).
+		mediaURL := req.MediaURL
+		if req.FileID != nil {
+			var err error
+			mediaURL, err = resolveFileMediaURL(db, userID, *req.FileID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"message": "File tidak ditemukan", "code": "NOT_FOUND"})
+				return
+			}
+		}
+
 		// Create bulk job
 		job := models.BulkJob{
 			UserID:     userID,
 			DeviceID:   req.DeviceID,
 			Type:       req.Type,
 			Content:    req.Content,
-			MediaURL:   req.MediaURL,
+			MediaURL:   mediaURL,
 			Status:     "pending",
 			TotalCount: len(req.Recipients),
 			MinDelay:   req.MinDelay,

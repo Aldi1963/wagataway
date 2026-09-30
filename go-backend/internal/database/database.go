@@ -73,6 +73,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.BotOrder{},
 		&models.AdminWaBot{},
 		&models.AdminActivityLog{},
+		&models.File{},
 	); err != nil {
 		return err
 	}
