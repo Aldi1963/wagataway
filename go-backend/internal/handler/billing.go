@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 		b.GET("/usage", getBillingUsage(db))
 		b.POST("/subscribe", createSubscription(cfg, db))
 		b.GET("/transactions", listTransactions(db))
+		b.GET("/transactions/:id", getBillingTransaction(cfg, db))
 		b.POST("/voucher/redeem", redeemVoucher(db))
 	}
 }
@@ -86,8 +88,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		var req struct {
-			PlanID        uint   `json:"planId" binding:"required"`
-			PaymentMethod string `json:"paymentMethod"`
+			PlanID uint `json:"planId" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Plan wajib dipilih"})
@@ -95,28 +96,91 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var plan models.Plan
-		if err := db.First(&plan, req.PlanID).Error; err != nil {
+		if err := db.Where("id = ? AND is_active = ?", req.PlanID, true).First(&plan).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Paket tidak ditemukan"})
 			return
 		}
+		if plan.Price <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Paket gratis tidak perlu pembayaran"})
+			return
+		}
 
-		// Create transaction record
+		kp := newClipkuPay(cfg)
+		if !kp.enabled() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "Payment gateway belum dikonfigurasi"})
+			return
+		}
+
+		var user models.User
+		if err := db.First(&user, userID).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "User tidak ditemukan"})
+			return
+		}
+
+		orderID := fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix())
+
+		// Catat transaksi lokal dulu sebagai pending
 		tx := models.Transaction{
 			UserID:        userID,
 			PlanID:        &req.PlanID,
 			Amount:        plan.Price,
 			Status:        "pending",
-			PaymentMethod: req.PaymentMethod,
+			PaymentMethod: "clipkupay",
+			ExternalID:    orderID,
 		}
-		db.Create(&tx)
+		if err := db.Create(&tx).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
+			return
+		}
 
-		// TODO: integrate with payment gateway (Midtrans/Xendit)
-		// For now return transaction for manual confirmation
+		// Buat transaksi di Clipku Pay
+		data, err := kp.createTransaction(orderID, plan.Price, user.Name, user.Email)
+		if err != nil {
+			db.Model(&tx).Update("status", "failed")
+			c.JSON(http.StatusBadGateway, gin.H{"message": "Gagal membuat pembayaran: " + err.Error()})
+			return
+		}
+		db.Model(&tx).Updates(map[string]any{"payment_ref": data.PaymentURL})
+
 		c.JSON(http.StatusCreated, gin.H{
 			"transaction": tx,
 			"plan":        plan,
-			"message":     "Transaksi dibuat, menunggu pembayaran",
+			"orderId":     orderID,
+			"paymentUrl":  data.PaymentURL,
+			"qrUrl":       data.QrURL,
+			"message":     "Transaksi dibuat, silakan selesaikan pembayaran",
 		})
+	}
+}
+
+// GET /api/billing/transactions/:id — cek status + sinkron dari Clipku Pay bila pending.
+func getBillingTransaction(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+	kp := newClipkuPay(cfg)
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		var tx models.Transaction
+		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).
+			Preload("Plan").First(&tx).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Transaksi tidak ditemukan"})
+			return
+		}
+
+		// Sinkronkan status dari Clipku Pay bila masih pending
+		if tx.Status == "pending" && tx.ExternalID != "" && kp.enabled() {
+			if remote, err := kp.getTransaction(tx.ExternalID); err == nil {
+				if clipkuIsPaid(remote.Status) {
+					_ = activateSubscription(db, tx.ID)
+					db.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
+				} else {
+					st := strings.ToLower(strings.TrimSpace(remote.Status))
+					if st == "expired" || st == "failed" || st == "cancelled" {
+						db.Model(&tx).Update("status", st)
+						tx.Status = st
+					}
+				}
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"transaction": tx})
 	}
 }
 

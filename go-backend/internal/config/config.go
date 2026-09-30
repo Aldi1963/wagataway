@@ -43,6 +43,11 @@ type Config struct {
 	PaymentKey    string
 	PaymentSecret string
 
+	// Clipku Pay — payment gateway untuk langganan (m.clipku.com)
+	ClipkuPayAPIKey     string
+	ClipkuPayBaseURL    string
+	ClipkuPayWebhookURL string
+
 	// Telegram
 	TelegramBotToken string
 	TelegramChatID   string
@@ -84,6 +89,10 @@ func Load() *Config {
 
 		PaymentKey:    getEnv("PAYMENT_GATEWAY_KEY", ""),
 		PaymentSecret: getEnv("PAYMENT_GATEWAY_SECRET", ""),
+
+		ClipkuPayAPIKey:     getEnv("CLIPKUPAY_API_KEY", ""),
+		ClipkuPayBaseURL:    getEnv("CLIPKUPAY_BASE_URL", "https://m.clipku.com"),
+		ClipkuPayWebhookURL: getEnv("CLIPKUPAY_WEBHOOK_URL", "https://wa.clipku.com/api/billing/clipkupay/webhook"),
 
 		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:   getEnv("TELEGRAM_CHAT_ID", ""),

@@ -47,6 +47,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		registerOtpAuthRoutes(api, cfg, db)
 		registerLinkRoutes(api, db) // /l/:code redirect
 
+		// Webhook Clipku Pay — publik, diverifikasi via X-Signature
+		api.POST("/billing/clipkupay/webhook", clipkuPayWebhook(cfg, db))
+
 		// ── Public API (stricter rate limit) ───────────────────────────────
 		publicAPI := api.Group("")
 		publicAPI.Use(middleware.PublicAPIRateLimit.Middleware())
