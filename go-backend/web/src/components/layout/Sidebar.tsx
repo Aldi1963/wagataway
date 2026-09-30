@@ -446,9 +446,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           <span className="block text-[17px] font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
             WaGataway
           </span>
-          <span className="mt-0.5 inline-block rounded-full bg-green-500/15 px-2 py-px text-[10px] font-bold tracking-wider text-green-400">
-            GATEWAY
-          </span>
         </span>
         <button
           onClick={onClose}
