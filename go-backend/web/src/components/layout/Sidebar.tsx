@@ -100,17 +100,57 @@ interface AdminNavItem extends NavItem {
   tab: string;
 }
 
-const adminItems: AdminNavItem[] = [
+const adminTopItems: AdminNavItem[] = [
   { label: "Ringkasan", href: "/admin?tab=ringkasan", icon: LayoutDashboard, tab: "ringkasan" },
-  { label: "Pengguna", href: "/admin?tab=pengguna", icon: Users, tab: "pengguna" },
-  { label: "Paket", href: "/admin?tab=paket", icon: Package, tab: "paket" },
-  { label: "Voucher", href: "/admin?tab=voucher", icon: Ticket, tab: "voucher" },
-  { label: "Transaksi", href: "/admin?tab=transaksi", icon: ReceiptText, tab: "transaksi" },
-  { label: "Log Aktivitas", href: "/admin?tab=log", icon: ScrollText, tab: "log" },
-  { label: "Kesehatan Sistem", href: "/admin?tab=kesehatan", icon: HeartPulse, tab: "kesehatan" },
-  { label: "Pengaturan", href: "/admin?tab=pengaturan", icon: Settings, tab: "pengaturan" },
-  { label: "Notifikasi", href: "/admin?tab=notifikasi", icon: BellRing, tab: "notifikasi" },
 ];
+
+interface AdminNavSection {
+  label: string;
+  items: AdminNavItem[];
+}
+
+const adminSections: AdminNavSection[] = [
+  {
+    label: "Manajemen",
+    items: [
+      { label: "Pengguna", href: "/admin?tab=pengguna", icon: Users, tab: "pengguna" },
+      { label: "Paket", href: "/admin?tab=paket", icon: Package, tab: "paket" },
+      { label: "Voucher", href: "/admin?tab=voucher", icon: Ticket, tab: "voucher" },
+      { label: "Transaksi", href: "/admin?tab=transaksi", icon: ReceiptText, tab: "transaksi" },
+    ],
+  },
+  {
+    label: "Sistem",
+    items: [
+      { label: "Log Aktivitas", href: "/admin?tab=log", icon: ScrollText, tab: "log" },
+      { label: "Kesehatan Sistem", href: "/admin?tab=kesehatan", icon: HeartPulse, tab: "kesehatan" },
+      { label: "Pengaturan", href: "/admin?tab=pengaturan", icon: Settings, tab: "pengaturan" },
+    ],
+  },
+  {
+    label: "Komunikasi",
+    items: [
+      { label: "Notifikasi", href: "/admin?tab=notifikasi", icon: BellRing, tab: "notifikasi" },
+    ],
+  },
+];
+
+const ADMIN_STORAGE_KEY = "wag-sidebar-admin-sections";
+
+function loadOpenAdminSections(): string[] {
+  try {
+    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((x) => typeof x === "string");
+      }
+    }
+  } catch {
+    // abaikan, pakai default
+  }
+  return adminSections.map((s) => s.label);
+}
 
 // URL lama tetap valid dan menandai menu gabungan sebagai aktif
 const ACTIVE_ALIASES: Record<string, string[]> = {
@@ -244,6 +284,32 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   // Di halaman admin, sidebar user diganti navigasi admin
   const isAdminArea = location === "/admin";
   const activeTab = new URLSearchParams(search).get("tab") || "ringkasan";
+  const [openAdminSections, setOpenAdminSections] = useState<string[]>(loadOpenAdminSections);
+
+  // Buka section admin yang memuat tab aktif
+  useEffect(() => {
+    if (!isAdminArea) return;
+    const active = adminSections.find((s) => s.items.some((i) => i.tab === activeTab));
+    if (active) {
+      setOpenAdminSections((prev) =>
+        prev.includes(active.label) ? prev : [...prev, active.label]
+      );
+    }
+  }, [isAdminArea, activeTab]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(openAdminSections));
+    } catch {
+      // abaikan
+    }
+  }, [openAdminSections ]);
+
+  const toggleAdminSection = (label: string) => {
+    setOpenAdminSections((prev) =>
+      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]
+    );
+  };
 
   useEffect(() => {
     try {
@@ -405,14 +471,44 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       >
         {isAdminArea ? (
           <>
-            <div className={cn("pt-1", collapsed && "hidden lg:block")}>
-              {!collapsed && (
-                <p className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Admin
-                </p>
-              )}
-              <div className="space-y-1">{adminItems.map(renderAdminItem)}</div>
-            </div>
+            {adminTopItems.map(renderAdminItem)}
+
+            {adminSections.map((section) => {
+              if (collapsed) {
+                return (
+                  <div key={section.label} className="space-y-1 pt-1 hidden lg:block">
+                    {section.items.map(renderAdminItem)}
+                  </div>
+                );
+              }
+              const isOpen = openAdminSections.includes(section.label);
+              return (
+                <div key={section.label} className="pt-1">
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleAdminSection(section.label);
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    <span>{section.label}</span>
+                    <ChevronDown
+                      className={cn(
+                        "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
+                        isOpen && "rotate-180"
+                      )}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-1">
+                      {section.items.map(renderAdminItem)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div className="pt-2">
               <Link
                 href="/"

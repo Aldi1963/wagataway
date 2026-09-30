@@ -15,11 +15,13 @@ import (
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 func registerAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, wm *whatsapp.Manager) {
 	rg.GET("/users", adminListUsers(db))
+	rg.POST("/users", adminCreateUser(db))
 	rg.PUT("/users/:id", adminUpdateUser(db))
 	rg.DELETE("/users/:id", adminDeleteUser(db))
 	rg.GET("/packages", adminListPackages(db))
@@ -94,6 +96,62 @@ func adminListUsers(db *gorm.DB) gin.HandlerFunc {
 		query.Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&users)
 
 		c.JSON(http.StatusOK, gin.H{"users": users, "total": total, "page": page})
+	}
+}
+
+func adminCreateUser(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			Name     string `json:"name" binding:"required"`
+			Email    string `json:"email" binding:"required"`
+			Password string `json:"password" binding:"required"`
+			Role     string `json:"role"`
+			Plan     string `json:"plan"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		email := strings.TrimSpace(strings.ToLower(req.Email))
+		if len(req.Password) < 6 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Password minimal 6 karakter"})
+			return
+		}
+		var count int64
+		db.Model(&models.User{}).Where("email = ?", email).Count(&count)
+		if count > 0 {
+			c.JSON(http.StatusConflict, gin.H{"message": "Email sudah terdaftar"})
+			return
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memproses password"})
+			return
+		}
+		role := req.Role
+		if role != "admin" && role != "user" {
+			role = "user"
+		}
+		plan := strings.TrimSpace(req.Plan)
+		if plan == "" {
+			plan = "free"
+		}
+		user := models.User{
+			Name:     strings.TrimSpace(req.Name),
+			Email:    email,
+			Password: string(hashed),
+			Role:     role,
+			Plan:     plan,
+			Status:   "active",
+			Timezone: "Asia/Jakarta",
+		}
+		if err := db.Create(&user).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat pengguna"})
+			return
+		}
+		logAdminAction(db, middleware.GetUserID(c), "create_user", "user",
+			strconv.FormatUint(uint64(user.ID), 10), "Buat: "+email)
+		c.JSON(http.StatusCreated, gin.H{"user": user, "message": "Pengguna dibuat"})
 	}
 }
 
@@ -262,10 +320,15 @@ func adminTransactions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		status := strings.TrimSpace(c.Query("status"))
 		var txs []models.Transaction
 		var total int64
-		db.Model(&models.Transaction{}).Count(&total)
-		db.Preload("User").Preload("Plan").Order("created_at DESC").
+		q := db.Model(&models.Transaction{})
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		q.Count(&total)
+		q.Preload("User").Preload("Plan").Order("created_at DESC").
 			Offset((page - 1) * limit).Limit(limit).Find(&txs)
 		c.JSON(http.StatusOK, gin.H{"transactions": txs, "total": total})
 	}

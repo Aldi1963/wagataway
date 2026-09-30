@@ -476,6 +476,37 @@ function UsersTab() {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "user", plan: "free" });
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const openForm = () => {
+    setForm({ name: "", email: "", password: "", role: "user", plan: "free" });
+    setShowForm(true);
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (form.password.length < 6) {
+      toast.error("Password minimal 6 karakter");
+      return;
+    }
+    setCreating(true);
+    try {
+      await apiPost("/admin/users", form);
+      toast.success("Pengguna ditambahkan");
+      setShowForm(false);
+      load(1, search);
+      setPage(1);
+    } catch (err) {
+      toast.error(errMsg(err, "Gagal menambahkan pengguna"));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const load = (p = page, q = search) => {
     setLoading(true);
@@ -550,8 +581,8 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
+      <div className="flex gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-9"
@@ -566,6 +597,9 @@ function UsersTab() {
         </Button>
         <Button size="sm" variant="outline" onClick={exportCsv} className="h-10 gap-1.5">
           <Download className="w-4 h-4" /> Export CSV
+        </Button>
+        <Button size="sm" onClick={openForm} className="h-10 gap-1.5">
+          <Plus className="w-4 h-4" /> Tambah Pengguna
         </Button>
       </div>
 
@@ -645,6 +679,43 @@ function UsersTab() {
             </div>
           </div>
         </>
+      )}
+
+      {showForm && (
+        <Modal title="Tambah Pengguna" onClose={() => setShowForm(false)}>
+          <form onSubmit={handleCreate} className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-foreground">Nama</label>
+              <Input value={form.name} onChange={set("name")} required className="mt-1" placeholder="Nama lengkap" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">Email</label>
+              <Input type="email" value={form.email} onChange={set("email")} required className="mt-1" placeholder="email@contoh.com" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">Password</label>
+              <Input type="password" value={form.password} onChange={set("password")} required className="mt-1" placeholder="Minimal 6 karakter" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-foreground block">Role</label>
+                <Select value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v }))} options={ROLE_OPTS} ariaLabel="Role" className="mt-1 w-full" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground block">Paket</label>
+                <Select value={form.plan} onChange={(v) => setForm((f) => ({ ...f, plan: v }))} options={PLAN_OPTS} ariaLabel="Paket" className="mt-1 w-full" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>
+                Batal
+              </Button>
+              <Button type="submit" size="sm" disabled={creating}>
+                {creating ? "Menyimpan..." : "Simpan"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {deleting && (
@@ -1123,13 +1194,16 @@ function TransactionsTab() {
   const [txns, setTxns] = useState<Txn[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = (p = page) => {
+  const load = (p = page, status = statusFilter) => {
     setLoading(true);
     setError(null);
-    apiGet<{ transactions: Txn[]; total: number }>(`/admin/transactions?page=${p}&limit=${PAGE_LIMIT}`)
+    const q = new URLSearchParams({ page: String(p), limit: String(PAGE_LIMIT) });
+    if (status) q.set("status", status);
+    apiGet<{ transactions: Txn[]; total: number }>(`/admin/transactions?${q}`)
       .then((res) => {
         setTxns(res.transactions || []);
         setTotal(res.total || 0);
@@ -1139,15 +1213,17 @@ function TransactionsTab() {
   };
 
   useEffect(() => {
-    load(page);
+    load(page, statusFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
 
   const exportCsv = async () => {
     try {
-      const res = await apiGet<{ transactions: Txn[] }>("/admin/transactions?limit=1000&page=1");
+      const q = new URLSearchParams({ page: "1", limit: "1000" });
+      if (statusFilter) q.set("status", statusFilter);
+      const res = await apiGet<{ transactions: Txn[] }>(`/admin/transactions?${q}`);
       const rows: (string | number | null | undefined)[][] = [
         ["id", "tanggal", "nama", "email", "paket", "amount", "status"],
         ...(res.transactions || []).map((t) => [
@@ -1167,9 +1243,28 @@ function TransactionsTab() {
     }
   };
 
+  const TXN_STATUS_OPTS = [
+    { value: "", label: "Semua status" },
+    { value: "pending", label: "Menunggu" },
+    { value: "paid", label: "Berhasil" },
+    { value: "failed", label: "Gagal" },
+    { value: "expired", label: "Kedaluwarsa" },
+    { value: "cancel", label: "Dibatalkan" },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-between gap-2 flex-wrap">
+        <Select
+          value={statusFilter}
+          onChange={(v) => {
+            setPage(1);
+            setStatusFilter(v);
+          }}
+          options={TXN_STATUS_OPTS}
+          ariaLabel="Filter status transaksi"
+          className="w-44"
+        />
         <Button size="sm" variant="outline" onClick={exportCsv} className="gap-1.5">
           <Download className="w-4 h-4" /> Export CSV
         </Button>
