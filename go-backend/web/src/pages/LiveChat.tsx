@@ -209,16 +209,18 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
 
   const handleSend = async () => {
     if (!input.trim() || !activePhone) return;
+    const activeConv = conversations.find((c) => c.phone === activePhone);
+    const deviceId = activeConv?.deviceId || 1;
     setLoading(true);
     try {
       if (aiMode) {
         await apiPost("/chat/ai-reply", {
-          deviceId: 1,
+          deviceId,
           phone: activePhone,
         });
       } else {
         await apiPost("/chat/send", {
-          deviceId: 1,
+          deviceId,
           phone: activePhone,
           content: input,
           type: "text",
@@ -226,7 +228,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       }
       setInput("");
     } catch (err: any) {
-      console.error(err);
+      toast.error(err?.message || "Gagal mengirim pesan");
     } finally {
       setLoading(false);
     }
