@@ -30,6 +30,8 @@ import {
   BellRing,
   ArrowLeft,
   Bot,
+  FlaskConical,
+  Webhook,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -50,14 +52,13 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Urutan: item langsung dulu, lalu grup sub-menu collapsible (hanya untuk grup berisi 2+ item)
+// Urutan: Dashboard, Pesan dulu, lalu alur kerja, Developer grup sendiri, Akun di bawah
 const topItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutGrid },
   { label: "Jadwal", href: "/schedule", icon: Clock },
   { label: "Otomatisasi", href: "/automation", icon: Bot },
   { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
   { label: "Kontak", href: "/contacts", icon: Users },
-  { label: "Developer", href: "/developer", icon: CodeXml },
   { label: "Akun", href: "/settings", icon: Settings },
 ];
 
@@ -74,6 +75,14 @@ const sections: NavSection[] = [
     items: [
       { label: "Laporan", href: "/reports", icon: BarChart3 },
       { label: "Links", href: "/links", icon: Link2 },
+    ],
+  },
+  {
+    label: "Developer",
+    items: [
+      { label: "API Docs", href: "/api-docs", icon: CodeXml },
+      { label: "Playground", href: "/api-playground", icon: FlaskConical },
+      { label: "Webhook Logs", href: "/webhook-logs", icon: Webhook },
     ],
   },
 ];
