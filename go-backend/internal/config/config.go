@@ -71,7 +71,7 @@ func Load() *Config {
 		AppURL:  getEnv("APP_URL", "http://localhost:8080"),
 
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/wagataway?sslmode=disable"),
-		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
+		RedisURL:    getEnv("REDIS_URL", ""),
 
 		JWTSecret: jwtSecret,
 		JWTExpiry: expiry,
