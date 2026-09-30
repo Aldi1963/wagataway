@@ -220,7 +220,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
             </p>
           </div>
         )}
-        <div className="flex gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
           <SyncWAButton kind="groups" onDone={load} />
           <Button onClick={openAdd} className="gap-1.5">
             <Plus className="w-4 h-4" />

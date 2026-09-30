@@ -374,7 +374,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
             </p>
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <SyncWAButton kind="contacts" onDone={() => load(search)} />
           <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5">
             <Upload className="w-4 h-4" />
