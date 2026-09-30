@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
+import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface DripStep {
   id: number;
@@ -26,11 +27,6 @@ interface Campaign {
   isActive: boolean;
   enrolled: number;
   steps?: DripStep[];
-}
-
-interface Device {
-  id: number;
-  name: string;
 }
 
 interface DripAnalytics {
@@ -79,11 +75,11 @@ function Modal({
   );
 }
 
-const emptyForm = { name: "", description: "", deviceId: "", triggerType: "manual", triggerVal: "" };
+const emptyForm = { name: "", description: "", triggerType: "manual", triggerVal: "" };
 
 export default function DripCampaign({ embedded = false }: { embedded?: boolean }) {
+  const { activeDeviceId, activeDevice } = useActiveDevice();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -101,13 +97,9 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
   const load = () => {
     setLoading(true);
     setError(null);
-    Promise.all([
-      apiGet<{ campaigns: Campaign[] }>("/drip"),
-      apiGet<{ devices: Device[] }>("/devices"),
-    ])
-      .then(([c, d]) => {
+    apiGet<{ campaigns: Campaign[] }>("/drip")
+      .then((c) => {
         setCampaigns(c.campaigns || []);
-        setDevices(d.devices || []);
       })
       .catch((e) => setError(e.message || "Gagal memuat data"))
       .finally(() => setLoading(false));
@@ -116,8 +108,12 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
   useEffect(load, []);
 
   const openAdd = () => {
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setEditing(null);
-    setForm({ ...emptyForm, deviceId: devices.length === 1 ? String(devices[0].id) : "" });
+    setForm({ ...emptyForm });
     setShowForm(true);
   };
 
@@ -126,7 +122,6 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
     setForm({
       name: c.name,
       description: c.description || "",
-      deviceId: String(c.deviceId),
       triggerType: c.triggerType || "manual",
       triggerVal: c.triggerVal || "",
     });
@@ -134,12 +129,12 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
   };
 
   const save = async () => {
-    if (!form.name.trim()) {
-      toast.error("Nama campaign wajib diisi");
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
       return;
     }
-    if (!form.deviceId) {
-      toast.error("Pilih perangkat dulu");
+    if (!form.name.trim()) {
+      toast.error("Nama campaign wajib diisi");
       return;
     }
     setSaving(true);
@@ -147,7 +142,7 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
       const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
-        deviceId: Number(form.deviceId),
+        deviceId: editing ? editing.deviceId : activeDeviceId,
         triggerType: form.triggerType,
         triggerVal: form.triggerVal.trim(),
       };
@@ -252,6 +247,10 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
     }
   };
 
+  // Hanya tampilkan campaign milik perangkat aktif
+  const visibleCampaigns =
+    activeDeviceId == null ? [] : campaigns.filter((c) => c.deviceId === activeDeviceId);
+
   return (
     <div className="space-y-6">
       <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
@@ -280,7 +279,13 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
             <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
           </Button>
         </div>
-      ) : campaigns.length === 0 ? (
+      ) : activeDeviceId == null ? (
+        <div className="rounded-lg border border-border p-8 text-center">
+          <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
+          <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
+          <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola campaign</p>
+        </div>
+      ) : visibleCampaigns.length === 0 ? (
         <div className="rounded-lg border border-border p-8 text-center">
           <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
           <p className="text-sm font-medium mt-2">Belum ada campaign</p>
@@ -288,7 +293,7 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
         </div>
       ) : (
         <div className="space-y-3">
-          {campaigns.map((c) => {
+          {visibleCampaigns.map((c) => {
             const isOpen = expanded === c.id;
             const steps = c.steps || [];
             return (
@@ -486,35 +491,26 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium">Perangkat</label>
-                <Dropdown
-                  value={form.deviceId}
-                  onChange={(v) => setForm({ ...form, deviceId: v })}
-                  ariaLabel="Perangkat"
-                  className="mt-1"
-                  options={[
-                    { value: "", label: "— Pilih perangkat —" },
-                    ...devices.map((d) => ({ value: String(d.id), label: d.name })),
-                  ]}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium">Tipe trigger</label>
-                <Dropdown
-                  value={form.triggerType}
-                  onChange={(v) => setForm({ ...form, triggerType: v })}
-                  ariaLabel="Tipe trigger"
-                  className="mt-1"
-                  options={[
-                    { value: "manual", label: "Manual" },
-                    { value: "keyword", label: "Keyword" },
-                    { value: "webhook", label: "Webhook" },
-                  ]}
-                />
-              </div>
+            <div>
+              <label className="text-xs font-medium">Tipe trigger</label>
+              <Dropdown
+                value={form.triggerType}
+                onChange={(v) => setForm({ ...form, triggerType: v })}
+                ariaLabel="Tipe trigger"
+                className="mt-1"
+                options={[
+                  { value: "manual", label: "Manual" },
+                  { value: "keyword", label: "Keyword" },
+                  { value: "webhook", label: "Webhook" },
+                ]}
+              />
             </div>
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Campaign berjalan di perangkat{" "}
+              <span className="font-medium text-foreground">
+                {activeDevice?.name || `#${activeDeviceId}`}
+              </span>
+            </p>
             {form.triggerType === "keyword" && (
               <div>
                 <label className="text-xs font-medium">Keyword trigger</label>

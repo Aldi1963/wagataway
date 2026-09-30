@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
+import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface ScheduleItem {
   id: number;
@@ -16,11 +16,6 @@ interface ScheduleItem {
   sendAt: string;
   status: "pending" | "sent" | "failed" | "cancelled";
   errorMsg?: string;
-}
-
-interface Device {
-  id: number;
-  name: string;
 }
 
 const statusStyle: Record<string, string> = {
@@ -265,12 +260,11 @@ function ScheduleRow({
 }
 
 export default function Schedule({ embedded = false, forcedView }: { embedded?: boolean; forcedView?: "list" | "calendar" }) {
+  const { activeDeviceId, activeDevice } = useActiveDevice();
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [deviceId, setDeviceId] = useState("");
   const [to, setTo] = useState("");
   const [content, setContent] = useState("");
   const [sendAt, setSendAt] = useState("");
@@ -289,13 +283,9 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
   const load = () => {
     setLoading(true);
     setError(null);
-    Promise.all([
-      apiGet<{ schedules: ScheduleItem[] }>("/schedule"),
-      apiGet<{ devices: Device[] }>("/devices"),
-    ])
-      .then(([s, d]) => {
+    apiGet<{ schedules: ScheduleItem[] }>("/schedule")
+      .then((s) => {
         setSchedules(s.schedules || []);
-        setDevices(d.devices || []);
       })
       .catch((e) => setError(e.message || "Gagal memuat data"))
       .finally(() => setLoading(false));
@@ -304,7 +294,10 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
   useEffect(load, []);
 
   const openAdd = () => {
-    setDeviceId(devices.length === 1 ? String(devices[0].id) : "");
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setTo("");
     setContent("");
     setSendAt("");
@@ -312,8 +305,8 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
   };
 
   const save = async () => {
-    if (!deviceId) {
-      toast.error("Pilih perangkat dulu");
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
       return;
     }
     if (!to.trim() || !content.trim() || !sendAt) {
@@ -328,7 +321,7 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
     setSaving(true);
     try {
       const res = await apiPost<{ schedule: ScheduleItem }>("/schedule", {
-        deviceId: Number(deviceId),
+        deviceId: activeDeviceId,
         to: to.trim(),
         content: content.trim(),
         sendAt: iso,
@@ -444,19 +437,12 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       {showForm && (
         <Modal title="Jadwalkan Pesan Baru" onClose={() => setShowForm(false)}>
           <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium">Perangkat</label>
-              <Dropdown
-                value={deviceId}
-                onChange={setDeviceId}
-                ariaLabel="Perangkat"
-                className="mt-1"
-                options={[
-                  { value: "", label: "— Pilih perangkat —" },
-                  ...devices.map((d) => ({ value: String(d.id), label: d.name })),
-                ]}
-              />
-            </div>
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Dijadwalkan via perangkat{" "}
+              <span className="font-medium text-foreground">
+                {activeDevice?.name || `#${activeDeviceId}`}
+              </span>
+            </p>
             <div>
               <label className="text-xs font-medium">Nomor tujuan</label>
               <Input

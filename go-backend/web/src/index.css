@@ -155,3 +155,31 @@
   --text-color-kumo-subtle: #9aa5d6;
   --text-color-kumo-placeholder: #6b77ab;
 }
+
+/* ── Animasi page transition WaGataway ─────────────────────────────── */
+@keyframes float-plane {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-8deg); }
+}
+@keyframes ping-slow {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  70%, 100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes bounce-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-7px); opacity: 1; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes fade-slide-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float-plane { animation: float-plane 1.8s ease-in-out infinite; }
+.animate-ping-slow { animation: ping-slow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+.animate-bounce-dot { animation: bounce-dot 1.2s ease-in-out infinite; }
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+.animate-fade-slide-in { animation: fade-slide-in 0.25s ease-out; }

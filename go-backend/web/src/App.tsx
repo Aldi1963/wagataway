@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ActiveDeviceProvider } from "@/hooks/use-active-device";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { PageTransitionLoader } from "@/components/ui/page-transition";
 import { Toaster } from "sonner";
 
 // ── Lazy Pages ────────────────────────────────────────────────────────────────
@@ -33,8 +34,8 @@ const Landing = lazy(() => import("@/pages/Landing"));
 // ── Loading ───────────────────────────────────────────────────────────────────
 function PageLoader() {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen flex items-center justify-center p-8 bg-background">
+      <PageTransitionLoader />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
+import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface Rule {
   id: number;
@@ -19,11 +20,6 @@ interface Rule {
   deviceId: number | null;
   isActive: boolean;
   priority: number;
-}
-
-interface Device {
-  id: number;
-  name: string;
 }
 
 const matchTypeLabels: Record<string, string> = {
@@ -60,11 +56,11 @@ function Modal({
   );
 }
 
-const emptyForm = { name: "", keyword: "", matchType: "contains", replyContent: "", deviceId: "" };
+const emptyForm = { name: "", keyword: "", matchType: "contains", replyContent: "" };
 
 export default function AutoReply({ embedded = false }: { embedded?: boolean }) {
+  const { activeDeviceId, activeDevice } = useActiveDevice();
   const [rules, setRules] = useState<Rule[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -76,13 +72,9 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
   const load = () => {
     setLoading(true);
     setError(null);
-    Promise.all([
-      apiGet<{ rules: Rule[] }>("/auto-reply"),
-      apiGet<{ devices: Device[] }>("/devices"),
-    ])
-      .then(([r, d]) => {
+    apiGet<{ rules: Rule[] }>("/auto-reply")
+      .then((r) => {
         setRules(r.rules || []);
-        setDevices(d.devices || []);
       })
       .catch((e) => setError(e.message || "Gagal memuat data"))
       .finally(() => setLoading(false));
@@ -91,6 +83,10 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
   useEffect(load, []);
 
   const openAdd = () => {
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setEditing(null);
     setForm(emptyForm);
     setShowForm(true);
@@ -103,12 +99,15 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
       keyword: rule.keyword,
       matchType: rule.matchType || "contains",
       replyContent: rule.replyContent,
-      deviceId: rule.deviceId ? String(rule.deviceId) : "",
     });
     setShowForm(true);
   };
 
   const save = async () => {
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     if (!form.name.trim() || !form.keyword.trim() || !form.replyContent.trim()) {
       toast.error("Nama, keyword, dan isi balasan wajib diisi");
       return;
@@ -120,7 +119,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
         keyword: form.keyword.trim(),
         matchType: form.matchType,
         replyContent: form.replyContent.trim(),
-        deviceId: form.deviceId ? Number(form.deviceId) : null,
+        deviceId: activeDeviceId,
       };
       if (editing) {
         const res = await apiPut<{ rule: Rule }>(`/auto-reply/${editing.id}`, payload);
@@ -169,8 +168,9 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
     }
   };
 
-  const deviceName = (id: number | null) =>
-    id == null ? "Semua perangkat" : devices.find((d) => d.id === id)?.name || `Perangkat #${id}`;
+  // Hanya tampilkan rule milik perangkat aktif
+  const visibleRules =
+    activeDeviceId == null ? [] : rules.filter((r) => r.deviceId === activeDeviceId);
 
   return (
     <div className="space-y-6">
@@ -200,7 +200,13 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
             <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
           </Button>
         </div>
-      ) : rules.length === 0 ? (
+      ) : activeDeviceId == null ? (
+        <div className="rounded-lg border border-border p-8 text-center">
+          <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
+          <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
+          <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola auto reply</p>
+        </div>
+      ) : visibleRules.length === 0 ? (
         <div className="rounded-lg border border-border p-8 text-center">
           <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
           <p className="text-sm font-medium mt-2">Belum ada rule</p>
@@ -208,7 +214,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
         </div>
       ) : (
         <div className="space-y-3">
-          {rules.map((rule) => (
+          {visibleRules.map((rule) => (
             <Card key={rule.id}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -225,7 +231,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Keyword: <span className="font-mono">{rule.keyword}</span> (
-                        {matchTypeLabels[rule.matchType] || rule.matchType}) · {deviceName(rule.deviceId)}
+                        {matchTypeLabels[rule.matchType] || rule.matchType})
                       </p>
                       <p className="text-xs text-muted-foreground mt-1 border-l-2 border-border pl-2 line-clamp-2">
                         {rule.replyContent}
@@ -293,35 +299,26 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
                 onChange={(e) => setForm({ ...form, keyword: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium">Tipe kecocokan</label>
-                <Dropdown
-                  value={form.matchType}
-                  onChange={(v) => setForm({ ...form, matchType: v })}
-                  ariaLabel="Tipe kecocokan keyword"
-                  className="mt-1"
-                  options={[
-                    { value: "contains", label: "Mengandung keyword" },
-                    { value: "exact", label: "Persis sama" },
-                    { value: "startsWith", label: "Diawali keyword" },
-                  ]}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium">Perangkat</label>
-                <Dropdown
-                  value={form.deviceId}
-                  onChange={(v) => setForm({ ...form, deviceId: v })}
-                  ariaLabel="Perangkat"
-                  className="mt-1"
-                  options={[
-                    { value: "", label: "Semua perangkat" },
-                    ...devices.map((d) => ({ value: String(d.id), label: d.name })),
-                  ]}
-                />
-              </div>
+            <div>
+              <label className="text-xs font-medium">Tipe kecocokan</label>
+              <Dropdown
+                value={form.matchType}
+                onChange={(v) => setForm({ ...form, matchType: v })}
+                ariaLabel="Tipe kecocokan keyword"
+                className="mt-1"
+                options={[
+                  { value: "contains", label: "Mengandung keyword" },
+                  { value: "exact", label: "Persis sama" },
+                  { value: "startsWith", label: "Diawali keyword" },
+                ]}
+              />
             </div>
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Rule berlaku untuk perangkat{" "}
+              <span className="font-medium text-foreground">
+                {activeDevice?.name || `#${activeDeviceId}`}
+              </span>
+            </p>
             <div>
               <label className="text-xs font-medium">Isi balasan</label>
               <textarea

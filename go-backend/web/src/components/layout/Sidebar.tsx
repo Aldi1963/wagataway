@@ -3,6 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/api";
 import { useActiveDevice, type ActiveDevice } from "@/hooks/use-active-device";
+import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/hooks/use-auth";
 import {
   LayoutGrid,
@@ -218,25 +219,21 @@ function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
         Active Device
       </p>
       <div className="relative">
-        <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-        <select
-          aria-label="Pilih device aktif"
-          value={activeDevice?.id ?? ""}
-          onChange={(e) => {
-            const id = Number(e.target.value);
+        <Dropdown
+          value={activeDevice ? String(activeDevice.id) : ""}
+          onChange={(v) => {
+            const id = Number(v);
             setActiveDevice(devices.find((d) => d.id === id) ?? null);
           }}
-          className="flex h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#243370] appearance-none dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
-        >
-          <option value="" className="bg-white dark:bg-[#0a1030]">Select Device</option>
-          {devices.map((d) => (
-            <option key={d.id} value={d.id} className="bg-white dark:bg-[#0a1030]">
-              {d.name}
-              {d.phone ? ` (${d.phone})` : ""}
-              {d.status !== "connected" ? ` — ${d.status}` : ""}
-            </option>
-          ))}
-        </select>
+          options={devices.map((d) => ({
+            value: String(d.id),
+            label: `${d.name}${d.phone ? ` (${d.phone})` : ""}${d.status !== "connected" ? ` — ${d.status}` : ""}`,
+          }))}
+          placeholder="Pilih Device"
+          ariaLabel="Pilih device aktif"
+          className="[&_button]:rounded-full [&_button]:pl-9"
+        />
+        <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
       </div>
     </div>
   );

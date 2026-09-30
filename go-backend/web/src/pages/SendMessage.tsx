@@ -80,12 +80,11 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
   const [, navigate] = useLocation();
-  const { activeDeviceId } = useActiveDevice();
+  const { activeDeviceId, activeDevice } = useActiveDevice();
   const [devices, setDevices] = useState<Device[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [history, setHistory] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deviceId, setDeviceId] = useState<number | "">("");
   const [to, setTo] = useState("");
   const [content, setContent] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -109,19 +108,8 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
           apiGet<{ devices: Device[] }>("/devices"),
           apiGet<{ templates: Template[] }>("/templates"),
         ]);
-        const devs = d.devices ?? [];
-        setDevices(devs);
+        setDevices(d.devices ?? []);
         setTemplates(t.templates ?? []);
-        // Prioritas: Active Device global (sidebar) > device terhubung > pertama
-        const active =
-          activeDeviceId != null
-            ? devs.find((x) => x.id === activeDeviceId)
-            : undefined;
-        const preferred =
-          active ??
-          devs.find((x) => x.status === "connected") ??
-          devs[0];
-        if (preferred) setDeviceId(preferred.id);
       } catch (e) {
         toast.error(
           e instanceof Error ? e.message : "Gagal memuat data"
@@ -141,15 +129,15 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
   };
 
   const canSend =
-    !sending && deviceId !== "" && to.trim() !== "" && content.trim() !== "";
+    !sending && activeDeviceId != null && to.trim() !== "" && content.trim() !== "";
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSend) return;
+    if (!canSend || activeDeviceId == null) return;
     setSending(true);
     try {
       const body: Record<string, unknown> = {
-        deviceId,
+        deviceId: activeDeviceId,
         to: to.trim(),
         content: content.trim(),
       };
@@ -212,23 +200,18 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
             </div>
           ) : (
             <form onSubmit={handleSend} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-foreground">
-                  Perangkat
-                </label>
-                <Dropdown
-                  value={String(deviceId)}
-                  onChange={(v) => setDeviceId(v === "" ? "" : Number(v))}
-                  ariaLabel="Perangkat"
-                  disabled={sending}
-                  options={devices.map((d) => ({
-                    value: String(d.id),
-                    label: `${d.name}${d.phone ? ` (${d.phone})` : ""} — ${
-                      d.status === "connected" ? "Terhubung" : d.status === "connecting" ? "Menghubungkan" : "Terputus"
-                    }`,
-                  }))}
-                />
-              </div>
+              {activeDeviceId == null ? (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                  Pilih perangkat aktif di sidebar dulu sebelum mengirim pesan.
+                </div>
+              ) : (
+                <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  Mengirim via{" "}
+                  <span className="font-medium text-foreground">
+                    {activeDevice?.name || `Perangkat #${activeDeviceId}`}
+                  </span>
+                </p>
+              )}
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-foreground">

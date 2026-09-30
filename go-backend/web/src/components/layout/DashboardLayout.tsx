@@ -1,6 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "wouter";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { PageTransitionLoader } from "@/components/ui/page-transition";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -10,6 +12,20 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [location] = useLocation();
+  const [transitioning, setTransitioning] = useState(false);
+  const firstRender = useRef(true);
+
+  // Animasi loading cantik tiap ganti halaman
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    setTransitioning(true);
+    const t = setTimeout(() => setTransitioning(false), 650);
+    return () => clearTimeout(t);
+  }, [location]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -34,7 +50,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <TopBar onMenu={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="relative flex-1 overflow-y-auto p-4 sm:p-6">
+          {children}
+          {/* Overlay animasi transisi halaman */}
+          <div
+            aria-hidden={!transitioning}
+            className={cn(
+              "absolute inset-0 z-30 flex items-center justify-center bg-background/80 backdrop-blur-sm transition-opacity duration-200",
+              transitioning ? "opacity-100" : "pointer-events-none opacity-0"
+            )}
+          >
+            <PageTransitionLoader />
+          </div>
+        </main>
       </div>
     </div>
   );

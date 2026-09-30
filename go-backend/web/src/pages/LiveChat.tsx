@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X, Smartphone } from "lucide-react";
+import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dropdown } from "@/components/ui/dropdown";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/api";
 import { toast } from "sonner";
+import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface Template {
   id: number;
@@ -25,11 +25,6 @@ interface Conversation {
   deviceId: number;
 }
 
-interface Device {
-  id: number;
-  name: string;
-}
-
 interface ChatMsg {
   id: number;
   phone: string;
@@ -41,6 +36,7 @@ interface ChatMsg {
 }
 
 export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
+  const { activeDeviceId } = useActiveDevice();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activePhone, setActivePhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -48,9 +44,6 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const [aiMode, setAiMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [deviceFilter, setDeviceFilter] = useState<number | null>(null);
-  const [devicesFailed, setDevicesFailed] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -103,32 +96,18 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     setShowQuickReplies(false);
   };
 
-  const loadConversations = (devId: number | null) => {
-    const q = devId != null ? `?deviceId=${devId}` : "";
-    apiGet<{ conversations: Conversation[] }>(`/chat/conversations${q}`)
+  // Conversations selalu mengikuti perangkat aktif di sidebar
+  useEffect(() => {
+    setActivePhone(null);
+    setMessages([]);
+    if (activeDeviceId == null) {
+      setConversations([]);
+      return;
+    }
+    apiGet<{ conversations: Conversation[] }>(`/chat/conversations?deviceId=${activeDeviceId}`)
       .then((d) => setConversations(d.conversations || []))
       .catch(() => {});
-  };
-
-  // Load conversations (awal: semua perangkat)
-  useEffect(() => {
-    loadConversations(null);
-  }, []);
-
-  // Load daftar device untuk filter per-perangkat
-  useEffect(() => {
-    apiGet<{ devices: Device[] }>("/devices")
-      .then((d) => setDevices(d.devices || []))
-      .catch(() => setDevicesFailed(true));
-  }, []);
-
-  const handleDeviceChange = (val: string) => {
-    const devId = val === "all" ? null : Number(val);
-    setDeviceFilter(devId);
-    loadConversations(devId);
-  };
-
-  const deviceName = (id: number) => devices.find((d) => d.id === id)?.name;
+  }, [activeDeviceId]);
 
   // Load messages when active phone changes
   useEffect(() => {
@@ -209,18 +188,20 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
 
   const handleSend = async () => {
     if (!input.trim() || !activePhone) return;
-    const activeConv = conversations.find((c) => c.phone === activePhone);
-    const deviceId = activeConv?.deviceId || 1;
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setLoading(true);
     try {
       if (aiMode) {
         await apiPost("/chat/ai-reply", {
-          deviceId,
+          deviceId: activeDeviceId,
           phone: activePhone,
         });
       } else {
         await apiPost("/chat/send", {
-          deviceId,
+          deviceId: activeDeviceId,
           phone: activePhone,
           content: input,
           type: "text",
@@ -236,14 +217,18 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
 
   const handleAIReply = async () => {
     if (!activePhone) return;
+    if (activeDeviceId == null) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setLoading(true);
     try {
       await apiPost("/chat/ai-reply", {
-        deviceId: 1,
+        deviceId: activeDeviceId,
         phone: activePhone,
       });
     } catch (err: any) {
-      console.error(err);
+      toast.error(err?.message || "Gagal meminta balasan AI");
     } finally {
       setLoading(false);
     }
@@ -275,23 +260,15 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          {!devicesFailed && devices.length > 0 && (
-            <Dropdown
-              ariaLabel="Filter perangkat"
-              value={deviceFilter == null ? "all" : String(deviceFilter)}
-              onChange={handleDeviceChange}
-              className="mt-2"
-              options={[
-                { value: "all", label: "Semua Perangkat" },
-                ...devices.map((d) => ({ value: String(d.id), label: d.name })),
-              ]}
-            />
-          )}
         </div>
 
         {/* List */}
         <div className="flex-1 overflow-y-auto">
-          {filteredConvos.length === 0 ? (
+          {activeDeviceId == null ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              Pilih perangkat aktif di sidebar dulu
+            </div>
+          ) : filteredConvos.length === 0 ? (
             <div className="p-6 text-center text-xs text-muted-foreground">
               Belum ada percakapan
             </div>
@@ -324,12 +301,6 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                     {convo.lastMessage}
                   </p>
-                  {deviceName(convo.deviceId) && (
-                    <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5 flex items-center gap-1">
-                      <Smartphone className="w-2.5 h-2.5 shrink-0" />
-                      {deviceName(convo.deviceId)}
-                    </p>
-                  )}
                 </div>
               </button>
             ))
