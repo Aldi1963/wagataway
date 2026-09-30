@@ -41,6 +41,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ContactGroup{},
 		&models.ContactGroupMember{},
 		&models.AutoReply{},
+		&models.AIReplyConfig{},
 		&models.ApiKey{},
 		&models.Plan{},
 		&models.Subscription{},
@@ -74,6 +75,16 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.AdminWaBot{},
 		&models.AdminActivityLog{},
 		&models.File{},
+		&models.ChatLabel{},
+		&models.ChatAssignment{},
+		&models.MessageReport{},
+		&models.RecurringSchedule{},
+		&models.GroupRule{},
+		&models.Followup{},
+		&models.WebhookDeliveryLog{},
+		&models.TeamMember{},
+		&models.Affiliate{},
+		&models.AffiliateEarning{},
 	); err != nil {
 		return err
 	}

@@ -741,14 +741,18 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		return
 	}
 
+	// Extract text content
+	text := extractMessageText(msg)
+	sender := msg.Info.Sender.User
+
+	// AI auto-reply hook — non-blocking, gagal diam-diam (hanya log).
+	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
+	go m.checkAIReply(sess, sender, text, msg.Info.IsGroup)
+
 	// Skip group messages for now (can be enabled per-device)
 	if msg.Info.IsGroup {
 		return
 	}
-
-	// Extract text content
-	text := extractMessageText(msg)
-	sender := msg.Info.Sender.User
 
 	log.Info().
 		Uint("deviceID", sess.DeviceID).

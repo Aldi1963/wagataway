@@ -45,6 +45,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		// ── Public routes (no auth) ────────────────────────────────────────
 		registerAuthRoutes(api, cfg, db)
 		registerOAuthRoutes(api, cfg, db)
+		registerTeamLoginRoute(api, cfg, db) // POST /api/auth/team-login
 		registerPublicRoutes(api, cfg, db)
 		registerOtpAuthRoutes(api, cfg, db)
 		registerLinkRoutes(api, db) // /l/:code redirect
@@ -68,6 +69,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerContactRoutes(protected, db, waManager)
 			registerContactGroupRoutes(protected, db, waManager)
 			registerAutoReplyRoutes(protected, db)
+			registerAIReplyRoutes(protected, db)
 			registerApiKeyRoutes(protected, db)
 			registerBillingRoutes(protected, cfg, db)
 			registerScheduleRoutes(protected, db)
@@ -88,6 +90,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerBotOrderRoutes(protected, db)
 			registerGroupRoutes(protected, db, waManager)
 			registerCannedResponseRoutes(protected, db)
+			registerChatLabelRoutes(protected, db)
+			registerMessageReportRoutes(protected, db)
+			registerRecurringScheduleRoutes(protected, db)
+			registerGroupRuleRoutes(protected, db)
+			registerFollowupRoutes(protected, db)
+			registerWebhookDeliveryLogRoutes(protected, db)
+			registerTeamMemberRoutes(protected, cfg, db)
+			registerAffiliateRoutes(protected, db)
 			registerTwoFARoutes(protected, cfg, db)
 			registerSSERoutes(protected)
 			registerSSETicketRoutes(protected)

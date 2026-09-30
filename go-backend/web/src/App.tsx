@@ -28,6 +28,16 @@ const Billing = lazy(() => import("@/pages/Billing"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
+const ChatLabels = lazy(() => import("@/pages/ChatLabels"));
+const CannedResponses = lazy(() => import("@/pages/CannedResponses"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const RecurringSchedules = lazy(() => import("@/pages/RecurringSchedules"));
+const GroupRules = lazy(() => import("@/pages/GroupRules"));
+const Followups = lazy(() => import("@/pages/Followups"));
+const WebhookLogs = lazy(() => import("@/pages/WebhookLogs"));
+const ApiPlayground = lazy(() => import("@/pages/ApiPlayground"));
+const Team = lazy(() => import("@/pages/Team"));
+const Affiliate = lazy(() => import("@/pages/Affiliate"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Landing = lazy(() => import("@/pages/Landing"));
 
@@ -175,6 +185,36 @@ function AppRouter() {
         </Route>
         <Route path="/notifications">
           <ProtectedRoute><Notifications /></ProtectedRoute>
+        </Route>
+        <Route path="/chat-labels">
+          <ProtectedRoute><ChatLabels /></ProtectedRoute>
+        </Route>
+        <Route path="/canned-responses">
+          <ProtectedRoute><CannedResponses /></ProtectedRoute>
+        </Route>
+        <Route path="/reports">
+          <ProtectedRoute><Reports /></ProtectedRoute>
+        </Route>
+        <Route path="/recurring">
+          <ProtectedRoute><RecurringSchedules /></ProtectedRoute>
+        </Route>
+        <Route path="/group-rules">
+          <ProtectedRoute><GroupRules /></ProtectedRoute>
+        </Route>
+        <Route path="/followups">
+          <ProtectedRoute><Followups /></ProtectedRoute>
+        </Route>
+        <Route path="/webhook-logs">
+          <ProtectedRoute><WebhookLogs /></ProtectedRoute>
+        </Route>
+        <Route path="/api-playground">
+          <ProtectedRoute><ApiPlayground /></ProtectedRoute>
+        </Route>
+        <Route path="/team">
+          <ProtectedRoute><Team /></ProtectedRoute>
+        </Route>
+        <Route path="/affiliate">
+          <ProtectedRoute><Affiliate /></ProtectedRoute>
         </Route>
         <Route path="/profile">
           <Redirect to="/settings" />

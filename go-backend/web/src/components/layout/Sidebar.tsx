@@ -32,6 +32,16 @@ import {
   HeartPulse,
   BellRing,
   ArrowLeft,
+  Tags,
+  Zap,
+  FileBarChart,
+  Repeat,
+  ShieldCheck,
+  Timer,
+  Webhook,
+  FlaskConical,
+  UserPlus,
+  Gift,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -63,9 +73,14 @@ const sections: NavSection[] = [
     items: [
       { label: "Kirim Pesan", href: "/send", icon: Send },
       { label: "Jadwal", href: "/schedule", icon: Clock },
+      { label: "Jadwal Berulang", href: "/recurring", icon: Repeat },
+      { label: "Follow-up", href: "/followups", icon: Timer },
       { label: "Templates", href: "/templates", icon: LayoutTemplate },
+      { label: "Canned Responses", href: "/canned-responses", icon: Zap },
       { label: "Auto Reply", href: "/auto-reply", icon: MessageSquare },
       { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
+      { label: "Label & Assign", href: "/chat-labels", icon: Tags },
+      { label: "Aturan Grup", href: "/group-rules", icon: ShieldCheck },
       { label: "File Manager", href: "/files", icon: FolderOpen },
     ],
   },
@@ -77,17 +92,24 @@ const sections: NavSection[] = [
     label: "Data",
     items: [
       { label: "Analytics", href: "/analytics", icon: BarChart3 },
+      { label: "Laporan Broadcast", href: "/reports", icon: FileBarChart },
       { label: "Links", href: "/links", icon: Link2 },
     ],
   },
   {
     label: "Pengembang",
-    items: [{ label: "API Developer", href: "/api-docs", icon: CodeXml }],
+    items: [
+      { label: "API Developer", href: "/api-docs", icon: CodeXml },
+      { label: "API Playground", href: "/api-playground", icon: FlaskConical },
+      { label: "Webhook Logs", href: "/webhook-logs", icon: Webhook },
+    ],
   },
   {
     label: "Akun",
     items: [
       { label: "Langganan", href: "/billing", icon: CreditCard },
+      { label: "Tim", href: "/team", icon: UserPlus },
+      { label: "Afiliasi", href: "/affiliate", icon: Gift },
       { label: "Setting", href: "/settings", icon: Settings },
     ],
   },

@@ -35,9 +35,10 @@ const (
 // sensitiveSettingKeys adalah kunci pengaturan yang tidak boleh dikembalikan
 // mentah ke frontend.
 var sensitiveSettingKeys = map[string]bool{
-	settingClipkuAPIKey:     true,
+	settingClipkuAPIKey:       true,
 	settingGoogleClientSecret: true,
 	settingGithubClientSecret: true,
+	"ai_api_key":              true,
 }
 
 type oauthProvider struct {
