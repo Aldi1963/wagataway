@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Plus, Zap, Trash2, Power, Pencil, X, RefreshCw } from "lucide-react";
+import { Plus, Zap, Trash2, Pencil, X, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -228,17 +229,26 @@ export default function AutoReply() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={rule.isActive}
+                      aria-label={rule.isActive ? "Nonaktifkan rule" : "Aktifkan rule"}
+                      title={rule.isActive ? "Nonaktifkan rule" : "Aktifkan rule"}
                       onClick={() => toggle(rule)}
-                      aria-label={rule.isActive ? "Nonaktifkan" : "Aktifkan"}
-                      title={rule.isActive ? "Nonaktifkan" : "Aktifkan"}
+                      className={cn(
+                        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                        rule.isActive ? "bg-[#243370]" : "bg-muted"
+                      )}
                     >
-                      <Power className={`w-3.5 h-3.5 ${rule.isActive ? "text-green-600" : "text-muted-foreground"}`} />
-                    </Button>
+                      <span
+                        className={cn(
+                          "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all",
+                          rule.isActive ? "left-[18px]" : "left-0.5"
+                        )}
+                      />
+                    </button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(rule)} aria-label="Edit">
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>

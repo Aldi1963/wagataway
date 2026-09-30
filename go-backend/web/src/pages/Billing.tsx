@@ -1,9 +1,23 @@
-import { Check } from "lucide-react";
+import { useState } from "react";
+import { Check, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const plans = [
+// Nomor WhatsApp admin untuk upgrade paket.
+// GANTI dengan nomor CS yang sebenarnya, format: 62812xxxxxxx (tanpa +, tanpa spasi).
+const CS_WA_NUMBER = "6280000000000";
+
+interface Plan {
+  name: string;
+  price: number;
+  period: string;
+  features: string[];
+  current: boolean;
+  popular?: boolean;
+}
+
+const plans: Plan[] = [
   {
     name: "Free",
     price: 0,
@@ -29,6 +43,14 @@ const plans = [
 ];
 
 export default function Billing() {
+  const [upgradePlan, setUpgradePlan] = useState<Plan | null>(null);
+
+  const waLink = upgradePlan
+    ? `https://wa.me/${CS_WA_NUMBER}?text=${encodeURIComponent(
+        `Halo Admin WaGataway, saya ingin upgrade ke paket ${upgradePlan.name}.`
+      )}`
+    : "#";
+
   return (
     <div className="space-y-6">
       <div>
@@ -77,6 +99,7 @@ export default function Billing() {
                 className="w-full"
                 size="sm"
                 disabled={plan.current}
+                onClick={() => setUpgradePlan(plan)}
               >
                 {plan.current ? "Paket Saat Ini" : "Pilih Paket"}
               </Button>
@@ -84,6 +107,55 @@ export default function Billing() {
           </Card>
         ))}
       </div>
+
+      {/* Upgrade confirmation modal */}
+      {upgradePlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setUpgradePlan(null)}
+          />
+          <Card className="relative w-full max-w-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Upgrade ke Paket {upgradePlan.name}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border border-border p-3">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-semibold text-foreground">{upgradePlan.name}</span>
+                  <span className="text-lg font-bold text-foreground">
+                    Rp {upgradePlan.price.toLocaleString("id-ID")}
+                    <span className="text-xs font-normal text-muted-foreground">{upgradePlan.period}</span>
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {upgradePlan.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Check className="w-3 h-3 text-foreground" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Untuk upgrade, hubungi admin via WhatsApp.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+                  onClick={() => window.open(waLink, "_blank", "noopener")}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Hubungi Admin
+                </Button>
+                <Button variant="outline" onClick={() => setUpgradePlan(null)}>
+                  Batal
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

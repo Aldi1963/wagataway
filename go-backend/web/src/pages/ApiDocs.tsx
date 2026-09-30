@@ -543,21 +543,60 @@ function EndpointRow({
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"curl" | "try">("curl");
+  const [copied, setCopied] = useState(false);
+
+  const copyEndpoint = async () => {
+    const text = `${ep.method} ${baseUrl}${ep.path}\n\n${ep.curl}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback untuk browser tanpa akses clipboard API
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* abaikan */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="rounded-lg border border-border overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 transition-colors"
-      >
-        <span
-          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 w-[52px] text-center ${methodStyle[ep.method]}`}
+      <div className="flex items-center">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 transition-colors"
         >
-          {ep.method}
-        </span>
-        <code className="text-xs font-mono text-foreground truncate flex-1">{ep.path}</code>
-        <span className="text-xs text-muted-foreground hidden md:block truncate max-w-[220px]">{ep.title}</span>
-        <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 w-[52px] text-center ${methodStyle[ep.method]}`}
+          >
+            {ep.method}
+          </span>
+          <code className="text-xs font-mono text-foreground truncate flex-1">{ep.path}</code>
+          <span className="text-xs text-muted-foreground hidden md:block truncate max-w-[220px]">{ep.title}</span>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        <div className="pr-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={copyEndpoint}
+            title="Salin method, URL, dan contoh cURL"
+          >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? "Tersalin!" : "Salin"}
+          </Button>
+        </div>
+      </div>
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-3 border-t border-border bg-card">
           <p className="text-sm font-medium text-foreground pt-2">{ep.title}</p>

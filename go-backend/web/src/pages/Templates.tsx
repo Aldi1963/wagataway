@@ -260,11 +260,7 @@ export default function Templates() {
       {!loading && !error && templates.length === 0 && (
         <Card>
           <CardContent className="p-10 text-center space-y-3">
-            <img
-              src="/illustrations/message-sent.svg"
-              alt="Belum ada template"
-              className="w-44 h-auto mx-auto"
-            />
+            <FileText className="w-8 h-8 mx-auto text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">
               Belum ada template
             </p>

@@ -53,6 +53,36 @@ export default function LiveChat() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  /** Bunyi beep sederhana via Web Audio API (tanpa file eksternal). */
+  const playNotificationSound = () => {
+    // Hanya bunyi bila tab sedang terlihat — browser pun memblokir audio saat tab tersembunyi.
+    if (document.visibilityState !== "visible") return;
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtxRef.current) audioCtxRef.current = new AC();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") void ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      const t = ctx.currentTime;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.4, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    } catch {
+      /* abaikan: audio tidak tersedia */
+    }
+  };
 
   const toggleQuickReplies = () => {
     const next = !showQuickReplies;
@@ -106,6 +136,9 @@ export default function LiveChat() {
       .catch(() => {});
     // Mark as read
     apiPost(`/chat/conversations/${activePhone}/read`).catch(() => {});
+    setConversations((prev) =>
+      prev.map((c) => (c.phone === activePhone ? { ...c, unreadCount: 0 } : c))
+    );
   }, [activePhone]);
 
   // SSE for real-time messages
@@ -115,7 +148,8 @@ export default function LiveChat() {
     const es = new EventSource(`/api/stream?token=${token}`);
     es.addEventListener("chat:message", (e) => {
       const data = JSON.parse(e.data);
-      if (data.phone === activePhone) {
+      const isActiveConvo = data.phone === activePhone;
+      if (isActiveConvo) {
         setMessages((prev) => [
           ...prev,
           {
@@ -129,14 +163,23 @@ export default function LiveChat() {
           },
         ]);
       }
-      // Update conversation list
+      // Update conversation list; naikkan badge unread untuk pesan masuk di percakapan lain
       setConversations((prev) =>
         prev.map((c) =>
           c.phone === data.phone
-            ? { ...c, lastMessage: data.content, lastActivity: new Date().toISOString() }
+            ? {
+                ...c,
+                lastMessage: data.content,
+                lastActivity: new Date().toISOString(),
+                unreadCount:
+                  !isActiveConvo && data.direction === "in"
+                    ? c.unreadCount + 1
+                    : c.unreadCount,
+              }
             : c
         )
       );
+      if (data.direction === "in") playNotificationSound();
     });
     return () => es.close();
   }, [activePhone]);

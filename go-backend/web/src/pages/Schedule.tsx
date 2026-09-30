@@ -263,7 +263,7 @@ function ScheduleRow({
   );
 }
 
-export default function Schedule({ embedded = false }: { embedded?: boolean }) {
+export default function Schedule({ embedded = false, forcedView }: { embedded?: boolean; forcedView?: "list" | "calendar" }) {
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,7 +275,10 @@ export default function Schedule({ embedded = false }: { embedded?: boolean }) {
   const [sendAt, setSendAt] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<ScheduleItem | null>(null);
-  const [view, setView] = useState<"list" | "calendar">("list");
+  const [viewState, setView] = useState<"list" | "calendar">("list");
+  // Bila dipaksa dari luar (mis. tab Kalender di ScheduleHub), pakai itu dan
+  // sembunyikan toggle internal agar tidak ada dua lapis tab.
+  const view = forcedView ?? viewState;
   const [month, setMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -373,6 +376,7 @@ export default function Schedule({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
         <div className="flex items-center gap-2">
+          {!forcedView && (
           <div className="flex rounded-md border border-border p-0.5">
             <Button
               variant={view === "list" ? "secondary" : "ghost"}
@@ -391,6 +395,7 @@ export default function Schedule({ embedded = false }: { embedded?: boolean }) {
               <CalendarDays className="w-3.5 h-3.5" /> Kalender
             </Button>
           </div>
+          )}
           <Button size="sm" className="gap-1.5" onClick={openAdd}>
             <Plus className="w-3.5 h-3.5" />
             Jadwalkan Baru

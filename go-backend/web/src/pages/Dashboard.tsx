@@ -88,11 +88,13 @@ function Toggle({
   onToggle,
   disabled,
   label,
+  title,
 }: {
   checked: boolean;
   onToggle: (v: boolean) => void;
   disabled?: boolean;
   label: string;
+  title?: string;
 }) {
   return (
     <button
@@ -100,6 +102,7 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      title={title}
       disabled={disabled}
       onClick={() => onToggle(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -577,16 +580,28 @@ export default function Dashboard() {
                         <td className="py-3 pr-4 font-mono text-[13px] text-foreground whitespace-nowrap">
                           {d.phone || "-"}
                         </td>
-                        <td
-                          className="py-3 pr-4 text-xs text-muted-foreground max-w-[160px] truncate"
-                          title={d.webhookUrl || ""}
-                        >
-                          {d.webhookUrl || "-"}
+                        <td className="py-3 pr-4">
+                          {d.webhookUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(d)}
+                              title={d.webhookUrl}
+                              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap cursor-pointer"
+                              style={{ backgroundColor: `${NAVY}1a`, color: NAVY }}
+                            >
+                              Terpasang
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Belum dipasang
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 pr-4">
                           <Toggle
                             checked={!!d.readReceipts}
                             label={`Read receipts ${d.name}`}
+                            title="Centang biru otomatis terkirim saat pesan dibaca"
                             disabled={!!toggling[`${d.id}:readReceipts`]}
                             onToggle={(v) => handleToggle(d, "readReceipts", v)}
                           />
@@ -595,6 +610,7 @@ export default function Dashboard() {
                           <Toggle
                             checked={!!d.rejectCall}
                             label={`Reject call ${d.name}`}
+                            title="Tolak panggilan WhatsApp masuk secara otomatis"
                             disabled={!!toggling[`${d.id}:rejectCall`]}
                             onToggle={(v) => handleToggle(d, "rejectCall", v)}
                           />
@@ -603,6 +619,7 @@ export default function Dashboard() {
                           <Toggle
                             checked={!!d.autoOnline}
                             label={`Auto online ${d.name}`}
+                            title="Tampilkan status online"
                             disabled={!!toggling[`${d.id}:autoOnline`]}
                             onToggle={(v) => handleToggle(d, "autoOnline", v)}
                           />
@@ -611,6 +628,7 @@ export default function Dashboard() {
                           <Toggle
                             checked={!!d.typingIndicator}
                             label={`Typing indicator ${d.name}`}
+                            title="Tampilkan 'mengetik...' sebelum pesan terkirim"
                             disabled={!!toggling[`${d.id}:typingIndicator`]}
                             onToggle={(v) => handleToggle(d, "typingIndicator", v)}
                           />

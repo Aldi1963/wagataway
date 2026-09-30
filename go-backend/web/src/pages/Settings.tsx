@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useLocation } from "wouter";
@@ -41,6 +43,14 @@ export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
 
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const pwMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
+  const pwMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+  const pwValid = newPassword.length >= 6 && pwMatch;
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -77,18 +87,48 @@ export default function Settings() {
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-medium">Password Saat Ini</label>
-            <Input type="password" placeholder="••••••••" />
+            <PasswordInput
+              placeholder="••••••••"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+            />
           </div>
           <div className="space-y-2">
             <label className="text-xs font-medium">Password Baru</label>
-            <Input type="password" placeholder="Minimal 6 karakter" />
+            <PasswordInput
+              placeholder="Minimal 6 karakter"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+            <StrengthMeter password={newPassword} />
           </div>
           <div className="space-y-2">
             <label className="text-xs font-medium">Konfirmasi Password Baru</label>
-            <Input type="password" placeholder="Ulangi password baru" />
+            <div className="relative">
+              <PasswordInput
+                placeholder="Ulangi password baru"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                className={cn(
+                  pwMatch && "border-emerald-500 focus-visible:ring-emerald-500",
+                  pwMismatch && "border-red-500 focus-visible:ring-red-500"
+                )}
+              />
+              {pwMatch && (
+                <span className="absolute right-10 top-1/2 -translate-y-1/2 text-emerald-500">
+                  <Check className="w-4 h-4" />
+                </span>
+              )}
+            </div>
+            {pwMismatch && (
+              <p className="text-[11px] text-red-500">Password tidak sama.</p>
+            )}
           </div>
 
-          <Button size="sm">Ubah Password</Button>
+          <Button size="sm" disabled={!pwValid}>Ubah Password</Button>
         </div>
       </SettingCard>
 

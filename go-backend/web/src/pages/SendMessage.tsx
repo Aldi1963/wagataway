@@ -262,6 +262,9 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   disabled={sending}
                   required
                 />
+                <p className="text-[10px] text-muted-foreground text-right">
+                  {content.length} karakter
+                </p>
               </div>
 
               <Button type="submit" className="gap-2" disabled={!canSend}>

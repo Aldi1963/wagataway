@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
-import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Download } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Download, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -484,11 +484,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
               </>
             ) : (
               <div className="space-y-3">
-                <img
-                  src="/illustrations/manage-chats.svg"
-                  alt="Belum ada kontak"
-                  className="w-44 h-auto mx-auto"
-                />
+                <Users className="w-8 h-8 mx-auto text-muted-foreground" />
                 <p className="font-medium">Belum ada kontak</p>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                   Tambahkan kontak pertama Anda untuk mulai mengirim pesan

@@ -1,14 +1,105 @@
 import { useState } from "react";
-import { Send, Upload } from "lucide-react";
+import { toast } from "sonner";
+import { Send, Upload, Users, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiGet } from "@/lib/api";
+
+interface SimpleContact {
+  id: number;
+  phone: string;
+}
+
+interface SimpleGroup {
+  id: number;
+  name: string;
+  memberCount: number;
+}
+
+interface SimpleMember {
+  contactId: number;
+}
 
 export default function BulkMessages({ embedded = false }: { embedded?: boolean }) {
   const [recipients, setRecipients] = useState("");
   const [message, setMessage] = useState("");
   const [minDelay, setMinDelay] = useState("3");
   const [maxDelay, setMaxDelay] = useState("8");
+  const [groups, setGroups] = useState<SimpleGroup[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
+  const [groupId, setGroupId] = useState("");
+  const [loadingNumbers, setLoadingNumbers] = useState(false);
+
+  const ensureGroups = async () => {
+    if (groupsLoaded) return;
+    try {
+      const res = await apiGet<{ groups: SimpleGroup[] }>("/contact-groups");
+      setGroups(res.groups ?? []);
+      setGroupsLoaded(true);
+    } catch {
+      // gagal dimuat — user bisa coba lagi saat memilih
+    }
+  };
+
+  const handleLoadContacts = async () => {
+    setLoadingNumbers(true);
+    try {
+      const res = await apiGet<{ contacts: SimpleContact[] }>(
+        "/contacts?limit=1000"
+      );
+      const phones = (res.contacts ?? [])
+        .map((c) => (c.phone || "").trim())
+        .filter(Boolean);
+      if (phones.length === 0) {
+        toast.error("Belum ada kontak dengan nomor");
+        return;
+      }
+      setRecipients(phones.join("\n"));
+      toast.success(`${phones.length} nomor diambil dari kontak`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memuat kontak");
+    } finally {
+      setLoadingNumbers(false);
+    }
+  };
+
+  const handleLoadGroup = async () => {
+    if (!groupId) {
+      toast.error("Pilih grup terlebih dahulu");
+      return;
+    }
+    setLoadingNumbers(true);
+    try {
+      const [mRes, cRes] = await Promise.all([
+        apiGet<{ members: SimpleMember[] }>(
+          `/contact-groups/${groupId}/members`
+        ),
+        apiGet<{ contacts: SimpleContact[] }>("/contacts?limit=1000"),
+      ]);
+      const phoneById = new Map<number, string>(
+        (cRes.contacts ?? []).map((c) => [c.id, (c.phone || "").trim()])
+      );
+      const memberIds = new Set(
+        (mRes.members ?? []).map((m) => m.contactId)
+      );
+      const phones = [...memberIds]
+        .map((id) => phoneById.get(id) ?? "")
+        .filter(Boolean);
+      if (phones.length === 0) {
+        toast.error("Grup ini belum punya anggota dengan nomor");
+        return;
+      }
+      setRecipients(phones.join("\n"));
+      toast.success(`${phones.length} nomor diambil dari grup`);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Gagal memuat anggota grup"
+      );
+    } finally {
+      setLoadingNumbers(false);
+    }
+  };
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -26,6 +117,46 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-medium text-foreground">Nomor Tujuan</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px] gap-1.5"
+                onClick={handleLoadContacts}
+                disabled={loadingNumbers}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Ambil dari Kontak
+              </Button>
+              <select
+                className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={groupId}
+                onFocus={ensureGroups}
+                onClick={ensureGroups}
+                onChange={(e) => setGroupId(e.target.value)}
+                disabled={loadingNumbers}
+                aria-label="Pilih grup"
+              >
+                <option value="">Pilih grup…</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} ({g.memberCount})
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px] gap-1.5"
+                onClick={handleLoadGroup}
+                disabled={loadingNumbers || !groupId}
+              >
+                <UsersRound className="w-3.5 h-3.5" />
+                Ambil dari Grup
+              </Button>
+            </div>
             <textarea
               className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-[100px] resize-y font-mono"
               placeholder="Satu nomor per baris:&#10;628123456789&#10;628987654321&#10;628111222333"

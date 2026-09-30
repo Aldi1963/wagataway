@@ -666,6 +666,18 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 			updates["connected_at"] = &now
 		}
 		m.db.Model(&models.Device{}).Where("id = ?", sess.DeviceID).Updates(updates)
+		// Auto-resolve notifikasi "Perangkat terputus" untuk device ini
+		// (notif basi hilang sendiri begitu perangkat tersambung ulang).
+		var dName models.Device
+		devName := fmt.Sprintf("perangkat #%d", sess.DeviceID)
+		if err := m.db.Select("name").Where("id = ?", sess.DeviceID).First(&dName).Error; err == nil && dName.Name != "" {
+			devName = dName.Name
+		}
+		m.db.Model(&models.Notification{}).
+			Where("user_id = ? AND type = ? AND title = ? AND is_read = ? AND message LIKE ?",
+				sess.UserID, "device", "Perangkat terputus", false, "%"+devName+"%").
+			Update("is_read", true)
+
 		log.Info().Uint("deviceID", sess.DeviceID).Msg("Connection established event")
 
 		// Muat flag perilaku device lalu terapkan presence

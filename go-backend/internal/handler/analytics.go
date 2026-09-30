@@ -57,7 +57,9 @@ func analyticsMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		days := 7
-
+		if q := c.Query("days"); q == "30" {
+			days = 30
+		}
 		type DayStat struct {
 			Date   string `json:"date"`
 			Sent   int64  `json:"sent"`
