@@ -24,6 +24,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   updateUser: (user: User) => void;
+  setTokenFromOAuth: (token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -71,9 +72,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUser = (u: User) => setUser(u);
 
+  // Dipakai halaman callback OAuth: simpan token lalu verifikasi ke /auth/me.
+  const setTokenFromOAuth = async (token: string) => {
+    localStorage.setItem("token", token);
+    const data = await apiGet<{ user: User }>("/auth/me");
+    setUser(data.user);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, login, register, logout, updateUser }}
+      value={{ user, isLoading, login, register, logout, updateUser, setTokenFromOAuth }}
     >
       {children}
     </AuthContext.Provider>

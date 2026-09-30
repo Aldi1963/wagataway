@@ -1387,7 +1387,7 @@ interface KnownSetting {
   type: "text" | "number" | "toggle" | "select" | "password";
   def: string;
   options?: { value: string; label: string }[];
-  group?: "general" | "gateway";
+  group?: "general" | "gateway" | "oauth";
 }
 
 const KNOWN_SETTINGS: KnownSetting[] = [
@@ -1451,6 +1451,38 @@ const KNOWN_SETTINGS: KnownSetting[] = [
     def: "https://wa.clipku.com/api/billing/clipkupay/webhook",
     group: "gateway",
   },
+  {
+    key: "google_client_id",
+    label: "Google Client ID",
+    desc: "Client ID dari Google Cloud Console (APIs & Services → Credentials).",
+    type: "text",
+    def: "",
+    group: "oauth",
+  },
+  {
+    key: "google_client_secret",
+    label: "Google Client Secret",
+    desc: "Client secret Google. Tidak ditampilkan kembali setelah disimpan.",
+    type: "password",
+    def: "",
+    group: "oauth",
+  },
+  {
+    key: "github_client_id",
+    label: "GitHub Client ID",
+    desc: "Client ID dari GitHub (Settings → Developer settings → OAuth Apps).",
+    type: "text",
+    def: "",
+    group: "oauth",
+  },
+  {
+    key: "github_client_secret",
+    label: "GitHub Client Secret",
+    desc: "Client secret GitHub. Tidak ditampilkan kembali setelah disimpan.",
+    type: "password",
+    def: "",
+    group: "oauth",
+  },
 ];
 
 function SettingsTab() {
@@ -1460,7 +1492,7 @@ function SettingsTab() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [hasGatewayKey, setHasGatewayKey] = useState(false);
+  const [maskedKeys, setMaskedKeys] = useState<Record<string, boolean>>({});
   const [gateway, setGateway] = useState<{
     mode: string;
     webhook_url: string;
@@ -1478,6 +1510,14 @@ function SettingsTab() {
     () => KNOWN_SETTINGS.filter((s) => s.group === "gateway"),
     []
   );
+  const oauthSettings = useMemo(
+    () => KNOWN_SETTINGS.filter((s) => s.group === "oauth"),
+    []
+  );
+  const [oauthStatus, setOauthStatus] = useState<Record<
+    string,
+    { enabled: boolean; redirect_uri: string }
+  > | null>(null);
 
   const loadGateway = () => {
     apiGet<{ mode: string; webhook_url: string; has_api_key: boolean }>(
@@ -1485,12 +1525,17 @@ function SettingsTab() {
     )
       .then((res) => setGateway(res))
       .catch(() => setGateway(null));
+    apiGet<{ providers: Record<string, { enabled: boolean; redirect_uri: string }> }>(
+      "/auth/oauth/status"
+    )
+      .then((res) => setOauthStatus(res.providers || null))
+      .catch(() => setOauthStatus(null));
   };
 
   const load = () => {
     setLoading(true);
     setError(null);
-    apiGet<{ settings: Record<string, string>; has_clipkupay_api_key?: boolean }>(
+    apiGet<{ settings: Record<string, string>; masked?: Record<string, boolean> }>(
       "/admin/settings"
     )
       .then((res) => {
@@ -1507,7 +1552,7 @@ function SettingsTab() {
         }
         setValues(v);
         setCustomRows(custom);
-        setHasGatewayKey(!!res.has_clipkupay_api_key);
+        setMaskedKeys(res.masked || {});
       })
       .catch((e) => setError(errMsg(e, "Gagal memuat pengaturan")))
       .finally(() => setLoading(false));
@@ -1622,9 +1667,11 @@ function SettingsTab() {
               value={val}
               onChange={(e) => setVal(ks.key, e.target.value)}
               placeholder={
-                ks.key === "clipkupay_api_key" && hasGatewayKey
+                ks.type === "password" && maskedKeys[ks.key]
                   ? "•••••••• (tersimpan)"
-                  : "Masukkan API key baru"
+                  : ks.key === "clipkupay_api_key"
+                    ? "Masukkan API key baru"
+                    : "Masukkan secret baru"
               }
               className="w-full sm:max-w-xs font-mono"
             />
@@ -1763,6 +1810,77 @@ function SettingsTab() {
                   {testing ? "Menguji..." : "Test Koneksi"}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <h3 className="text-sm font-semibold text-foreground mb-1">
+                Login Sosial (OAuth)
+              </h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Izinkan pengguna masuk dengan akun Google atau GitHub. Isi Client
+                ID & Secret dari masing-masing provider.
+              </p>
+              <div className="divide-y divide-border">
+                {oauthSettings.map((ks) => (
+                  <div
+                    key={ks.key}
+                    className="py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{ks.label}</p>
+                      <p className="text-xs text-muted-foreground">{ks.desc}</p>
+                    </div>
+                    <div className="shrink-0">{renderControl(ks)}</div>
+                  </div>
+                ))}
+              </div>
+              {oauthStatus && (
+                <div className="mt-4 rounded-lg border border-border bg-muted/50 p-3 space-y-2.5">
+                  <p className="text-xs font-medium text-foreground">
+                    Redirect URI — daftarkan di Google Cloud Console & GitHub OAuth Apps
+                  </p>
+                  {(["google", "github"] as const).map((name) => (
+                    <div key={name} className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 capitalize ${
+                          oauthStatus[name]?.enabled
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            oauthStatus[name]?.enabled ? "bg-emerald-500" : "bg-muted-foreground"
+                          }`}
+                        />
+                        {name}
+                      </span>
+                      <code className="flex-1 min-w-0 truncate text-xs font-mono bg-background border border-border rounded-md px-2.5 py-2">
+                        {oauthStatus[name]?.redirect_uri || "—"}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 shrink-0"
+                        onClick={() => {
+                          const uri = oauthStatus[name]?.redirect_uri;
+                          if (uri) {
+                            navigator.clipboard
+                              .writeText(uri)
+                              .then(() => toast.success("Redirect URI disalin"))
+                              .catch(() => toast.error("Gagal menyalin"));
+                          }
+                        }}
+                      >
+                        <Copy className="w-3.5 h-3.5" /> Salin
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

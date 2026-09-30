@@ -10,6 +10,7 @@ import { Toaster } from "sonner";
 // ── Lazy Pages ────────────────────────────────────────────────────────────────
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
+const OAuthCallback = lazy(() => import("@/pages/OAuthCallback"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -120,6 +121,9 @@ function AppRouter() {
         </Route>
         <Route path="/reset-password">
           <GuestRoute><ResetPassword /></GuestRoute>
+        </Route>
+        <Route path="/oauth/callback">
+          <OAuthCallback />
         </Route>
         <Route path="/">
           <HomeRoute />

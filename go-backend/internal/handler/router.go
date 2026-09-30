@@ -44,6 +44,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 	{
 		// ── Public routes (no auth) ────────────────────────────────────────
 		registerAuthRoutes(api, cfg, db)
+		registerOAuthRoutes(api, cfg, db)
 		registerPublicRoutes(api, cfg, db)
 		registerOtpAuthRoutes(api, cfg, db)
 		registerLinkRoutes(api, db) // /l/:code redirect

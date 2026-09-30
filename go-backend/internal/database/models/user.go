@@ -19,6 +19,7 @@ type User struct {
 	Plan      string         `gorm:"size:50;default:free" json:"plan"`
 	Status    string         `gorm:"size:20;default:active" json:"status"` // active, suspended, banned
 	GoogleID  string         `gorm:"size:255" json:"-"`
+	GithubID  string         `gorm:"size:255" json:"-"`
 	TwoFASecret string      `gorm:"size:255" json:"-"`
 	TwoFAEnabled bool        `gorm:"default:false" json:"twoFaEnabled"`
 	Timezone  string         `gorm:"size:50;default:Asia/Jakarta" json:"timezone"`

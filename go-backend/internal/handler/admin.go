@@ -273,12 +273,12 @@ func adminGetSettings(db *gorm.DB) gin.HandlerFunc {
 		var settings []models.Setting
 		db.Find(&settings)
 		result := map[string]string{}
-		hasAPIKey := false
+		masked := map[string]bool{}
 		for _, s := range settings {
-			// Jangan kirim API key mentah ke frontend.
-			if s.Key == settingClipkuAPIKey {
+			// Jangan kirim secret mentah ke frontend.
+			if sensitiveSettingKeys[s.Key] {
 				if s.Value != "" {
-					hasAPIKey = true
+					masked[s.Key] = true
 				}
 				result[s.Key] = ""
 				continue
@@ -286,8 +286,8 @@ func adminGetSettings(db *gorm.DB) gin.HandlerFunc {
 			result[s.Key] = s.Value
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"settings":              result,
-			"has_clipkupay_api_key": hasAPIKey,
+			"settings": result,
+			"masked":   masked,
 		})
 	}
 }
@@ -300,8 +300,8 @@ func adminUpdateSettings(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		for key, value := range req {
-			// Nilai kosong untuk API key = jangan timpa yang sudah ada.
-			if key == settingClipkuAPIKey && value == "" {
+			// Nilai kosong untuk secret = jangan timpa yang sudah ada.
+			if sensitiveSettingKeys[key] && value == "" {
 				continue
 			}
 			db.Where("key = ?", key).Assign(models.Setting{Key: key, Value: value}).

@@ -30,7 +30,6 @@ func registerAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	{
 		auth.POST("/login", handleLogin(cfg, db))
 		auth.POST("/register", handleRegister(cfg, db))
-		auth.POST("/google", handleGoogleLogin(cfg, db))
 		auth.GET("/me", middleware.AuthRequired(cfg), handleGetMe(db))
 		auth.PATCH("/me", middleware.AuthRequired(cfg), handleUpdateMe(db))
 		auth.POST("/change-password", middleware.AuthRequired(cfg), handleChangePassword(db))
@@ -149,22 +148,6 @@ func handleRegister(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 				"plan":  user.Plan,
 			},
 		})
-	}
-}
-
-func handleGoogleLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var req struct {
-			Credential string `json:"credential" binding:"required"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid", "code": "VALIDATION_ERROR"})
-			return
-		}
-
-		// TODO: Verify Google ID token and extract user info
-		// For now, placeholder response
-		c.JSON(http.StatusNotImplemented, gin.H{"message": "Google OAuth belum diimplementasi", "code": "NOT_IMPLEMENTED"})
 	}
 }
 
