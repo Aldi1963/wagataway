@@ -33,6 +33,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	// ── Kompatibilitas WAMP (ppob.clipku.com): POST /send-message & /send-media
+	// dengan field api_key, sender, number, message (lihat wamp_compat.go).
+	registerWampCompatRoutes(r, db, waManager)
+
 	// ── Static files (uploads) ─────────────────────────────────────────────
 	r.Static("/uploads", "./public/uploads")
 	r.Static("/assets", "./web/dist/assets")
