@@ -477,7 +477,7 @@ func adminHealth(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		}
 
 		clipkuStatus := "disabled"
-		if strings.TrimSpace(cfg.ClipkuPayAPIKey) != "" {
+		if newClipkuPay(cfg).enabled() {
 			clipkuStatus = "ok"
 		}
 
