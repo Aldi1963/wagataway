@@ -31,6 +31,12 @@ func (s *Scheduler) Start() {
 	// Process drip campaign steps every minute
 	s.cron.AddFunc("0 * * * * *", s.processDripSteps)
 
+	// Process recurring schedules every minute
+	s.cron.AddFunc("0 * * * * *", s.processRecurringSchedules)
+
+	// Process automatic follow-ups every 5 minutes
+	s.cron.AddFunc("0 */5 * * * *", s.processFollowups)
+
 	// Cleanup expired sessions every hour
 	s.cron.AddFunc("0 0 * * * *", s.cleanupExpiredSessions)
 

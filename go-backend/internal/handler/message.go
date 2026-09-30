@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
@@ -110,12 +111,15 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Send via WhatsApp
+		campaignID := "single-" + time.Now().Format("20060102150405")
 		go func() {
 			err := wm.SendMessage(req.DeviceID, req.To, req.Type, req.Content, mediaURL)
 			if err != nil {
 				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
+				recordReport(db, userID, campaignID, req.To, "failed", err.Error())
 			} else {
 				db.Model(&msg).Update("status", "sent")
+				recordReport(db, userID, campaignID, req.To, "sent", "")
 			}
 		}()
 

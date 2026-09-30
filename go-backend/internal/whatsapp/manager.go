@@ -391,6 +391,7 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 
 	sentCount := 0
 	failedCount := 0
+	campaignID := fmt.Sprintf("bulk-%d", jobID)
 
 	for _, r := range recipients {
 		err := m.SendMessage(job.DeviceID, r.Phone, job.Type, job.Content, job.MediaURL)
@@ -402,12 +403,14 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 				"status":    "failed",
 				"error_msg": err.Error(),
 			})
+			recordMessageReport(db, job.UserID, campaignID, r.Phone, "failed", err.Error(), sentAt)
 		} else {
 			sentCount++
 			db.Model(&r).Updates(map[string]interface{}{
 				"status":  "sent",
 				"sent_at": &sentAt,
 			})
+			recordMessageReport(db, job.UserID, campaignID, r.Phone, "sent", "", sentAt)
 		}
 
 		// Random delay between messages (anti-ban)
@@ -748,6 +751,11 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	// AI auto-reply hook — non-blocking, gagal diam-diam (hanya log).
 	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
 	go m.checkAIReply(sess, sender, text, msg.Info.IsGroup)
+
+	// Aturan grup (anti-link, anti-spam) — non-blocking, gagal diam-diam.
+	if msg.Info.IsGroup {
+		go m.checkGroupRules(sess, sender, text, msg.Info.Chat.String())
+	}
 
 	// Skip group messages for now (can be enabled per-device)
 	if msg.Info.IsGroup {
