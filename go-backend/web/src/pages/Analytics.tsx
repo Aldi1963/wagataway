@@ -158,8 +158,7 @@ export default function Analytics() {
               value={(overview?.sentMessages ?? 0).toLocaleString("id-ID")}
               badge={
                 <Badge
-                  className="mt-1.5 text-[10px]"
-                  style={{ backgroundColor: `${NAVY}1a`, color: NAVY }}
+                  className="mt-1.5 bg-[#243370]/10 text-[10px] text-[#243370] dark:bg-[#4c63d2]/15 dark:text-[#aab6f5]"
                 >
                   {(overview?.deliveryRate ?? 0).toFixed(1)}%
                 </Badge>

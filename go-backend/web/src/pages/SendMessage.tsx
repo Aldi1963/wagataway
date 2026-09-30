@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   Send,
@@ -81,6 +81,7 @@ const selectCls =
   "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
+  const [, navigate] = useLocation();
   const { activeDeviceId } = useActiveDevice();
   const [devices, setDevices] = useState<Device[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -207,8 +208,8 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   mengirim pesan.
                 </p>
               </div>
-              <Button asChild size="sm">
-                <Link to="/">Ke Dashboard</Link>
+              <Button size="sm" onClick={() => navigate("/")}>
+                Ke Dashboard
               </Button>
             </div>
           ) : (

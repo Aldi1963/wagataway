@@ -1,6 +1,13 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Card aplikasi mengikuti gaya Kumo UI (Cloudflare LayerCard):
+ * permukaan elevated + ring halus + shadow (tanpa border+shadow ganda),
+ * mengikuti aturan shadow-borders & concentric radius dari kumo-design.
+ * API compound (Card/Header/Title/Description/Content) tidak berubah.
+ */
+
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -8,7 +15,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border border-border bg-card text-card-foreground",
+      "rounded-xl bg-kumo-elevated text-kumo-strong shadow-md ring-1 ring-kumo-line",
       className
     )}
     {...props}
@@ -22,7 +29,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    className={cn("flex flex-col space-y-1.5 px-5 py-4", className)}
     {...props}
   />
 ));
@@ -34,7 +41,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
+    className={cn("font-semibold leading-none text-kumo-strong", className)}
     {...props}
   />
 ));
@@ -44,11 +51,7 @@ const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p
-    ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
-    {...props}
-  />
+  <p ref={ref} className={cn("text-sm text-kumo-subtle", className)} {...props} />
 ));
 CardDescription.displayName = "CardDescription";
 
@@ -56,7 +59,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+  <div ref={ref} className={cn("px-5 py-4 pt-0", className)} {...props} />
 ));
 CardContent.displayName = "CardContent";
 

@@ -511,7 +511,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-semibold">
               WhatsApp Accounts
             </CardTitle>
-            <Button size="sm" className="gap-1.5" onClick={() => setShowAdd(true)}>
+            <Button size="sm" className="gap-1.5 shrink-0" onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4" /> Add Device
             </Button>
           </div>

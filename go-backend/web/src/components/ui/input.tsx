@@ -1,22 +1,29 @@
 import * as React from "react";
+import { inputVariants } from "@cloudflare/kumo";
 import { cn } from "@/lib/utils";
 
+/**
+ * Input aplikasi memakai gaya Kumo UI (Cloudflare) lewat `inputVariants`,
+ * sehingga semua props input HTML standar tetap didukung penuh.
+ */
+
 export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {}
+  extends React.InputHTMLAttributes<HTMLInputElement> {
+  error?: string | boolean;
+}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type = "text", error, ...props }, ref) => {
     return (
       <input
         type={type}
+        ref={ref}
+        data-kumo-component="input"
         className={cn(
-          "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm transition-colors",
-          "placeholder:text-muted-foreground",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background",
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          inputVariants({ variant: error ? "error" : "default", size: "base" }),
+          "w-full",
           className
         )}
-        ref={ref}
         {...props}
       />
     );

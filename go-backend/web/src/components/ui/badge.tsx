@@ -1,33 +1,41 @@
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
+import { Badge as KumoBadge } from "@cloudflare/kumo";
 import { cn } from "@/lib/utils";
 
-const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
-  {
-    variants: {
-      variant: {
-        default: "border-transparent bg-primary text-primary-foreground",
-        secondary: "border-border bg-secondary text-secondary-foreground",
-        destructive: "border-transparent bg-destructive text-destructive-foreground",
-        outline: "border-border text-foreground",
-        success: "border-transparent bg-success text-white",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-);
+/**
+ * Badge aplikasi di atas Kumo UI (Cloudflare).
+ * API variant tetap sama (default|secondary|destructive|outline|success).
+ */
 
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+type AppVariant = "default" | "secondary" | "destructive" | "outline" | "success";
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+const variantMap: Record<
+  AppVariant,
+  "primary" | "secondary" | "red" | "outline" | "success"
+> = {
+  default: "primary",
+  secondary: "secondary",
+  destructive: "red",
+  outline: "outline",
+  success: "success",
+};
+
+export interface BadgeProps {
+  variant?: AppVariant;
+  className?: string;
+  children?: React.ReactNode;
+}
+
+function Badge({ className, variant = "default", children }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <KumoBadge
+      variant={variantMap[variant]}
+      appearance="filled"
+      className={cn(className)}
+    >
+      {children}
+    </KumoBadge>
   );
 }
 
-export { Badge, badgeVariants };
+export { Badge };

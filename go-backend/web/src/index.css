@@ -1,4 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Wajib: Tailwind v4 tidak scan node_modules by default (lihat README Kumo).
+ * Tanpa ini, class internal Kumo (mis. `contents`) tidak ke-generate. */
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles";
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -117,4 +121,37 @@
     outline: none;
     box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring-color);
   }
+}
+
+/* ── KUMO UI: brand navy WaGataway di atas token Kumo ─────────────────────────
+ * Kumo membaca tema dari atribut data-theme="kumo" + data-mode="light|dark"
+ * pada <html> (diatur oleh ThemeProvider). Di sini brand Cloudflare (biru)
+ * diganti navy #243370 agar identitas WaGataway tetap terjaga. */
+
+[data-theme="kumo"] {
+  --color-kumo-brand: #243370;
+  --color-kumo-brand-hover: #1b2a5e;
+  --text-color-kumo-brand: #243370;
+}
+
+/* Dark mode: permukaan navy mengikuti tema gelap aplikasi */
+[data-theme="kumo"][data-mode="dark"],
+[data-mode="dark"] [data-theme="kumo"] {
+  --color-kumo-brand: #4c63d2;
+  --color-kumo-brand-hover: #5d74dd;
+  --text-color-kumo-brand: #aab6f5;
+  --color-kumo-canvas: #0a1030;
+  --color-kumo-elevated: #121a42;
+  --color-kumo-base: #121a42;
+  --color-kumo-tint: #1a2350;
+  --color-kumo-recessed: #0d1435;
+  --color-kumo-line: #27326a;
+  --color-kumo-hairline: #232c5e;
+  --color-kumo-control: #121a42;
+  --color-kumo-interact: #27326a;
+  --color-kumo-fill: #1a2350;
+  --text-color-kumo-default: #eef1ff;
+  --text-color-kumo-strong: #ffffff;
+  --text-color-kumo-subtle: #9aa5d6;
+  --text-color-kumo-placeholder: #6b77ab;
 }

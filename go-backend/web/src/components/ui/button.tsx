@@ -1,69 +1,116 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
+import { Button as KumoButton } from "@cloudflare/kumo";
 import { cn } from "@/lib/utils";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-  {
-    variants: {
-      variant: {
-        // Navy solid — aksi utama
-        default:
-          "bg-primary text-primary-foreground border border-primary hover:opacity-90 active:scale-[0.98]",
-        // Soft red tint — aksi destruktif (ala MPWA: Clear All / Delete All)
-        destructive:
-          "bg-red-500/10 text-red-700 border border-red-500/25 hover:bg-red-500/20 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30 dark:hover:bg-red-500/25 active:scale-[0.98]",
-        outline:
-          "border border-border bg-background hover:bg-secondary text-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground border border-border hover:bg-muted",
-        ghost:
-          "hover:bg-secondary text-foreground",
-        link:
-          "text-foreground underline-offset-4 hover:underline",
-        // Soft navy tint
-        tint:
-          "bg-[#243370]/10 text-[#243370] border border-[#243370]/25 hover:bg-[#243370]/20 dark:bg-[#4c63d2]/15 dark:text-[#aab6f5] dark:border-[#4c63d2]/30 dark:hover:bg-[#4c63d2]/25 active:scale-[0.98]",
-        // Soft green tint — Import
-        success:
-          "bg-green-500/10 text-green-700 border border-green-500/25 hover:bg-green-500/20 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30 dark:hover:bg-green-500/25 active:scale-[0.98]",
-        // Soft amber tint — Export
-        warning:
-          "bg-amber-500/10 text-amber-700 border border-amber-500/25 hover:bg-amber-500/20 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30 dark:hover:bg-amber-500/25 active:scale-[0.98]",
-      },
-      size: {
-        default: "h-9 px-4 py-2 rounded-full",
-        sm: "h-8 rounded-full px-3 text-xs",
-        lg: "h-10 rounded-full px-6",
-        icon: "h-9 w-9 rounded-full",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-);
+/**
+ * Button aplikasi di atas Kumo UI (Cloudflare).
+ * API variant/size tetap sama seperti sebelumnya sehingga semua halaman
+ * tidak perlu diubah; tampilannya mengikuti design system Kumo dengan
+ * brand navy WaGataway. Bentuk pill dipertahankan (rounded-full).
+ */
+
+type AppVariant =
+  | "default"
+  | "destructive"
+  | "outline"
+  | "secondary"
+  | "ghost"
+  | "link"
+  | "tint"
+  | "success"
+  | "warning";
+
+type AppSize = "default" | "sm" | "lg" | "icon";
+
+const variantMap: Record<
+  AppVariant,
+  "primary" | "secondary" | "ghost" | "destructive" | "outline"
+> = {
+  default: "primary",
+  destructive: "destructive",
+  outline: "outline",
+  secondary: "secondary",
+  ghost: "ghost",
+  link: "ghost",
+  tint: "secondary",
+  success: "secondary",
+  warning: "secondary",
+};
+
+const sizeMap: Record<AppSize, "xs" | "sm" | "base" | "lg"> = {
+  default: "base",
+  sm: "sm",
+  lg: "lg",
+  icon: "base",
+};
+
+// Soft tint ala MPWA untuk aksi berwanti (di atas Kumo secondary)
+const tintClasses: Partial<Record<AppVariant, string>> = {
+  tint: "bg-[#243370]/10 text-[#243370] border border-[#243370]/25 hover:bg-[#243370]/20 dark:bg-[#4c63d2]/15 dark:text-[#aab6f5] dark:border-[#4c63d2]/30 dark:hover:bg-[#4c63d2]/25",
+  success:
+    "bg-green-500/10 text-green-700 border border-green-500/25 hover:bg-green-500/20 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30 dark:hover:bg-green-500/25",
+  warning:
+    "bg-amber-500/10 text-amber-700 border border-amber-500/25 hover:bg-amber-500/20 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30 dark:hover:bg-amber-500/25",
+  link: "underline underline-offset-4 px-2",
+};
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color"> {
+  variant?: AppVariant;
+  size?: AppSize;
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  (
+    {
+      className,
+      variant = "default",
+      size = "default",
+      type = "button",
+      loading,
+      title,
+      children,
+      ...props
+    },
+    ref
+  ) => {
+    const isIcon = size === "icon";
+    const shared = {
+      ref,
+      variant: variantMap[variant],
+      size: sizeMap[size],
+      loading,
+      type: type as "submit" | "reset" | "button",
+      className: cn("rounded-full", tintClasses[variant], className),
+      ...props,
+    } as const;
+    if (isIcon) {
+      return (
+        <KumoButton
+          {...shared}
+          shape="circle"
+          // Tombol ikon Kumo mewajibkan nama aksesibel; fallback ke string
+          // kosong bila pemanggil tidak memberi aria-label/title.
+          title={title ?? ""}
+          className={cn("whitespace-nowrap", shared.className)}
+        >
+          {children}
+        </KumoButton>
+      );
+    }
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
+      <KumoButton
+        {...shared}
+        shape="base"
+        title={title ?? ""}
+        className={cn("whitespace-nowrap", shared.className)}
+      >
+        {children}
+      </KumoButton>
     );
   }
 );
 Button.displayName = "Button";
 
-export { Button, buttonVariants };
+export { Button };
