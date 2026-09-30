@@ -1315,33 +1315,22 @@ function TransactionsTab() {
               </table>
             </div>
           </Card>
-          {/* Kartu mobile */}
-          <div className="md:hidden space-y-3">
+          {/* Kartu mobile — minimalis */}
+          <div className="md:hidden space-y-2">
             {txns.map((t) => (
               <Card key={t.id}>
-                <CardContent className="p-4 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">#{t.id}</span>
-                    {txnBadge(t.status)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground truncate">{t.user?.name || "-"}</p>
-                    <p className="text-xs text-muted-foreground truncate">{t.user?.email || ""}</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <p className="text-muted-foreground mb-0.5">Paket</p>
-                      <p className="text-foreground">{t.plan?.name || "-"}</p>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] text-muted-foreground shrink-0">#{t.id}</span>
+                      <p className="text-sm font-medium text-foreground truncate">{t.user?.name || t.user?.email || "-"}</p>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground mb-0.5">Jumlah</p>
-                      <p className="font-semibold text-foreground">{fmtRp(t.amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground mb-0.5">Tanggal</p>
-                      <p className="text-foreground">{fmtDate(t.createdAt)}</p>
-                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                      <span className="font-semibold text-foreground">{fmtRp(t.amount)}</span>
+                      {t.plan?.name ? ` · ${t.plan.name}` : ""} · {fmtDate(t.createdAt)}
+                    </p>
                   </div>
+                  <div className="shrink-0">{txnBadge(t.status)}</div>
                 </CardContent>
               </Card>
             ))}
