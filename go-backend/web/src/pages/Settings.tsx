@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { useLocation } from "wouter";
 import { Sun, Moon, Check, UserRound, LockKeyhole, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { apiPatch, apiPost } from "@/lib/api";
 import { KeyManager } from "@/components/KeyManager";
 
 function SettingCard({
@@ -39,17 +40,66 @@ function SettingCard({
 }
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
+
+  const [name, setName] = useState(user?.name ?? "");
+  const [savingName, setSavingName] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPw, setChangingPw] = useState(false);
+
+  useEffect(() => {
+    if (user) setName(user.name);
+    // sinkron hanya saat identitas user berubah (bukan saat mengetik)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const pwMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
   const pwMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
   const pwValid = newPassword.length >= 6 && pwMatch;
+
+  const handleSaveName = async () => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || savingName) return;
+    setSavingName(true);
+    try {
+      const data = await apiPatch<{ message: string; name: string }>(
+        "/auth/me",
+        { name: trimmed }
+      );
+      if (user) updateUser({ ...user, name: data.name });
+      toast.success(data.message || "Nama berhasil diperbarui");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan nama");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!pwValid || changingPw) return;
+    setChangingPw(true);
+    try {
+      const data = await apiPost<{ message: string }>("/auth/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      toast.success(data.message || "Password berhasil diubah");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Gagal mengubah password"
+      );
+    } finally {
+      setChangingPw(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -72,14 +122,24 @@ export default function Settings() {
 
           <div className="space-y-2">
             <label className="text-xs font-medium">Nama</label>
-            <Input defaultValue={user?.name || ""} />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              minLength={2}
+            />
           </div>
           <div className="space-y-2">
             <label className="text-xs font-medium">Email</label>
             <Input defaultValue={user?.email || ""} disabled />
           </div>
 
-          <Button size="sm">Simpan Perubahan</Button>
+          <Button
+            size="sm"
+            onClick={handleSaveName}
+            disabled={savingName || name.trim().length < 2}
+          >
+            {savingName ? "Menyimpan…" : "Simpan Perubahan"}
+          </Button>
         </div>
       </SettingCard>
 
@@ -128,7 +188,13 @@ export default function Settings() {
             )}
           </div>
 
-          <Button size="sm" disabled={!pwValid}>Ubah Password</Button>
+          <Button
+            size="sm"
+            onClick={handleChangePassword}
+            disabled={!pwValid || changingPw}
+          >
+            {changingPw ? "Mengubah…" : "Ubah Password"}
+          </Button>
         </div>
       </SettingCard>
 

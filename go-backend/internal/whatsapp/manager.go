@@ -157,8 +157,11 @@ func (m *Manager) Disconnect(deviceID uint) {
 		wasDisconnected = device.Status == "disconnected"
 	}
 
-	// Update DB
-	m.db.Model(&models.Device{}).Where("id = ?", deviceID).Update("status", "disconnected")
+	// Update DB — lewati saat graceful shutdown agar status "connected"
+	// tetap tersimpan dan autoReconnect bisa memulihkan sesi saat boot.
+	if !m.shuttingDown.Load() {
+		m.db.Model(&models.Device{}).Where("id = ?", deviceID).Update("status", "disconnected")
+	}
 
 	if !wasDisconnected && !m.shuttingDown.Load() {
 		name := device.Name

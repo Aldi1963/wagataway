@@ -32,6 +32,8 @@ func registerAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		auth.POST("/register", handleRegister(cfg, db))
 		auth.POST("/google", handleGoogleLogin(cfg, db))
 		auth.GET("/me", middleware.AuthRequired(cfg), handleGetMe(db))
+		auth.PATCH("/me", middleware.AuthRequired(cfg), handleUpdateMe(db))
+		auth.POST("/change-password", middleware.AuthRequired(cfg), handleChangePassword(db))
 		auth.POST("/logout", handleLogout())
 		auth.POST("/forgot-password", handleForgotPassword(cfg, db))
 		auth.POST("/reset-password", handleResetPassword(cfg, db))
@@ -195,6 +197,70 @@ func handleLogout() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// JWT is stateless — client just discards the token
 		c.JSON(http.StatusOK, gin.H{"message": "Berhasil logout"})
+	}
+}
+
+type updateMeRequest struct {
+	Name string `json:"name" binding:"required,min=2,max=100"`
+}
+
+func handleUpdateMe(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+
+		var req updateMeRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Nama tidak valid (min. 2 karakter)", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		if err := db.Model(&models.User{}).Where("id = ?", userID).Update("name", req.Name).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan perubahan", "code": "SERVER_ERROR"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Informasi akun berhasil disimpan", "name": req.Name})
+	}
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" binding:"required"`
+	NewPassword     string `json:"newPassword" binding:"required,min=6,max=100"`
+}
+
+func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+
+		var req changePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Password baru minimal 6 karakter", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		var user models.User
+		if err := db.First(&user, userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "User tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Password saat ini salah", "code": "INVALID_CURRENT_PASSWORD"})
+			return
+		}
+
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memproses password", "code": "SERVER_ERROR"})
+			return
+		}
+
+		if err := db.Model(&user).Update("password", string(hashed)).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengubah password", "code": "SERVER_ERROR"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah"})
 	}
 }
 

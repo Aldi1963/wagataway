@@ -54,3 +54,12 @@ export async function apiDelete<T>(path: string): Promise<T> {
   if (!res.ok) throw new Error((await res.json()).message || "Request failed");
   return res.json();
 }
+
+export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await apiFetch(path, {
+    method: "PATCH",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error((await res.json()).message || "Request failed");
+  return res.json();
+}
