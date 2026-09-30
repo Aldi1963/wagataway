@@ -655,10 +655,17 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 		sess.mu.Unlock()
 
 		now := time.Now()
-		m.db.Model(&models.Device{}).Where("id = ?", sess.DeviceID).Updates(map[string]interface{}{
+		updates := map[string]interface{}{
 			"status":    "connected",
 			"last_seen": &now,
-		})
+		}
+		// Pairing via kode pairing tidak melewati event "login" QR,
+		// jadi nomor HP + connected_at diisi di sini bila sesi sudah terautentikasi.
+		if sess.Client != nil && sess.Client.Store.ID != nil && sess.Client.Store.ID.User != "" {
+			updates["phone"] = sess.Client.Store.ID.User
+			updates["connected_at"] = &now
+		}
+		m.db.Model(&models.Device{}).Where("id = ?", sess.DeviceID).Updates(updates)
 		log.Info().Uint("deviceID", sess.DeviceID).Msg("Connection established event")
 
 		// Muat flag perilaku device lalu terapkan presence
