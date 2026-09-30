@@ -114,6 +114,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 				c.JSON(http.StatusNotFound, gin.H{"message": "File not found", "code": "NOT_FOUND"})
 				return
 			}
+			// index.html jangan di-cache browser: setiap deploy ganti hash asset,
+			// index.html lama = CSS/JS lama ikut ke-load (tombol Kumo rusak di cache).
+			c.Header("Cache-Control", "no-cache")
 			c.File(filepath.Join(frontendDist, "index.html"))
 		})
 	}
