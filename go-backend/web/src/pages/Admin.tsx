@@ -1315,31 +1315,25 @@ function TransactionsTab() {
               </table>
             </div>
           </Card>
-          {/* Kartu mobile — minimalis */}
-          <div className="md:hidden space-y-2">
+          {/* Daftar mobile — flat tanpa card per item, cuma divider */}
+          <div className="md:hidden rounded-xl border border-border bg-card divide-y divide-border">
             {txns.map((t) => (
-              <Card key={t.id}>
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[11px] text-muted-foreground shrink-0">#{t.id}</span>
-                      <p className="text-sm font-medium text-foreground truncate">{t.user?.name || t.user?.email || "-"}</p>
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                      <span className="font-semibold text-foreground">{fmtRp(t.amount)}</span>
-                      {t.plan?.name ? ` · ${t.plan.name}` : ""} · {fmtDate(t.createdAt)}
-                    </p>
+              <div key={t.id} className="px-3 py-2.5 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[11px] text-muted-foreground shrink-0">#{t.id}</span>
+                    <p className="text-sm font-semibold text-foreground">{fmtRp(t.amount)}</p>
                   </div>
-                  <div className="shrink-0">{txnBadge(t.status)}</div>
-                </CardContent>
-              </Card>
+                  <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                    {t.user?.name || t.user?.email || "-"}
+                    {t.plan?.name ? ` · ${t.plan.name}` : ""} · {fmtDate(t.createdAt)}
+                  </p>
+                </div>
+                <div className="shrink-0">{txnBadge(t.status)}</div>
+              </div>
             ))}
             {txns.length === 0 && (
-              <Card>
-                <CardContent className="p-8 text-center text-sm text-muted-foreground">
-                  Belum ada transaksi
-                </CardContent>
-              </Card>
+              <p className="p-8 text-center text-sm text-muted-foreground">Belum ada transaksi</p>
             )}
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
