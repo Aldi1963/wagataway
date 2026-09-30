@@ -22,7 +22,7 @@ export function Toggle({
       onClick={() => onToggle(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
         checked
-          ? "bg-[#243370] border-[#243370] dark:bg-blue-500 dark:border-blue-500"
+          ? "bg-[#243370] border-[#243370] dark:bg-[#243370] dark:border-[#243370]"
           : "bg-gray-300 border-gray-300 dark:bg-muted dark:border-muted"
       }`}
     >

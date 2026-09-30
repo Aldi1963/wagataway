@@ -300,7 +300,7 @@ function OverviewTab() {
   };
 
   const stats = [
-    { icon: Users, label: "Total Pengguna", value: fmtNum(data?.totalUsers ?? 0), tint: "bg-blue-500/10 text-blue-600" },
+    { icon: Users, label: "Total Pengguna", value: fmtNum(data?.totalUsers ?? 0), tint: "bg-[#243370]/10 text-[#243370] dark:text-[#8fa0e8]" },
     { icon: Smartphone, label: "Total Device", value: fmtNum(data?.totalDevices ?? 0), tint: "bg-violet-500/10 text-violet-600" },
     { icon: MessageSquareText, label: "Total Pesan", value: fmtNum(data?.totalMessages ?? 0), tint: "bg-emerald-500/10 text-emerald-600" },
     { icon: Wallet, label: "Total Pendapatan", value: fmtRp(data?.totalRevenue ?? 0), tint: "bg-amber-500/10 text-amber-600" },
@@ -359,7 +359,7 @@ function OverviewTab() {
                           formatter={(value) => [fmtNum(Number(value)), "Pengguna"]}
                           contentStyle={{ borderRadius: 8, fontSize: 12 }}
                         />
-                        <Bar dataKey="signups" name="Pengguna" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="signups" name="Pengguna" fill="#243370" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

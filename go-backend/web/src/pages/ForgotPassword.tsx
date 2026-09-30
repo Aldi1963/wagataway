@@ -33,7 +33,7 @@ export default function ForgotPassword() {
     >
       {sent ? (
         <div className="text-center py-4">
-          <span className="w-14 h-14 rounded-full bg-[#243370]/10 dark:bg-blue-500/10 flex items-center justify-center mx-auto">
+          <span className="w-14 h-14 rounded-full bg-[#243370]/10 dark:bg-[#243370]/10 flex items-center justify-center mx-auto">
             <MailCheck className="w-7 h-7 text-[#243370] dark:text-blue-400" />
           </span>
           <h2 className="font-semibold text-foreground mt-4">
