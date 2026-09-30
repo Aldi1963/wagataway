@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useState, type ReactNode } from "react";
+import { useSearch } from "wouter";
 import {
   LayoutDashboard,
   Users,
@@ -1701,7 +1702,8 @@ function ActivityLogTab() {
 
 interface HealthStatus {
   database: "ok" | "error";
-  redis: "ok" | "error";
+  redis: "ok" | "error" | "disabled";
+  clipkupay: "ok" | "disabled";
   timestamp: number;
 }
 
@@ -1724,21 +1726,32 @@ function HealthTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const statusCard = (label: string, status: "ok" | "error") => (
+  const statusCard = (label: string, status: "ok" | "error" | "disabled") => (
     <Card>
       <CardContent className="p-5 flex items-center gap-4">
         <span
-          className={cn("w-3 h-3 rounded-full shrink-0", status === "ok" ? "bg-green-500" : "bg-red-500")}
+          className={cn(
+            "w-3 h-3 rounded-full shrink-0",
+            status === "ok" && "bg-green-500",
+            status === "error" && "bg-red-500",
+            status === "disabled" && "bg-slate-400"
+          )}
         />
         <div>
           <p className="font-medium text-foreground">{label}</p>
           <p
             className={cn(
               "text-sm",
-              status === "ok" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+              status === "ok" && "text-green-600 dark:text-green-400",
+              status === "error" && "text-red-600 dark:text-red-400",
+              status === "disabled" && "text-muted-foreground"
             )}
           >
-            {status === "ok" ? "Berfungsi normal" : "Bermasalah"}
+            {status === "ok"
+              ? "Berfungsi normal"
+              : status === "disabled"
+                ? "Tidak digunakan"
+                : "Bermasalah"}
           </p>
         </div>
       </CardContent>
@@ -1758,9 +1771,10 @@ function HealthTab() {
 
       {!loading && !error && health && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {statusCard("Database", health.database)}
             {statusCard("Redis", health.redis)}
+            {statusCard("Clipku Pay", health.clipkupay ?? "disabled")}
           </div>
           <p className="text-xs text-muted-foreground">
             Terakhir dicek: {new Date(health.timestamp * 1000).toLocaleString("id-ID")}
@@ -1792,102 +1806,34 @@ const SECTION_DESC: Record<string, string> = {
   voucher: "Kelola kode voucher",
   transaksi: "Riwayat transaksi pembayaran",
   log: "Jejak aktivitas para admin",
-  kesehatan: "Status database dan Redis",
+  kesehatan: "Status database, Redis, dan payment gateway",
   pengaturan: "Pengaturan sistem",
   notifikasi: "Kirim notifikasi ke pengguna",
 };
 
-function AdminNav({
-  activeTab,
-  onSelect,
-}: {
-  activeTab: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <nav className="space-y-1">
-      {TABS.map((t) => {
-        const isActive = activeTab === t.id;
-        return (
-          <button
-            key={t.id}
-            onClick={() => onSelect(t.id)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-              isActive
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            <t.icon className="w-4 h-4 shrink-0" />
-            {t.label}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
 export default function Admin() {
-  const [tab, setTab] = useState("ringkasan");
+  // Tab dikendalikan URL (?tab=...) agar bisa di-link dari sidebar admin
+  const search = useSearch();
+  const tabParam = new URLSearchParams(search).get("tab");
+  const tab = TABS.some((t) => t.id === tabParam) ? (tabParam as string) : "ringkasan";
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
 
   return (
-    <div className="flex gap-6">
-      {/* Sidebar — desktop */}
-      <aside className="hidden lg:block w-60 shrink-0">
-        <div className="sticky top-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Dashboard Admin</h2>
-            <p className="text-sm text-muted-foreground">
-              Kelola pengguna, paket, voucher, transaksi, dan pengaturan sistem
-            </p>
-          </div>
-          <AdminNav activeTab={tab} onSelect={setTab} />
-        </div>
-      </aside>
-
-      {/* Konten */}
-      <div className="flex-1 min-w-0 space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{active.label}</h2>
-          <p className="text-sm text-muted-foreground">{SECTION_DESC[tab]}</p>
-        </div>
-
-        {/* Pill navigasi — mobile */}
-        <div className="lg:hidden overflow-x-auto">
-          <div className="flex gap-2 w-max pb-1">
-            {TABS.map((t) => {
-              const isActive = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap border transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground border-primary font-medium"
-                      : "bg-background text-muted-foreground border-border hover:text-foreground"
-                  )}
-                >
-                  <t.icon className="w-3.5 h-3.5 shrink-0" />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {tab === "ringkasan" && <OverviewTab />}
-        {tab === "pengguna" && <UsersTab />}
-        {tab === "paket" && <PackagesTab />}
-        {tab === "voucher" && <VouchersTab />}
-        {tab === "transaksi" && <TransactionsTab />}
-        {tab === "log" && <ActivityLogTab />}
-        {tab === "kesehatan" && <HealthTab />}
-        {tab === "pengaturan" && <SettingsTab />}
-        {tab === "notifikasi" && <NotificationsTab />}
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">{active.label}</h2>
+        <p className="text-sm text-muted-foreground">{SECTION_DESC[tab]}</p>
       </div>
+
+      {tab === "ringkasan" && <OverviewTab />}
+      {tab === "pengguna" && <UsersTab />}
+      {tab === "paket" && <PackagesTab />}
+      {tab === "voucher" && <VouchersTab />}
+      {tab === "transaksi" && <TransactionsTab />}
+      {tab === "log" && <ActivityLogTab />}
+      {tab === "kesehatan" && <HealthTab />}
+      {tab === "pengaturan" && <SettingsTab />}
+      {tab === "notifikasi" && <NotificationsTab />}
     </div>
   );
 }

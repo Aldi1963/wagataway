@@ -405,14 +405,23 @@ func adminHealth(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			dbStatus = "error"
 		}
 
-		redisStatus := "ok"
-		if !pingRedis(cfg.RedisURL) {
-			redisStatus = "error"
+		redisStatus := "disabled"
+		if cfg.RedisURL != "" {
+			redisStatus = "ok"
+			if !pingRedis(cfg.RedisURL) {
+				redisStatus = "error"
+			}
+		}
+
+		clipkuStatus := "disabled"
+		if strings.TrimSpace(cfg.ClipkuPayAPIKey) != "" {
+			clipkuStatus = "ok"
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"database":  dbStatus,
 			"redis":     redisStatus,
+			"clipkupay": clipkuStatus,
 			"timestamp": time.Now().Unix(),
 		})
 	}
