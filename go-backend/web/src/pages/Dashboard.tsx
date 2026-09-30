@@ -6,7 +6,6 @@ import {
   Star,
   MessageSquare,
   Plus,
-  QrCode,
   Trash2,
   WifiOff,
   X,
@@ -105,8 +104,10 @@ function Toggle({
       title={title}
       disabled={disabled}
       onClick={() => onToggle(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? "bg-primary" : "bg-muted"
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked
+          ? "bg-primary border-primary"
+          : "bg-gray-300 border-gray-300 dark:bg-muted dark:border-muted"
       }`}
     >
       <span
@@ -640,50 +641,53 @@ export default function Dashboard() {
                           <StatusBadge status={d.status} />
                         </td>
                         <td className="py-3 text-right whitespace-nowrap">
-                          {d.status === "connected" ? (
+                          <div className="flex items-center justify-end gap-1">
+                            {d.status === "connected" ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={busyId === d.id}
+                                onClick={() => handleDisconnect(d)}
+                                aria-label="Putuskan"
+                                title="Putuskan"
+                              >
+                                <WifiOff className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleConnect(d)}
+                                aria-label="Hubungkan"
+                                title="Hubungkan"
+                              >
+                                <Smartphone className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              disabled={busyId === d.id}
-                              onClick={() => handleDisconnect(d)}
-                              aria-label="Putuskan"
-                              title="Putuskan"
+                              onClick={() => openEdit(d)}
+                              aria-label="Ubah"
+                              title="Ubah"
                             >
-                              <WifiOff className="w-4 h-4" />
+                              <Pencil className="w-4 h-4" />
                             </Button>
-                          ) : (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleConnect(d)}
-                              aria-label="Hubungkan"
-                              title="Hubungkan"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => setDeleting(d)}
+                              aria-label="Hapus"
+                              title="Hapus"
                             >
-                              <QrCode className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openEdit(d)}
-                            aria-label="Ubah"
-                            title="Ubah"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => setDeleting(d)}
-                            aria-label="Hapus"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
