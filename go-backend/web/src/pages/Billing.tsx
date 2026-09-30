@@ -61,8 +61,8 @@ export default function Billing() {
   const load = useCallback(async () => {
     try {
       const [p, s] = await Promise.all([
-        apiGet<{ plans: Plan[] }>("/api/billing/plans"),
-        apiGet<{ subscription: Subscription | null }>("/api/billing/subscription"),
+        apiGet<{ plans: Plan[] }>("/billing/plans"),
+        apiGet<{ subscription: Subscription | null }>("/billing/subscription"),
       ]);
       setPlans(p.plans || []);
       setSub(s.subscription);
@@ -101,7 +101,7 @@ export default function Billing() {
     stopPoll();
     pollRef.current = window.setInterval(async () => {
       try {
-        const r = await apiGet<{ transaction: TxStatus }>(`/api/billing/transactions/${id}`);
+        const r = await apiGet<{ transaction: TxStatus }>(`/billing/transactions/${id}`);
         const st = r.transaction.status;
         setTxStatus(st);
         if (st === "paid") {
@@ -125,7 +125,7 @@ export default function Billing() {
         paymentUrl: string;
         qrUrl: string;
         transaction: { id: number };
-      }>("/api/billing/subscribe", { planId: payPlan.id });
+      }>("/billing/subscribe", { planId: payPlan.id });
       setPaymentUrl(r.paymentUrl);
       setQrUrl(r.qrUrl);
       setTxStatus("pending");

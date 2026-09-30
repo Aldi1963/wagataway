@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearch } from "wouter";
 import {
   LayoutDashboard,
@@ -1376,11 +1376,69 @@ interface SettingRow {
   value: string;
 }
 
+interface KnownSetting {
+  key: string;
+  label: string;
+  desc: string;
+  type: "text" | "number" | "toggle" | "select";
+  def: string;
+  options?: { value: string; label: string }[];
+}
+
+const KNOWN_SETTINGS: KnownSetting[] = [
+  {
+    key: "site_name",
+    label: "Nama Situs",
+    desc: "Nama aplikasi yang tampil di judul halaman.",
+    type: "text",
+    def: "WaGataway",
+  },
+  {
+    key: "support_email",
+    label: "Email Support",
+    desc: "Alamat email untuk bantuan pengguna.",
+    type: "text",
+    def: "",
+  },
+  {
+    key: "support_whatsapp",
+    label: "WhatsApp Support",
+    desc: "Nomor WhatsApp bantuan, format internasional tanpa +.",
+    type: "text",
+    def: "",
+  },
+  {
+    key: "registration_enabled",
+    label: "Registrasi Dibuka",
+    desc: "Jika mati, pengguna baru tidak bisa mendaftar.",
+    type: "toggle",
+    def: "true",
+  },
+  {
+    key: "default_plan",
+    label: "Paket Default",
+    desc: "Paket yang diberikan ke pengguna baru.",
+    type: "select",
+    def: "free",
+    options: PLAN_OPTS,
+  },
+  {
+    key: "max_devices_per_user",
+    label: "Batas Perangkat",
+    desc: "Jumlah maksimal perangkat WhatsApp per pengguna.",
+    type: "number",
+    def: "5",
+  },
+];
+
 function SettingsTab() {
-  const [rows, setRows] = useState<SettingRow[]>([]);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [customRows, setCustomRows] = useState<SettingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const knownKeys = useMemo(() => new Set(KNOWN_SETTINGS.map((s) => s.key)), []);
 
   const load = () => {
     setLoading(true);
@@ -1388,7 +1446,18 @@ function SettingsTab() {
     apiGet<{ settings: Record<string, string> }>("/admin/settings")
       .then((res) => {
         const s = res.settings || {};
-        setRows(Object.entries(s).map(([key, value]) => ({ key, value: String(value ?? "") })));
+        const v: Record<string, string> = {};
+        const custom: SettingRow[] = [];
+        for (const [key, val] of Object.entries(s)) {
+          const str = String(val ?? "");
+          if (knownKeys.has(key)) v[key] = str;
+          else custom.push({ key, value: str });
+        }
+        for (const ks of KNOWN_SETTINGS) {
+          if (!(ks.key in v)) v[ks.key] = ks.def;
+        }
+        setValues(v);
+        setCustomRows(custom);
       })
       .catch((e) => setError(errMsg(e, "Gagal memuat pengaturan")))
       .finally(() => setLoading(false));
@@ -1396,16 +1465,19 @@ function SettingsTab() {
 
   useEffect(load, []);
 
-  const addRow = () => setRows((r) => [...r, { key: "", value: "" }]);
-  const removeRow = (i: number) => setRows((r) => r.filter((_, idx) => idx !== i));
+  const setVal = (key: string, val: string) =>
+    setValues((prev) => ({ ...prev, [key]: val }));
+
+  const addRow = () => setCustomRows((r) => [...r, { key: "", value: "" }]);
+  const removeRow = (i: number) => setCustomRows((r) => r.filter((_, idx) => idx !== i));
   const setRow = (i: number, k: "key" | "value", v: string) =>
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)));
+    setCustomRows((r) => r.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)));
 
   const handleSave = async () => {
-    const body: Record<string, string> = {};
-    for (const r of rows) {
+    const body: Record<string, string> = { ...values };
+    for (const r of customRows) {
       const k = r.key.trim();
-      if (!k) continue;
+      if (!k || knownKeys.has(k)) continue;
       body[k] = r.value;
     }
     setSaving(true);
@@ -1420,12 +1492,65 @@ function SettingsTab() {
     }
   };
 
+  const renderControl = (ks: KnownSetting) => {
+    const val = values[ks.key] ?? ks.def;
+    switch (ks.type) {
+      case "toggle": {
+        const on = val === "true";
+        return (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={ks.label}
+            onClick={() => setVal(ks.key, on ? "false" : "true")}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+              on ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                on ? "left-6" : "left-1"
+              }`}
+            />
+          </button>
+        );
+      }
+      case "select":
+        return (
+          <Select
+            value={val}
+            onChange={(v) => setVal(ks.key, v)}
+            options={ks.options || []}
+            ariaLabel={ks.label}
+            className="w-40"
+          />
+        );
+      case "number":
+        return (
+          <Input
+            type="number"
+            min={0}
+            value={val}
+            onChange={(e) => setVal(ks.key, e.target.value)}
+            className="w-28"
+          />
+        );
+      default:
+        return (
+          <Input
+            value={val}
+            onChange={(e) => setVal(ks.key, e.target.value)}
+            placeholder={ks.def}
+            className="w-full sm:max-w-xs"
+          />
+        );
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={addRow}>
-          <Plus className="w-3.5 h-3.5" /> Tambah Baris
-        </Button>
+      <div className="flex justify-end">
         <Button size="sm" onClick={handleSave} disabled={saving || loading}>
           {saving ? "Menyimpan..." : "Simpan Pengaturan"}
         </Button>
@@ -1435,39 +1560,75 @@ function SettingsTab() {
       {!loading && error && <ErrorCard message={error} onRetry={load} />}
 
       {!loading && !error && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            {rows.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Belum ada pengaturan. Tambah baris untuk membuat pengaturan baru.
+        <>
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <h3 className="text-sm font-semibold text-foreground mb-1">Pengaturan Umum</h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Pengaturan utama aplikasi.
               </p>
-            )}
-            {rows.map((r, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <Input
-                  className="font-mono"
-                  placeholder="kunci_pengaturan"
-                  value={r.key}
-                  onChange={(e) => setRow(i, "key", e.target.value)}
-                />
-                <Input
-                  placeholder="nilai"
-                  value={r.value}
-                  onChange={(e) => setRow(i, "value", e.target.value)}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 text-destructive"
-                  onClick={() => removeRow(i)}
-                  aria-label="Hapus baris"
-                >
-                  <Trash2 className="w-4 h-4" />
+              <div className="divide-y divide-border">
+                {KNOWN_SETTINGS.map((ks) => (
+                  <div
+                    key={ks.key}
+                    className="py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{ks.label}</p>
+                      <p className="text-xs text-muted-foreground">{ks.desc}</p>
+                    </div>
+                    <div className="shrink-0">{renderControl(ks)}</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-foreground">Pengaturan Kustom</h3>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={addRow}>
+                  <Plus className="w-3.5 h-3.5" /> Tambah Baris
                 </Button>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+              <p className="text-xs text-muted-foreground mb-4">
+                Kunci tambahan bebas untuk kebutuhan khusus.
+              </p>
+              {customRows.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Belum ada pengaturan kustom.
+                </p>
+              )}
+              <div className="space-y-3">
+                {customRows.map((r, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      className="font-mono"
+                      placeholder="kunci_pengaturan"
+                      value={r.key}
+                      onChange={(e) => setRow(i, "key", e.target.value)}
+                    />
+                    <Input
+                      placeholder="nilai"
+                      value={r.value}
+                      onChange={(e) => setRow(i, "value", e.target.value)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-destructive"
+                      onClick={() => removeRow(i)}
+                      aria-label="Hapus baris"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
