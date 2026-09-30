@@ -4,6 +4,7 @@ import { Play, FlaskConical, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiFetch } from "@/lib/api";
 
 interface Preset {
@@ -18,7 +19,7 @@ const PRESETS: Preset[] = [
     label: "Kirim Pesan",
     method: "POST",
     path: "/messages/send",
-    body: '{\n  "device_id": 1,\n  "to": "62812xxxxxxx",\n  "message": "Halo dari playground!"\n}',
+    body: '{\n  "deviceId": 1,\n  "to": "62812xxxxxxx",\n  "content": "Halo dari playground!"\n}',
   },
   {
     label: "Cek Device",
@@ -42,7 +43,7 @@ const PRESETS: Preset[] = [
     label: "Kirim Gambar",
     method: "POST",
     path: "/messages/send",
-    body: '{\n  "device_id": 1,\n  "to": "62812xxxxxxx",\n  "message": "Lihat gambar ini",\n  "image_url": "https://example.com/gambar.jpg"\n}',
+    body: '{\n  "deviceId": 1,\n  "to": "62812xxxxxxx",\n  "content": "Lihat gambar ini",\n  "mediaUrl": "https://example.com/gambar.jpg"\n}',
   },
 ];
 
@@ -130,10 +131,15 @@ export default function ApiPlayground() {
               </div>
             </div>
             <div className="grid grid-cols-[110px_1fr] gap-2">
-              <select value={method} onChange={(e) => setMethod(e.target.value as "GET" | "POST")} className={inputCls}>
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-              </select>
+              <Dropdown
+                value={method}
+                onChange={(v) => setMethod(v as "GET" | "POST")}
+                ariaLabel="Metode HTTP"
+                options={[
+                  { value: "GET", label: "GET" },
+                  { value: "POST", label: "POST" },
+                ]}
+              />
               <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/messages/send" className="font-mono" />
             </div>
             <div>

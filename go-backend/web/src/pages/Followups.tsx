@@ -4,16 +4,23 @@ import { Plus, Pencil, Trash2, X, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
 interface Followup {
   id: number;
   name: string;
-  target: string;
+  deviceId: number;
+  targetPhone: string;
   message: string;
-  trigger_hours: number;
-  active: boolean;
+  triggerAfterHours: number;
+  isActive: boolean;
+}
+
+interface Device {
+  id: number;
+  name: string;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -38,11 +45,13 @@ const inputCls =
 
 export default function Followups() {
   const [items, setItems] = useState<Followup[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Followup | null>(null);
   const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
+  const [deviceId, setDeviceId] = useState("");
+  const [targetPhone, setTargetPhone] = useState("");
   const [message, setMessage] = useState("");
   const [triggerHours, setTriggerHours] = useState("24");
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -50,8 +59,12 @@ export default function Followups() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiGet<{ followups: Followup[] } | Followup[]>("/followups");
+      const [r, d] = await Promise.all([
+        apiGet<{ followups: Followup[] } | Followup[]>("/followups"),
+        apiGet<{ devices: Device[] }>("/devices"),
+      ]);
       setItems(Array.isArray(r) ? r : r.followups ?? []);
+      setDevices(d.devices ?? []);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat follow-up");
     } finally {
@@ -61,21 +74,31 @@ export default function Followups() {
 
   useEffect(() => { load(); }, []);
 
+  const deviceName = (id: number) => devices.find((x) => x.id === id)?.name ?? `#${id}`;
+
   const openModal = (f?: Followup) => {
     setEditing(f ?? null);
     setName(f?.name ?? "");
-    setTarget(f?.target ?? "");
+    setDeviceId(f ? String(f.deviceId) : devices.length === 1 ? String(devices[0].id) : "");
+    setTargetPhone(f?.targetPhone ?? "");
     setMessage(f?.message ?? "");
-    setTriggerHours(String(f?.trigger_hours ?? 24));
+    setTriggerHours(String(f?.triggerAfterHours ?? 24));
     setShowModal(true);
   };
 
   const save = async () => {
-    if (!name.trim() || !target.trim() || !message.trim()) { toast.error("Nama, target, dan pesan wajib diisi"); return; }
+    if (!name.trim() || !targetPhone.trim() || !message.trim()) { toast.error("Nama, target, dan pesan wajib diisi"); return; }
+    if (!deviceId) { toast.error("Pilih device pengirim"); return; }
     const hours = Number(triggerHours);
     if (!hours || hours < 1) { toast.error("Trigger jam harus minimal 1"); return; }
     try {
-      const payload = { name: name.trim(), target: target.trim(), message: message.trim(), trigger_hours: hours };
+      const payload = {
+        name: name.trim(),
+        deviceId: Number(deviceId),
+        targetPhone: targetPhone.trim(),
+        message: message.trim(),
+        triggerAfterHours: hours,
+      };
       if (editing) { await apiPut(`/followups/${editing.id}`, payload); toast.success("Diperbarui"); }
       else { await apiPost("/followups", payload); toast.success("Follow-up ditambahkan"); }
       setShowModal(false);
@@ -85,8 +108,8 @@ export default function Followups() {
 
   const toggleActive = async (f: Followup, v: boolean) => {
     try {
-      await apiPut(`/followups/${f.id}`, { active: v });
-      setItems((prev) => prev.map((x) => (x.id === f.id ? { ...x, active: v } : x)));
+      await apiPost(`/followups/${f.id}/toggle`, {});
+      setItems((prev) => prev.map((x) => (x.id === f.id ? { ...x, isActive: v } : x)));
       toast.success(v ? "Follow-up diaktifkan" : "Follow-up dinonaktifkan");
     } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
   };
@@ -123,6 +146,7 @@ export default function Followups() {
                 <thead>
                   <tr className="border-b border-border text-left">
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nama</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Device</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Target</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pesan</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Trigger</th>
@@ -132,18 +156,19 @@ export default function Followups() {
                 </thead>
                 <tbody>
                   {items.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Belum ada follow-up.</td></tr>
+                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Belum ada follow-up.</td></tr>
                   )}
                   {items.map((f) => (
                     <tr key={f.id} className="border-b border-border last:border-0">
                       <td className="py-3 px-4 font-medium">
                         <span className="inline-flex items-center gap-1.5"><Timer className="w-3.5 h-3.5 text-muted-foreground" />{f.name}</span>
                       </td>
-                      <td className="py-3 px-4 font-mono text-[13px]">{f.target}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{deviceName(f.deviceId)}</td>
+                      <td className="py-3 px-4 font-mono text-[13px]">{f.targetPhone}</td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[220px] truncate" title={f.message}>{f.message}</td>
-                      <td className="py-3 px-4 whitespace-nowrap text-xs">{f.trigger_hours} jam</td>
+                      <td className="py-3 px-4 whitespace-nowrap text-xs">{f.triggerAfterHours} jam</td>
                       <td className="py-3 px-4">
-                        <Toggle checked={f.active} label={`Aktif ${f.name}`} onToggle={(v) => toggleActive(f, v)} />
+                        <Toggle checked={f.isActive} label={`Aktif ${f.name}`} onToggle={(v) => toggleActive(f, v)} />
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(f)} aria-label="Ubah">
@@ -171,13 +196,26 @@ export default function Followups() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium">Target</label>
-                <Input className="mt-1.5" placeholder="Label / nomor" value={target} onChange={(e) => setTarget(e.target.value)} />
+                <label className="text-sm font-medium">Device Pengirim</label>
+                <Dropdown
+                  value={deviceId}
+                  onChange={setDeviceId}
+                  ariaLabel="Device pengirim"
+                  className="mt-1.5"
+                  options={[
+                    { value: "", label: "Pilih device" },
+                    ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
               </div>
               <div>
-                <label className="text-sm font-medium">Trigger (jam)</label>
-                <Input type="number" min={1} className="mt-1.5" value={triggerHours} onChange={(e) => setTriggerHours(e.target.value)} />
+                <label className="text-sm font-medium">Nomor Target</label>
+                <Input className="mt-1.5" placeholder="62812xxxxxxx" value={targetPhone} onChange={(e) => setTargetPhone(e.target.value)} />
               </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Trigger (jam)</label>
+              <Input type="number" min={1} className="mt-1.5" value={triggerHours} onChange={(e) => setTriggerHours(e.target.value)} />
             </div>
             <div>
               <label className="text-sm font-medium">Isi Pesan</label>

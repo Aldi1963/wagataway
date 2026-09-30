@@ -4,16 +4,17 @@ import { Plus, Trash2, X, Copy, Users, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Badge } from "@/components/ui/badge";
 import { Toggle } from "@/components/Toggle";
-import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiDelete } from "@/lib/api";
 
 interface Member {
   id: number;
   name: string;
   email: string;
   role: string;
-  active: boolean;
+  isActive: boolean;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -33,16 +34,13 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-const inputCls =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
-
 export default function Team() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("cs");
+  const [role, setRole] = useState("member");
   const [newPassword, setNewPassword] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -50,8 +48,8 @@ export default function Team() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiGet<{ team: Member[] } | Member[]>("/team");
-      setMembers(Array.isArray(r) ? r : r.team ?? []);
+      const r = await apiGet<{ members: Member[] } | Member[]>("/team");
+      setMembers(Array.isArray(r) ? r : r.members ?? []);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat tim");
     } finally {
@@ -69,15 +67,15 @@ export default function Team() {
       });
       setNewPassword(r.password ?? null);
       toast.success("Anggota ditambahkan");
-      setName(""); setEmail(""); setRole("cs");
+      setName(""); setEmail(""); setRole("member");
       load();
     } catch (e: any) { toast.error(e.message || "Gagal mengundang"); }
   };
 
   const toggleActive = async (m: Member, v: boolean) => {
     try {
-      await apiPut(`/team/${m.id}`, { active: v });
-      setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, active: v } : x)));
+      await apiPost(`/team/${m.id}/toggle`, {});
+      setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, isActive: v } : x)));
       toast.success(v ? "Anggota diaktifkan" : "Anggota dinonaktifkan");
     } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
   };
@@ -140,7 +138,7 @@ export default function Team() {
                       <td className="py-3 px-4 text-muted-foreground">{m.email}</td>
                       <td className="py-3 px-4"><Badge variant="secondary" className="capitalize">{m.role}</Badge></td>
                       <td className="py-3 px-4">
-                        <Toggle checked={m.active} label={`Aktif ${m.name}`} onToggle={(v) => toggleActive(m, v)} />
+                        <Toggle checked={m.isActive} label={`Aktif ${m.name}`} onToggle={(v) => toggleActive(m, v)} />
                       </td>
                       <td className="py-3 px-4 text-right">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(m.id)} aria-label="Hapus">
@@ -191,10 +189,17 @@ export default function Team() {
               </div>
               <div>
                 <label className="text-sm font-medium">Role</label>
-                <select value={role} onChange={(e) => setRole(e.target.value)} className={`${inputCls} mt-1.5`}>
-                  <option value="cs">CS — balas chat & kirim pesan</option>
-                  <option value="admin">Admin — kelola semua kecuali billing</option>
-                </select>
+                <Dropdown
+                  value={role}
+                  onChange={setRole}
+                  ariaLabel="Role"
+                  className="mt-1.5"
+                  options={[
+                    { value: "member", label: "Member — balas chat & kirim pesan" },
+                    { value: "admin", label: "Admin — kelola semua kecuali billing" },
+                    { value: "viewer", label: "Viewer — hanya lihat" },
+                  ]}
+                />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => setShowInvite(false)}>Batal</Button>

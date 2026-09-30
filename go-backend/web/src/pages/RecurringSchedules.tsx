@@ -4,17 +4,28 @@ import { Plus, Pencil, Trash2, X, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
 interface Recurring {
   id: number;
   name: string;
+  deviceId: number;
   target: string;
+  message: string;
+  mediaUrl?: string;
   frequency: string;
   time: string;
-  message?: string;
-  active: boolean;
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
+  isActive: boolean;
+  nextRunAt?: string | null;
+}
+
+interface Device {
+  id: number;
+  name: string;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -43,25 +54,50 @@ const FREQUENCIES = [
   { value: "monthly", label: "Bulanan" },
 ];
 
+const DAYS = [
+  { value: "0", label: "Minggu" },
+  { value: "1", label: "Senin" },
+  { value: "2", label: "Selasa" },
+  { value: "3", label: "Rabu" },
+  { value: "4", label: "Kamis" },
+  { value: "5", label: "Jumat" },
+  { value: "6", label: "Sabtu" },
+];
+
 const freqLabel = (f: string) => FREQUENCIES.find((x) => x.value === f)?.label ?? f;
+
+function fmtNextRun(s?: string | null) {
+  if (!s) return "-";
+  try {
+    return new Date(s).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch { return "-"; }
+}
 
 export default function RecurringSchedules() {
   const [items, setItems] = useState<Recurring[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [name, setName] = useState("");
+  const [deviceId, setDeviceId] = useState("");
   const [target, setTarget] = useState("");
   const [frequency, setFrequency] = useState("daily");
   const [time, setTime] = useState("08:00");
+  const [dayOfWeek, setDayOfWeek] = useState("1");
+  const [dayOfMonth, setDayOfMonth] = useState("1");
   const [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiGet<{ schedules: Recurring[] } | Recurring[]>("/recurring-schedules");
+      const [r, d] = await Promise.all([
+        apiGet<{ schedules: Recurring[] } | Recurring[]>("/recurring-schedules"),
+        apiGet<{ devices: Device[] }>("/devices"),
+      ]);
       setItems(Array.isArray(r) ? r : r.schedules ?? []);
+      setDevices(d.devices ?? []);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat jadwal");
     } finally {
@@ -71,20 +107,35 @@ export default function RecurringSchedules() {
 
   useEffect(() => { load(); }, []);
 
+  const deviceName = (id: number) => devices.find((x) => x.id === id)?.name ?? `#${id}`;
+
   const openModal = (s?: Recurring) => {
     setEditing(s ?? null);
     setName(s?.name ?? "");
+    setDeviceId(s?.deviceId ? String(s.deviceId) : devices.length === 1 ? String(devices[0].id) : "");
     setTarget(s?.target ?? "");
     setFrequency(s?.frequency ?? "daily");
     setTime(s?.time ?? "08:00");
+    setDayOfWeek(s?.dayOfWeek != null ? String(s.dayOfWeek) : "1");
+    setDayOfMonth(s?.dayOfMonth != null ? String(s.dayOfMonth) : "1");
     setMessage(s?.message ?? "");
     setShowModal(true);
   };
 
   const save = async () => {
     if (!name.trim() || !target.trim() || !message.trim()) { toast.error("Nama, target, dan pesan wajib diisi"); return; }
+    if (!/^\d{2}:\d{2}$/.test(time)) { toast.error("Format jam harus HH:MM"); return; }
     try {
-      const payload = { name: name.trim(), target: target.trim(), frequency, time, message: message.trim() };
+      const payload: Record<string, unknown> = {
+        name: name.trim(),
+        deviceId: deviceId ? Number(deviceId) : 0,
+        target: target.trim(),
+        frequency,
+        time,
+        message: message.trim(),
+      };
+      if (frequency === "weekly") payload.dayOfWeek = Number(dayOfWeek);
+      if (frequency === "monthly") payload.dayOfMonth = Math.min(31, Math.max(1, Number(dayOfMonth) || 1));
       if (editing) { await apiPut(`/recurring-schedules/${editing.id}`, payload); toast.success("Diperbarui"); }
       else { await apiPost("/recurring-schedules", payload); toast.success("Jadwal ditambahkan"); }
       setShowModal(false);
@@ -94,8 +145,8 @@ export default function RecurringSchedules() {
 
   const toggleActive = async (s: Recurring, v: boolean) => {
     try {
-      await apiPut(`/recurring-schedules/${s.id}`, { active: v });
-      setItems((prev) => prev.map((x) => (x.id === s.id ? { ...x, active: v } : x)));
+      await apiPost(`/recurring-schedules/${s.id}/toggle`, {});
+      setItems((prev) => prev.map((x) => (x.id === s.id ? { ...x, isActive: v } : x)));
       toast.success(v ? "Jadwal diaktifkan" : "Jadwal dinonaktifkan");
     } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
   };
@@ -128,31 +179,33 @@ export default function RecurringSchedules() {
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nama</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Device</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Target</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Frekuensi</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Jam</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Berikutnya</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Aktif</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Belum ada jadwal berulang.</td></tr>
+                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Belum ada jadwal berulang.</td></tr>
                   )}
                   {items.map((s) => (
                     <tr key={s.id} className="border-b border-border last:border-0">
                       <td className="py-3 px-4 font-medium">
                         <span className="inline-flex items-center gap-1.5"><Repeat className="w-3.5 h-3.5 text-muted-foreground" />{s.name}</span>
                       </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{deviceName(s.deviceId)}</td>
                       <td className="py-3 px-4 font-mono text-[13px]">{s.target}</td>
-                      <td className="py-3 px-4">{freqLabel(s.frequency)}</td>
-                      <td className="py-3 px-4 font-mono">{s.time}</td>
+                      <td className="py-3 px-4 whitespace-nowrap text-xs">{freqLabel(s.frequency)} · {s.time}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{fmtNextRun(s.nextRunAt)}</td>
                       <td className="py-3 px-4">
-                        <Toggle checked={s.active} label={`Aktif ${s.name}`} onToggle={(v) => toggleActive(s, v)} />
+                        <Toggle checked={s.isActive} label={`Aktif ${s.name}`} onToggle={(v) => toggleActive(s, v)} />
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(s)} aria-label="Ubah">
@@ -178,22 +231,59 @@ export default function RecurringSchedules() {
               <label className="text-sm font-medium">Nama Jadwal</label>
               <Input className="mt-1.5" placeholder="cth: Pengingat pembayaran" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div>
-              <label className="text-sm font-medium">Target</label>
-              <Input className="mt-1.5" placeholder="Nomor / grup / label kontak" value={target} onChange={(e) => setTarget(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">Device Pengirim</label>
+                <Dropdown
+                  value={deviceId}
+                  onChange={setDeviceId}
+                  ariaLabel="Device pengirim"
+                  className="mt-1.5"
+                  options={[
+                    { value: "", label: "Pilih device" },
+                    ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nomor Target</label>
+                <Input className="mt-1.5" placeholder="62812xxxxxxx" value={target} onChange={(e) => setTarget(e.target.value)} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium">Frekuensi</label>
-                <select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={`${inputCls} mt-1.5`}>
-                  {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                </select>
+                <Dropdown
+                  value={frequency}
+                  onChange={setFrequency}
+                  ariaLabel="Frekuensi"
+                  className="mt-1.5"
+                  options={FREQUENCIES.map((f) => ({ value: f.value, label: f.label }))}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">Jam Kirim</label>
                 <Input type="time" className="mt-1.5" value={time} onChange={(e) => setTime(e.target.value)} />
               </div>
             </div>
+            {frequency === "weekly" && (
+              <div>
+                <label className="text-sm font-medium">Hari</label>
+                <Dropdown
+                  value={dayOfWeek}
+                  onChange={setDayOfWeek}
+                  ariaLabel="Hari"
+                  className="mt-1.5"
+                  options={DAYS.map((d) => ({ value: d.value, label: d.label }))}
+                />
+              </div>
+            )}
+            {frequency === "monthly" && (
+              <div>
+                <label className="text-sm font-medium">Tanggal</label>
+                <Input type="number" min={1} max={31} className="mt-1.5" value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} />
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium">Isi Pesan</label>
               <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} placeholder="Tulis pesan..." className={`${inputCls} mt-1.5 resize-y`} />

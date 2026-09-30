@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -488,30 +489,30 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium">Perangkat</label>
-                <select
-                  className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                <Dropdown
                   value={form.deviceId}
-                  onChange={(e) => setForm({ ...form, deviceId: e.target.value })}
-                >
-                  <option value="">— Pilih perangkat —</option>
-                  {devices.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm({ ...form, deviceId: v })}
+                  ariaLabel="Perangkat"
+                  className="mt-1"
+                  options={[
+                    { value: "", label: "— Pilih perangkat —" },
+                    ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium">Tipe trigger</label>
-                <select
-                  className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                <Dropdown
                   value={form.triggerType}
-                  onChange={(e) => setForm({ ...form, triggerType: e.target.value })}
-                >
-                  <option value="manual">Manual</option>
-                  <option value="keyword">Keyword</option>
-                  <option value="webhook">Webhook</option>
-                </select>
+                  onChange={(v) => setForm({ ...form, triggerType: v })}
+                  ariaLabel="Tipe trigger"
+                  className="mt-1"
+                  options={[
+                    { value: "manual", label: "Manual" },
+                    { value: "keyword", label: "Keyword" },
+                    { value: "webhook", label: "Webhook" },
+                  ]}
+                />
               </div>
             </div>
             {form.triggerType === "keyword" && (

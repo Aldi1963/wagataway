@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/api";
@@ -273,19 +274,16 @@ export default function LiveChat() {
             />
           </div>
           {!devicesFailed && devices.length > 0 && (
-            <select
-              aria-label="Filter perangkat"
+            <Dropdown
+              ariaLabel="Filter perangkat"
               value={deviceFilter == null ? "all" : String(deviceFilter)}
-              onChange={(e) => handleDeviceChange(e.target.value)}
-              className="mt-2 w-full h-8 text-xs rounded-md border border-input bg-background px-2 text-foreground"
-            >
-              <option value="all">Semua Perangkat</option>
-              {devices.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              onChange={handleDeviceChange}
+              className="mt-2"
+              options={[
+                { value: "all", label: "Semua Perangkat" },
+                ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+              ]}
+            />
           )}
         </div>
 

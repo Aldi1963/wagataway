@@ -4,6 +4,7 @@ import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Download, Users } f
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import SyncWAButton from "@/components/contacts/SyncWAButton";
 
@@ -483,19 +484,17 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
           <div className="flex-1" />
           {groups.length > 0 && (
             <>
-              <select
+              <Dropdown
                 value={bulkGroup}
-                onChange={(e) => setBulkGroup(e.target.value)}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                aria-label="Pindah ke grup"
-              >
-                <option value="">Pindah ke grup...</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setBulkGroup}
+                ariaLabel="Pindah ke grup"
+                className="w-auto min-w-[150px]"
+                placeholder="Pindah ke grup..."
+                options={[
+                  { value: "", label: "Pindah ke grup..." },
+                  ...groups.map((g) => ({ value: String(g.id), label: g.name })),
+                ]}
+              />
               <Button
                 size="sm"
                 variant="outline"

@@ -48,8 +48,8 @@ export default function CannedResponses() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiGet<{ canned_responses: Canned[] } | Canned[]>("/canned-responses");
-      setItems(Array.isArray(r) ? r : r.canned_responses ?? []);
+      const r = await apiGet<{ responses: Canned[] } | Canned[]>("/canned-responses");
+      setItems(Array.isArray(r) ? r : r.responses ?? []);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat canned responses");
     } finally {

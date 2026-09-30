@@ -4,21 +4,25 @@ import { RotateCcw, Webhook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost } from "@/lib/api";
 
 interface Delivery {
   id: number;
-  created_at: string;
-  device_name?: string;
+  createdAt: string;
+  deviceId: number;
   url: string;
   event: string;
-  status_code?: number;
+  statusCode?: number;
   success: boolean;
-  error?: string;
+  errorMsg?: string;
+  retryCount?: number;
 }
 
-const inputCls =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
+interface Device {
+  id: number;
+  name: string;
+}
 
 function fmtTime(s: string) {
   try {
@@ -28,6 +32,7 @@ function fmtTime(s: string) {
 
 export default function WebhookLogs() {
   const [items, setItems] = useState<Delivery[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "success" | "failed">("all");
   const [retrying, setRetrying] = useState<number | null>(null);
@@ -35,8 +40,12 @@ export default function WebhookLogs() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiGet<{ deliveries: Delivery[] } | Delivery[]>("/webhook-deliveries");
+      const [r, d] = await Promise.all([
+        apiGet<{ deliveries: Delivery[] } | Delivery[]>("/webhook-deliveries"),
+        apiGet<{ devices: Device[] }>("/devices").catch(() => ({ devices: [] as Device[] })),
+      ]);
       setItems(Array.isArray(r) ? r : r.deliveries ?? []);
+      setDevices(d.devices ?? []);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat log webhook");
     } finally {
@@ -45,6 +54,8 @@ export default function WebhookLogs() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const deviceName = (id: number) => devices.find((x) => x.id === id)?.name ?? `#${id}`;
 
   const retry = async (d: Delivery) => {
     setRetrying(d.id);
@@ -71,11 +82,17 @@ export default function WebhookLogs() {
           <p className="text-sm text-muted-foreground">Riwayat pengiriman webhook per device.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select value={filter} onChange={(e) => setFilter(e.target.value as any)} className={`${inputCls} w-auto`}>
-            <option value="all">Semua</option>
-            <option value="success">Sukses</option>
-            <option value="failed">Gagal</option>
-          </select>
+          <Dropdown
+            value={filter}
+            onChange={(v) => setFilter(v as any)}
+            ariaLabel="Filter status"
+            className="w-auto min-w-[120px]"
+            options={[
+              { value: "all", label: "Semua" },
+              { value: "success", label: "Sukses" },
+              { value: "failed", label: "Gagal" },
+            ]}
+          />
           <Button variant="outline" size="sm" onClick={load}>Muat Ulang</Button>
         </div>
       </div>
@@ -107,11 +124,11 @@ export default function WebhookLogs() {
                   )}
                   {filtered.map((d) => (
                     <tr key={d.id} className="border-b border-border last:border-0">
-                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{fmtTime(d.created_at)}</td>
-                      <td className="py-3 px-4 font-medium">{d.device_name || "-"}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{fmtTime(d.createdAt)}</td>
+                      <td className="py-3 px-4 font-medium whitespace-nowrap">{deviceName(d.deviceId)}</td>
                       <td className="py-3 px-4 font-mono text-[12px] max-w-[220px] truncate" title={d.url}>{d.url}</td>
                       <td className="py-3 px-4"><Badge variant="secondary">{d.event}</Badge></td>
-                      <td className="py-3 px-4 font-mono text-[13px]">{d.status_code ?? "-"}</td>
+                      <td className="py-3 px-4 font-mono text-[13px]">{d.statusCode ?? "-"}</td>
                       <td className="py-3 px-4">
                         {d.success ? <Badge variant="success">Sukses</Badge> : <Badge variant="destructive">Gagal</Badge>}
                       </td>

@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, X, Tag, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
 interface ChatLabel {
@@ -14,11 +15,10 @@ interface ChatLabel {
 
 interface Assignment {
   id: number;
-  jid: string;
-  label_id?: number | null;
-  label_name?: string;
-  label_color?: string;
-  cs_name?: string;
+  chatJid: string;
+  labelId?: number | null;
+  label?: { name: string; color: string } | null;
+  assignedTo?: string;
   note?: string;
 }
 
@@ -110,10 +110,10 @@ export default function ChatLabels() {
     if (!assignJid.trim()) { toast.error("Nomor/JID wajib diisi"); return; }
     try {
       await apiPost("/chat-assignments", {
-        jid: assignJid.trim(),
-        label_id: assignLabelId ? Number(assignLabelId) : null,
-        cs_name: assignCs.trim() || null,
-        note: assignNote.trim() || null,
+        chatJid: assignJid.trim(),
+        labelId: assignLabelId ? Number(assignLabelId) : null,
+        assignedTo: assignCs.trim(),
+        note: assignNote.trim(),
       });
       toast.success("Chat di-assign");
       setShowAssignModal(false);
@@ -226,17 +226,17 @@ export default function ChatLabels() {
                   )}
                   {assigns.map((a) => (
                     <tr key={a.id} className="border-b border-border last:border-0">
-                      <td className="py-3 px-4 font-mono text-[13px]">{a.jid}</td>
+                      <td className="py-3 px-4 font-mono text-[13px]">{a.chatJid}</td>
                       <td className="py-3 px-4">
-                        {a.label_name ? (
-                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium text-white" style={{ backgroundColor: a.label_color || "#243370" }}>
-                            {a.label_name}
+                        {a.label ? (
+                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium text-white" style={{ backgroundColor: a.label.color || "#243370" }}>
+                            {a.label.name}
                           </span>
                         ) : <span className="text-muted-foreground text-xs">-</span>}
                       </td>
                       <td className="py-3 px-4">
-                        {a.cs_name ? (
-                          <span className="inline-flex items-center gap-1 text-xs"><UserCheck className="w-3.5 h-3.5" />{a.cs_name}</span>
+                        {a.assignedTo ? (
+                          <span className="inline-flex items-center gap-1 text-xs"><UserCheck className="w-3.5 h-3.5" />{a.assignedTo}</span>
                         ) : <span className="text-muted-foreground text-xs">-</span>}
                       </td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate">{a.note || "-"}</td>
@@ -293,10 +293,16 @@ export default function ChatLabels() {
             </div>
             <div>
               <label className="text-sm font-medium">Label</label>
-              <select value={assignLabelId} onChange={(e) => setAssignLabelId(e.target.value)} className={`${inputCls} mt-1.5`}>
-                <option value="">Tanpa label</option>
-                {labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
+              <Dropdown
+                value={assignLabelId}
+                onChange={setAssignLabelId}
+                ariaLabel="Label"
+                className="mt-1.5"
+                options={[
+                  { value: "", label: "Tanpa label" },
+                  ...labels.map((l) => ({ value: String(l.id), label: l.name })),
+                ]}
+              />
             </div>
             <div>
               <label className="text-sm font-medium">Assign ke CS</label>

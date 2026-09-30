@@ -148,6 +148,8 @@ function Modal({
   );
 }
 
+import { Dropdown } from "@/components/ui/dropdown";
+
 function Select({
   value,
   onChange,
@@ -162,18 +164,13 @@ function Select({
   ariaLabel?: string;
 }) {
   return (
-    <select
+    <Dropdown
       value={value}
-      aria-label={ariaLabel}
-      onChange={(e) => onChange(e.target.value)}
-      className={`h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground ${className || ""}`}
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      options={options}
+      className={className}
+      ariaLabel={ariaLabel}
+    />
   );
 }
 
@@ -884,12 +881,14 @@ function PackagesTab() {
                       )}
                     </td>
                     <td className="p-3 text-right whitespace-nowrap">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)} aria-label="Edit paket">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(p)} aria-label="Hapus paket">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)} aria-label="Edit paket">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(p)} aria-label="Hapus paket">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

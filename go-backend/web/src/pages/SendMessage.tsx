@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiGet, apiPost } from "@/lib/api";
 import { useActiveDevice } from "@/hooks/use-active-device";
@@ -76,9 +77,6 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
-
-const selectCls =
-  "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
   const [, navigate] = useLocation();
@@ -218,26 +216,18 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                 <label className="text-xs font-medium text-foreground">
                   Perangkat
                 </label>
-                <select
-                  className={selectCls}
-                  value={deviceId}
-                  onChange={(e) =>
-                    setDeviceId(e.target.value === "" ? "" : Number(e.target.value))
-                  }
+                <Dropdown
+                  value={String(deviceId)}
+                  onChange={(v) => setDeviceId(v === "" ? "" : Number(v))}
+                  ariaLabel="Perangkat"
                   disabled={sending}
-                >
-                  {devices.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                      {d.phone ? ` (${d.phone})` : ""} —{" "}
-                      {d.status === "connected"
-                        ? "Terhubung"
-                        : d.status === "connecting"
-                          ? "Menghubungkan"
-                          : "Terputus"}
-                    </option>
-                  ))}
-                </select>
+                  options={devices.map((d) => ({
+                    value: String(d.id),
+                    label: `${d.name}${d.phone ? ` (${d.phone})` : ""} — ${
+                      d.status === "connected" ? "Terhubung" : d.status === "connecting" ? "Menghubungkan" : "Terputus"
+                    }`,
+                  }))}
+                />
               </div>
 
               <div className="space-y-2">
@@ -262,19 +252,16 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   <label className="text-xs font-medium text-foreground">
                     Template <span className="text-muted-foreground">(opsional)</span>
                   </label>
-                  <select
-                    className={selectCls}
+                  <Dropdown
                     value={templateId}
-                    onChange={(e) => handleTemplate(e.target.value)}
+                    onChange={handleTemplate}
+                    ariaLabel="Template"
                     disabled={sending}
-                  >
-                    <option value="">Tanpa template</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: "", label: "Tanpa template" },
+                      ...templates.map((t) => ({ value: String(t.id), label: t.name })),
+                    ]}
+                  />
                 </div>
               )}
 

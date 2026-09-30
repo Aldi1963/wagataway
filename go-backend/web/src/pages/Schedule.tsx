@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -445,18 +446,16 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
           <div className="space-y-4">
             <div>
               <label className="text-xs font-medium">Perangkat</label>
-              <select
-                className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+              <Dropdown
                 value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-              >
-                <option value="">— Pilih perangkat —</option>
-                {devices.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setDeviceId}
+                ariaLabel="Perangkat"
+                className="mt-1"
+                options={[
+                  { value: "", label: "— Pilih perangkat —" },
+                  ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+                ]}
+              />
             </div>
             <div>
               <label className="text-xs font-medium">Nomor tujuan</label>

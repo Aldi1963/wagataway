@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -293,30 +294,30 @@ export default function AutoReply() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium">Tipe kecocokan</label>
-                <select
-                  className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                <Dropdown
                   value={form.matchType}
-                  onChange={(e) => setForm({ ...form, matchType: e.target.value })}
-                >
-                  <option value="contains">Mengandung keyword</option>
-                  <option value="exact">Persis sama</option>
-                  <option value="startsWith">Diawali keyword</option>
-                </select>
+                  onChange={(v) => setForm({ ...form, matchType: v })}
+                  ariaLabel="Tipe kecocokan keyword"
+                  className="mt-1"
+                  options={[
+                    { value: "contains", label: "Mengandung keyword" },
+                    { value: "exact", label: "Persis sama" },
+                    { value: "startsWith", label: "Diawali keyword" },
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium">Perangkat</label>
-                <select
-                  className="mt-1 flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                <Dropdown
                   value={form.deviceId}
-                  onChange={(e) => setForm({ ...form, deviceId: e.target.value })}
-                >
-                  <option value="">Semua perangkat</option>
-                  {devices.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm({ ...form, deviceId: v })}
+                  ariaLabel="Perangkat"
+                  className="mt-1"
+                  options={[
+                    { value: "", label: "Semua perangkat" },
+                    ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
               </div>
             </div>
             <div>

@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, X, Users, UserPlus, RefreshCw, ChevronRight } fro
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import SyncWAButton from "@/components/contacts/SyncWAButton";
 
@@ -378,18 +379,17 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
         >
           {/* Add member */}
           <div className="flex flex-col sm:flex-row gap-2 mb-5">
-            <select
+            <Dropdown
               value={pickContact}
-              onChange={(e) => setPickContact(e.target.value)}
-              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Pilih kontak untuk ditambahkan...</option>
-              {availableContacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} — {c.phone}
-                </option>
-              ))}
-            </select>
+              onChange={setPickContact}
+              ariaLabel="Pilih kontak untuk ditambahkan"
+              placeholder="Pilih kontak untuk ditambahkan..."
+              className="flex-1"
+              options={[
+                { value: "", label: "Pilih kontak untuk ditambahkan..." },
+                ...availableContacts.map((c) => ({ value: String(c.id), label: `${c.name} — ${c.phone}` })),
+              ]}
+            />
             <Button onClick={addMember} disabled={!pickContact} className="gap-1.5">
               <UserPlus className="w-4 h-4" />
               Tambah

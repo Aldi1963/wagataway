@@ -4,17 +4,23 @@ import { Plus, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
 interface GroupRule {
   id: number;
-  group_name: string;
-  group_jid?: string;
-  welcome_message?: string;
-  anti_link: boolean;
-  anti_spam: boolean;
-  active: boolean;
+  deviceId: number;
+  groupJid: string;
+  welcomeMsg?: string;
+  antiLink: boolean;
+  antiSpam: boolean;
+  isActive: boolean;
+}
+
+interface Device {
+  id: number;
+  name: string;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -39,10 +45,11 @@ const inputCls =
 
 export default function GroupRules() {
   const [items, setItems] = useState<GroupRule[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<GroupRule | null>(null);
-  const [groupName, setGroupName] = useState("");
+  const [deviceId, setDeviceId] = useState("");
   const [groupJid, setGroupJid] = useState("");
   const [welcome, setWelcome] = useState("");
   const [antiLink, setAntiLink] = useState(true);
@@ -52,8 +59,12 @@ export default function GroupRules() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiGet<{ rules: GroupRule[] } | GroupRule[]>("/group-rules");
+      const [r, d] = await Promise.all([
+        apiGet<{ rules: GroupRule[] } | GroupRule[]>("/group-rules"),
+        apiGet<{ devices: Device[] }>("/devices"),
+      ]);
       setItems(Array.isArray(r) ? r : r.rules ?? []);
+      setDevices(d.devices ?? []);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat aturan grup");
     } finally {
@@ -63,25 +74,28 @@ export default function GroupRules() {
 
   useEffect(() => { load(); }, []);
 
+  const deviceName = (id: number) => devices.find((x) => x.id === id)?.name ?? `#${id}`;
+
   const openModal = (g?: GroupRule) => {
     setEditing(g ?? null);
-    setGroupName(g?.group_name ?? "");
-    setGroupJid(g?.group_jid ?? "");
-    setWelcome(g?.welcome_message ?? "");
-    setAntiLink(g?.anti_link ?? true);
-    setAntiSpam(g?.anti_spam ?? true);
+    setDeviceId(g ? String(g.deviceId) : devices.length === 1 ? String(devices[0].id) : "");
+    setGroupJid(g?.groupJid ?? "");
+    setWelcome(g?.welcomeMsg ?? "");
+    setAntiLink(g?.antiLink ?? true);
+    setAntiSpam(g?.antiSpam ?? true);
     setShowModal(true);
   };
 
   const save = async () => {
-    if (!groupName.trim()) { toast.error("Nama grup wajib diisi"); return; }
+    if (!deviceId) { toast.error("Pilih device"); return; }
+    if (!groupJid.trim()) { toast.error("JID grup wajib diisi"); return; }
     try {
       const payload = {
-        group_name: groupName.trim(),
-        group_jid: groupJid.trim() || null,
-        welcome_message: welcome.trim() || null,
-        anti_link: antiLink,
-        anti_spam: antiSpam,
+        deviceId: Number(deviceId),
+        groupJid: groupJid.trim(),
+        welcomeMsg: welcome.trim(),
+        antiLink,
+        antiSpam,
       };
       if (editing) { await apiPut(`/group-rules/${editing.id}`, payload); toast.success("Diperbarui"); }
       else { await apiPost("/group-rules", payload); toast.success("Aturan ditambahkan"); }
@@ -90,9 +104,25 @@ export default function GroupRules() {
     } catch (e: any) { toast.error(e.message || "Gagal menyimpan"); }
   };
 
-  const toggleField = async (g: GroupRule, field: "active" | "anti_link" | "anti_spam", v: boolean) => {
+  // Toggle isActive via POST /:id/toggle
+  const toggleActive = async (g: GroupRule, v: boolean) => {
     try {
-      await apiPut(`/group-rules/${g.id}`, { [field]: v });
+      await apiPost(`/group-rules/${g.id}/toggle`, {});
+      setItems((prev) => prev.map((x) => (x.id === g.id ? { ...x, isActive: v } : x)));
+      toast.success(v ? "Aturan diaktifkan" : "Aturan dinonaktifkan");
+    } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
+  };
+
+  // Toggle antiLink/antiSpam via PUT dengan payload penuh
+  const toggleField = async (g: GroupRule, field: "antiLink" | "antiSpam", v: boolean) => {
+    try {
+      await apiPut(`/group-rules/${g.id}`, {
+        deviceId: g.deviceId,
+        groupJid: g.groupJid,
+        welcomeMsg: g.welcomeMsg ?? "",
+        antiLink: field === "antiLink" ? v : g.antiLink,
+        antiSpam: field === "antiSpam" ? v : g.antiSpam,
+      });
       setItems((prev) => prev.map((x) => (x.id === g.id ? { ...x, [field]: v } : x)));
       toast.success("Aturan diperbarui");
     } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
@@ -126,10 +156,11 @@ export default function GroupRules() {
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup (JID)</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Device</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Welcome</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anti-Link</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anti-Spam</th>
@@ -139,18 +170,19 @@ export default function GroupRules() {
                 </thead>
                 <tbody>
                   {items.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Belum ada aturan grup.</td></tr>
+                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Belum ada aturan grup.</td></tr>
                   )}
                   {items.map((g) => (
                     <tr key={g.id} className="border-b border-border last:border-0">
-                      <td className="py-3 px-4 font-medium">
-                        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />{g.group_name}</span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-muted-foreground max-w-[220px] truncate" title={g.welcome_message}>{g.welcome_message || "-"}</td>
-                      <td className="py-3 px-4"><Toggle checked={g.anti_link} label={`Anti-link ${g.group_name}`} onToggle={(v) => toggleField(g, "anti_link", v)} /></td>
-                      <td className="py-3 px-4"><Toggle checked={g.anti_spam} label={`Anti-spam ${g.group_name}`} onToggle={(v) => toggleField(g, "anti_spam", v)} /></td>
                       <td className="py-3 px-4">
-                        <Toggle checked={g.active} label={`Aktif ${g.group_name}`} onToggle={(v) => toggleField(g, "active", v)} />
+                        <span className="inline-flex items-center gap-1.5 font-mono text-[12px]"><ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />{g.groupJid}</span>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{deviceName(g.deviceId)}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate" title={g.welcomeMsg}>{g.welcomeMsg || "-"}</td>
+                      <td className="py-3 px-4"><Toggle checked={g.antiLink} label={`Anti-link ${g.groupJid}`} onToggle={(v) => toggleField(g, "antiLink", v)} /></td>
+                      <td className="py-3 px-4"><Toggle checked={g.antiSpam} label={`Anti-spam ${g.groupJid}`} onToggle={(v) => toggleField(g, "antiSpam", v)} /></td>
+                      <td className="py-3 px-4">
+                        <Toggle checked={g.isActive} label={`Aktif ${g.groupJid}`} onToggle={(v) => toggleActive(g, v)} />
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(g)} aria-label="Ubah">
@@ -173,11 +205,20 @@ export default function GroupRules() {
         <Modal title={editing ? "Ubah Aturan Grup" : "Tambah Aturan Grup"} onClose={() => setShowModal(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Nama Grup</label>
-              <Input className="mt-1.5" placeholder="cth: Grup Reseller" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+              <label className="text-sm font-medium">Device</label>
+              <Dropdown
+                value={deviceId}
+                onChange={setDeviceId}
+                ariaLabel="Device"
+                className="mt-1.5"
+                options={[
+                  { value: "", label: "Pilih device" },
+                  ...devices.map((d) => ({ value: String(d.id), label: d.name })),
+                ]}
+              />
             </div>
             <div>
-              <label className="text-sm font-medium">JID Grup <span className="text-muted-foreground font-normal">(opsional)</span></label>
+              <label className="text-sm font-medium">JID Grup</label>
               <Input className="mt-1.5 font-mono" placeholder="120363xxxx@g.us" value={groupJid} onChange={(e) => setGroupJid(e.target.value)} />
             </div>
             <div>
@@ -187,7 +228,7 @@ export default function GroupRules() {
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
                 <p className="text-sm font-medium">Anti-Link</p>
-                <p className="text-xs text-muted-foreground">Hapus pesan berisi link otomatis</p>
+                <p className="text-xs text-muted-foreground">Peringatkan pengirim link otomatis</p>
               </div>
               <Toggle checked={antiLink} label="Anti-link" onToggle={setAntiLink} />
             </div>

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Send, Upload, Users, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiGet } from "@/lib/api";
 
@@ -129,22 +130,19 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                 <Users className="w-3.5 h-3.5" />
                 Ambil dari Kontak
               </Button>
-              <select
-                className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              <Dropdown
                 value={groupId}
-                onFocus={ensureGroups}
-                onClick={ensureGroups}
-                onChange={(e) => setGroupId(e.target.value)}
+                onChange={setGroupId}
+                onOpen={ensureGroups}
                 disabled={loadingNumbers}
                 aria-label="Pilih grup"
-              >
-                <option value="">Pilih grup…</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} ({g.memberCount})
-                  </option>
-                ))}
-              </select>
+                className="w-auto min-w-[140px]"
+                placeholder="Pilih grup…"
+                options={[
+                  { value: "", label: "Pilih grup…" },
+                  ...groups.map((g) => ({ value: String(g.id), label: `${g.name} (${g.memberCount})` })),
+                ]}
+              />
               <Button
                 type="button"
                 variant="outline"
