@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -48,6 +49,12 @@ func createLink(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "URL tujuan wajib"})
 			return
 		}
+		// Tolak skema selain http/https dan IP internal (anti open-redirect
+		// ke phishing & anti SSRF via redirect)
+		if err := security.ValidateOutboundURL(req.TargetURL); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "URL tujuan tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
+			return
+		}
 		if req.Code == "" {
 			req.Code = generateShortCode()
 		}
@@ -79,6 +86,14 @@ func updateLink(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
+		if rawURL, ok := req["targetUrl"]; ok {
+			if s, ok := rawURL.(string); ok && s != "" {
+				if err := security.ValidateOutboundURL(s); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": "URL tujuan tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
+					return
+				}
+			}
+		}
 		db.Model(&link).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"link": link})
 	}

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
@@ -67,6 +68,18 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			req.Type = "text"
 		}
 
+		if utf8.RuneCountInString(req.Content) > 10000 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Konten pesan maksimal 10000 karakter", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		// Cek kepemilikan device
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+
 		// Create message record
 		msg := models.Message{
 			UserID:   userID,
@@ -125,6 +138,30 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 		if req.MaxDelay == 0 {
 			req.MaxDelay = 8
+		}
+
+		if utf8.RuneCountInString(req.Content) > 10000 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Konten pesan maksimal 10000 karakter", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if len(req.Recipients) > 1000 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Maksimal 1000 penerima per blast", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if req.MinDelay < 0 || req.MinDelay > 3600 || req.MaxDelay < 0 || req.MaxDelay > 3600 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Delay harus antara 0 sampai 3600 detik", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if req.MaxDelay < req.MinDelay {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "MaxDelay tidak boleh lebih kecil dari MinDelay", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		// Cek kepemilikan device
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
 		}
 
 		// Create bulk job

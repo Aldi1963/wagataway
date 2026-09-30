@@ -7,6 +7,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/sseauth"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
@@ -34,7 +35,7 @@ func AuthRequired(cfg *config.Config) gin.HandlerFunc {
 		// kirim header X-API-Key dengan nilai key yang dibuat di /api-keys.
 		if key := c.GetHeader("X-API-Key"); key != "" && apiKeyDB != nil {
 			var ak models.ApiKey
-			if err := apiKeyDB.Where("key = ? AND is_active = ?", key, true).First(&ak).Error; err != nil {
+			if err := apiKeyDB.Where("key_hash = ? AND is_active = ?", models.HashAPIKey(key), true).First(&ak).Error; err != nil {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"message": "API key tidak valid",
 					"code":    "INVALID_API_KEY",
@@ -64,10 +65,25 @@ func AuthRequired(cfg *config.Config) gin.HandlerFunc {
 
 		authHeader := c.GetHeader("Authorization")
 
-		// Support token via query param (for SSE endpoints)
+		// SSE memakai EventSource yang tidak bisa mengirim header Authorization:
+		// dukung ticket sekali pakai dari POST /api/sse/ticket sebagai alternatif.
+		// Dukungan ?token= (JWT lewat URL) sudah dihapus agar token tidak bocor
+		// ke log server, histori browser, atau header Referer.
 		if authHeader == "" {
-			if token := c.Query("token"); token != "" {
-				authHeader = "Bearer " + token
+			if ticket := c.Query("ticket"); ticket != "" {
+				t, err := sseauth.Consume(ticket)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+						"message": "Ticket tidak valid atau sudah kadaluarsa",
+						"code":    "INVALID_TICKET",
+					})
+					return
+				}
+				c.Set("userID", t.UserID)
+				c.Set("email", t.Email)
+				c.Set("role", t.Role)
+				c.Next()
+				return
 			}
 		}
 

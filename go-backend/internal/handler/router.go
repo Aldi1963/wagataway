@@ -24,6 +24,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 
 	// ── Global Middleware ───────────────────────────────────────────────────
 	r.Use(gin.Recovery())
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(middleware.GlobalRateLimit.Middleware())
 
@@ -83,6 +84,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerCannedResponseRoutes(protected, db)
 			registerTwoFARoutes(protected, cfg, db)
 			registerSSERoutes(protected)
+			registerSSETicketRoutes(protected)
 
 			// ── Admin only routes ──────────────────────────────────────────
 			admin := protected.Group("/admin")

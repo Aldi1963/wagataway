@@ -79,10 +79,12 @@ func createApiKey(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat API key"})
 			return
 		}
+		rawKey := "wg_" + hex.EncodeToString(buf)
 		key := models.ApiKey{
 			UserID:   userID,
 			Name:     req.Name,
-			Key:      "wg_" + hex.EncodeToString(buf),
+			Key:      "", // key mentah TIDAK disimpan — hanya hash-nya
+			KeyHash:  models.HashAPIKey(rawKey),
 			IsActive: true,
 		}
 		if err := db.Create(&key).Error; err != nil {
@@ -91,10 +93,12 @@ func createApiKey(db *gorm.DB) gin.HandlerFunc {
 		}
 		// Key penuh hanya dikembalikan sekali — frontend harus menampilkannya
 		// sekali lalu tidak bisa dilihat lagi.
+		resp := toAPIKeyResponse(key)
+		resp.KeyPreview = maskAPIKey(rawKey)
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "API key dibuat",
-			"apiKey":  key.Key,
-			"key":     toAPIKeyResponse(key),
+			"apiKey":  rawKey,
+			"key":     resp,
 		})
 	}
 }

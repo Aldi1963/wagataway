@@ -1,10 +1,19 @@
 package models
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// HashAPIKey mengembalikan digest SHA-256 (hex) dari API key mentah.
+// Key mentah tidak pernah disimpan di database — hanya hash-nya.
+func HashAPIKey(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
+}
 
 // ── API Keys ──────────────────────────────────────────────────────────────────
 
@@ -12,7 +21,8 @@ type ApiKey struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	UserID    uint           `gorm:"index;not null" json:"userId"`
 	Name      string         `gorm:"size:100;not null" json:"name"`
-	Key       string         `gorm:"size:64;uniqueIndex;not null" json:"key"`
+	Key       string         `gorm:"size:64" json:"key"` // legacy plaintext; dikosongkan setelah migrasi ke KeyHash
+	KeyHash   string         `gorm:"size:64;uniqueIndex" json:"-"`
 	IsActive  bool           `gorm:"default:true" json:"isActive"`
 	LastUsed  *time.Time     `json:"lastUsed"`
 	ExpiresAt *time.Time     `json:"expiresAt"`
@@ -205,16 +215,16 @@ type CannedResponse struct {
 // ── Short Links ───────────────────────────────────────────────────────────────
 
 type ShortLink struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	UserID      uint      `gorm:"index;not null" json:"userId"`
-	Code        string    `gorm:"size:20;uniqueIndex;not null" json:"code"`
-	TargetURL   string    `gorm:"size:2000;not null" json:"targetUrl"`
-	Title       string    `gorm:"size:255" json:"title"`
-	ClickCount  int       `gorm:"default:0" json:"clickCount"`
-	IsActive    bool      `gorm:"default:true" json:"isActive"`
-	ExpiresAt   *time.Time `json:"expiresAt"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	UserID     uint       `gorm:"index;not null" json:"userId"`
+	Code       string     `gorm:"size:20;uniqueIndex;not null" json:"code"`
+	TargetURL  string     `gorm:"size:2000;not null" json:"targetUrl"`
+	Title      string     `gorm:"size:255" json:"title"`
+	ClickCount int        `gorm:"default:0" json:"clickCount"`
+	IsActive   bool       `gorm:"default:true" json:"isActive"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }

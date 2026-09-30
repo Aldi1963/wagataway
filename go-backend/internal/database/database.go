@@ -31,7 +31,7 @@ func Connect(dsn string) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Device{},
 		&models.Message{},
@@ -54,6 +54,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.CsBotKnowledge{},
 		&models.Setting{},
 		&models.Voucher{},
+		&models.VoucherRedemption{},
 		&models.Notification{},
 		&models.ChatInbox{},
 		&models.ChatConversation{},
@@ -72,5 +73,39 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.BotOrder{},
 		&models.AdminWaBot{},
 		&models.AdminActivityLog{},
-	)
+	); err != nil {
+		return err
+	}
+	return migrateAPIKeyHashes(db)
+}
+
+// migrateAPIKeyHashes memindahkan API key plaintext lama ke kolom KeyHash.
+// Idempoten: hanya memproses baris yang KeyHash-nya masih kosong.
+func migrateAPIKeyHashes(db *gorm.DB) error {
+	// Index unik lama pada kolom key tidak lagi dibutuhkan (lookup memakai
+	// key_hash) dan akan menolak beberapa baris berisi string kosong.
+	if db.Migrator().HasIndex(&models.ApiKey{}, "idx_api_keys_key") {
+		if err := db.Migrator().DropIndex(&models.ApiKey{}, "idx_api_keys_key"); err != nil {
+			return err
+		}
+		log.Info().Msg("Dropped legacy unique index idx_api_keys_key")
+	}
+
+	var keys []models.ApiKey
+	if err := db.Where("key_hash = ? AND key <> ?", "", "").Find(&keys).Error; err != nil {
+		return err
+	}
+	for _, k := range keys {
+		hash := models.HashAPIKey(k.Key)
+		if err := db.Model(&models.ApiKey{}).Where("id = ?", k.ID).Updates(map[string]interface{}{
+			"key_hash": hash,
+			"key":      "",
+		}).Error; err != nil {
+			return err
+		}
+	}
+	if len(keys) > 0 {
+		log.Info().Int("count", len(keys)).Msg("Migrated plaintext API keys to key_hash")
+	}
+	return nil
 }

@@ -67,6 +67,13 @@ func createSchedule(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Cek kepemilikan device
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+
 		sched := models.ScheduledMessage{
 			UserID: userID, DeviceID: req.DeviceID, To: req.To,
 			Type: req.Type, Content: req.Content, MediaURL: req.MediaURL,
@@ -76,7 +83,6 @@ func createSchedule(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusCreated, gin.H{"schedule": sched})
 	}
 }
-
 
 func updateSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

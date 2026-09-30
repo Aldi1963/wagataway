@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -101,6 +102,10 @@ func createWebhook(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "URL wajib"})
 			return
 		}
+		if err := security.ValidateOutboundURL(req.URL); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "URL webhook tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
+			return
+		}
 		hook := models.Webhook{
 			UserID: userID, URL: req.URL, Secret: req.Secret,
 			Events: req.Events, DeviceID: req.DeviceID, IsActive: true,
@@ -121,6 +126,14 @@ func updateWebhook(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
+		if rawURL, ok := req["url"]; ok {
+			if s, ok := rawURL.(string); ok && s != "" {
+				if err := security.ValidateOutboundURL(s); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": "URL webhook tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
+					return
+				}
+			}
+		}
 		db.Model(&hook).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"webhook": hook})
 	}

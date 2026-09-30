@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Aldi1963/wagataway/internal/security"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -130,9 +131,13 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen]
 }
 
-// downloadFile downloads a file from a URL
+// downloadFile downloads a file from a URL. URL divalidasi anti-SSRF dulu
+// (tolak IP internal) dan diunduh tanpa mengikuti redirect.
 func downloadFile(url string) ([]byte, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
+	if err := security.ValidateOutboundURL(url); err != nil {
+		return nil, err
+	}
+	client := security.NewSafeClient(30 * time.Second)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
@@ -152,7 +157,8 @@ func downloadFile(url string) ([]byte, error) {
 
 // DeliverWebhookPayload POSTs a raw JSON payload to a webhook URL with the
 // standard headers (Content-Type, X-Webhook-Event, X-Webhook-Secret).
-// Timeout 10 detik. Mengembalikan HTTP status, sukses/tidak, pesan error,
+// Timeout 10 detik, tanpa mengikuti redirect (anti-SSRF).
+// Mengembalikan HTTP status, sukses/tidak, pesan error,
 // dan durasi pengiriman dalam milidetik.
 func DeliverWebhookPayload(url, secret, event string, raw []byte) (statusCode int, success bool, errMsg string, durationMs int64) {
 	start := time.Now()
@@ -168,7 +174,7 @@ func DeliverWebhookPayload(url, secret, event string, raw []byte) (statusCode in
 		req.Header.Set("X-Webhook-Secret", secret)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := security.NewSafeClient(10 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, false, err.Error(), 0

@@ -55,7 +55,9 @@ func handleLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if user.Status == "banned" {
-			c.JSON(http.StatusForbidden, gin.H{"message": "Akun Anda telah diblokir", "code": "ACCOUNT_BANNED"})
+			// Pesan generik yang sama seperti kredensial salah agar tidak
+			// membocorkan status akun (anti user-enumeration).
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Email atau password salah", "code": "INVALID_CREDENTIALS"})
 			return
 		}
 

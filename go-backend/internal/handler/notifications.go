@@ -38,8 +38,9 @@ func listNotifications(db *gorm.DB) gin.HandlerFunc {
 
 func markNotifRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		db.Model(&models.Notification{}).Where("id = ?", id).Update("is_read", true)
+		db.Model(&models.Notification{}).Where("id = ? AND user_id = ?", id, userID).Update("is_read", true)
 		c.JSON(http.StatusOK, gin.H{"message": "Ditandai dibaca"})
 	}
 }
@@ -56,8 +57,9 @@ func markAllNotifRead(db *gorm.DB) gin.HandlerFunc {
 
 func deleteNotification(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		db.Delete(&models.Notification{}, id)
+		db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Notification{})
 		c.JSON(http.StatusOK, gin.H{"message": "Notifikasi dihapus"})
 	}
 }

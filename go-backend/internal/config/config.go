@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"time"
 
@@ -52,6 +53,12 @@ func Load() *Config {
 
 	expiry, _ := time.ParseDuration(getEnv("JWT_EXPIRY", "24h"))
 
+	jwtSecret := getEnv("JWT_SECRET", "change-me-in-production")
+	if jwtSecret == "change-me-in-production" {
+		log.Fatal("FATAL: JWT_SECRET masih bernilai default \"change-me-in-production\". " +
+			"Set JWT_SECRET yang kuat (acak, min 32 karakter) di environment/.env sebelum menjalankan server.")
+	}
+
 	return &Config{
 		Port:    getEnv("PORT", "8080"),
 		GinMode: getEnv("GIN_MODE", "debug"),
@@ -61,7 +68,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/wagataway?sslmode=disable"),
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
 
-		JWTSecret: getEnv("JWT_SECRET", "change-me-in-production"),
+		JWTSecret: jwtSecret,
 		JWTExpiry: expiry,
 
 		WASessionsDir: getEnv("WA_SESSIONS_DIR", "./wa-sessions"),

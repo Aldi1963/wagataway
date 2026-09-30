@@ -3,9 +3,11 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,7 +23,7 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 		devices.DELETE("/:id", deleteDevice(db, wm))
 		devices.POST("/:id/connect", connectDevice(db, wm))
 		devices.POST("/:id/disconnect", disconnectDevice(db, wm))
-		devices.GET("/:id/qr", getDeviceQR(wm))
+		devices.GET("/:id/qr", getDeviceQR(db, wm))
 		devices.POST("/:id/pair-code", requestPairCode(db, wm))
 		devices.GET("/:id/status", getDeviceStatus(db, wm))
 	}
@@ -74,6 +76,14 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Webhook URL boleh kosong; bila diisi harus aman dari SSRF
+		if strings.TrimSpace(req.WebhookURL) != "" {
+			if err := security.ValidateOutboundURL(req.WebhookURL); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Webhook URL tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
+				return
+			}
+		}
+
 		device := models.Device{
 			UserID:     userID,
 			Name:       req.Name,
@@ -117,13 +127,13 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		var req struct {
-			Name       *string `json:"name"`
-			AutoOnline *bool   `json:"autoOnline"`
-			WebhookURL *string `json:"webhookUrl"`
+			Name            *string `json:"name"`
+			AutoOnline      *bool   `json:"autoOnline"`
+			WebhookURL      *string `json:"webhookUrl"`
 			ReadReceipts    *bool   `json:"readReceipts"`
 			RejectCall      *bool   `json:"rejectCall"`
 			TypingIndicator *bool   `json:"typingIndicator"`
-			MaxRetries *int    `json:"maxRetries"`
+			MaxRetries      *int    `json:"maxRetries"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid", "code": "VALIDATION_ERROR"})
@@ -138,6 +148,12 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			updates["auto_online"] = *req.AutoOnline
 		}
 		if req.WebhookURL != nil {
+			if strings.TrimSpace(*req.WebhookURL) != "" {
+				if err := security.ValidateOutboundURL(*req.WebhookURL); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": "Webhook URL tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
+					return
+				}
+			}
 			updates["webhook_url"] = *req.WebhookURL
 		}
 		if req.ReadReceipts != nil {
@@ -224,9 +240,16 @@ func disconnectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	}
 }
 
-func getDeviceQR(wm *whatsapp.Manager) gin.HandlerFunc {
+func getDeviceQR(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
 
 		qr, expiresAt := wm.GetQR(uint(id))
 		if qr == "" {
@@ -243,7 +266,14 @@ func getDeviceQR(wm *whatsapp.Manager) gin.HandlerFunc {
 
 func getDeviceStatus(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
 
 		status := wm.GetStatus(uint(id))
 		c.JSON(http.StatusOK, gin.H{"status": status})

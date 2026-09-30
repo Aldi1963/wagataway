@@ -54,6 +54,12 @@ func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 		if req.TriggerType == "" {
 			req.TriggerType = "manual"
 		}
+		// Cek kepemilikan device
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
 		campaign := models.DripCampaign{
 			UserID: userID, DeviceID: req.DeviceID, Name: req.Name,
 			Description: req.Description, TriggerType: req.TriggerType,
@@ -63,7 +69,6 @@ func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusCreated, gin.H{"campaign": campaign})
 	}
 }
-
 
 func getDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -159,23 +164,62 @@ func addDripStep(db *gorm.DB) gin.HandlerFunc {
 
 func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		stepId, _ := strconv.ParseUint(c.Param("stepId"), 10, 32)
 		var step models.DripStep
-		if err := db.First(&step, stepId).Error; err != nil {
+		if err := db.Joins("JOIN drip_campaigns ON drip_campaigns.id = drip_steps.campaign_id").
+			Where("drip_steps.id = ? AND drip_steps.campaign_id = ? AND drip_campaigns.user_id = ?", stepId, id, userID).
+			First(&step).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Step tidak ditemukan"})
 			return
 		}
-		var req map[string]interface{}
-		c.ShouldBindJSON(&req)
-		db.Model(&step).Updates(snakeKeys(req))
+		// Allowlist field yang boleh diubah (hindari mass assignment)
+		var req struct {
+			StepOrder  *int    `json:"stepOrder"`
+			DelayHours *int    `json:"delayHours"`
+			Type       *string `json:"type"`
+			Content    *string `json:"content"`
+			MediaURL   *string `json:"mediaUrl"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		updates := map[string]interface{}{}
+		if req.StepOrder != nil {
+			updates["step_order"] = *req.StepOrder
+		}
+		if req.DelayHours != nil {
+			updates["delay_hours"] = *req.DelayHours
+		}
+		if req.Type != nil {
+			updates["type"] = *req.Type
+		}
+		if req.Content != nil {
+			updates["content"] = *req.Content
+		}
+		if req.MediaURL != nil {
+			updates["media_url"] = *req.MediaURL
+		}
+		db.Model(&step).Updates(updates)
 		c.JSON(http.StatusOK, gin.H{"step": step})
 	}
 }
 
 func deleteDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		stepId, _ := strconv.ParseUint(c.Param("stepId"), 10, 32)
-		db.Delete(&models.DripStep{}, stepId)
+		var step models.DripStep
+		if err := db.Joins("JOIN drip_campaigns ON drip_campaigns.id = drip_steps.campaign_id").
+			Where("drip_steps.id = ? AND drip_steps.campaign_id = ? AND drip_campaigns.user_id = ?", stepId, id, userID).
+			First(&step).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Step tidak ditemukan"})
+			return
+		}
+		db.Delete(&step)
 		c.JSON(http.StatusOK, gin.H{"message": "Step dihapus"})
 	}
 }

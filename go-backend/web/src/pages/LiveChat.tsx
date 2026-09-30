@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/api";
+import { toast } from "sonner";
 
 interface Template {
   id: number;
@@ -141,12 +142,20 @@ export default function LiveChat() {
     );
   }, [activePhone]);
 
-  // SSE for real-time messages
+  // SSE for real-time messages (auth via single-use ticket, bukan JWT di URL)
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    const es = new EventSource(`/api/stream?token=${token}`);
-    es.addEventListener("chat:message", (e) => {
+    let es: EventSource | null = null;
+    let cancelled = false;
+    let gotMessage = false;
+    apiPost<{ ticket: string }>("/sse/ticket")
+      .then(({ ticket }) => {
+        if (cancelled) return;
+        es = new EventSource(`/api/stream?ticket=${ticket}`);
+        es.onerror = () => {
+          // Ticket salah/kedaluwarsa: jangan retry berulang
+          if (!gotMessage) es?.close();
+        };
+        es.addEventListener("chat:message", (e) => {
       const data = JSON.parse(e.data);
       const isActiveConvo = data.phone === activePhone;
       if (isActiveConvo) {
@@ -180,8 +189,16 @@ export default function LiveChat() {
         )
       );
       if (data.direction === "in") playNotificationSound();
-    });
-    return () => es.close();
+        gotMessage = true;
+      });
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Gagal membuka koneksi real-time");
+      });
+    return () => {
+      cancelled = true;
+      es?.close();
+    };
   }, [activePhone]);
 
   // Auto-scroll to bottom

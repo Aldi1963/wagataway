@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/config"
@@ -118,7 +120,6 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-
 func listTransactions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -128,6 +129,9 @@ func listTransactions(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"transactions": txs})
 	}
 }
+
+// errAlreadyRedeemed menandai percobaan redeem ganda oleh user yang sama.
+var errAlreadyRedeemed = errors.New("voucher already redeemed by user")
 
 func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -156,17 +160,56 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Apply voucher based on type
-		switch voucher.Type {
-		case "trial":
-			// Extend subscription with trial days
-			db.Model(&models.User{}).Where("id = ?", userID).Update("plan", "trial")
-		case "discount":
-			// Store discount for next payment
-		}
+		// Cek + catat redeem + increment used_count + terapkan efek voucher
+		// berjalan atomik dalam satu transaksi.
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var count int64
+			if err := tx.Model(&models.VoucherRedemption{}).
+				Where("voucher_id = ? AND user_id = ?", voucher.ID, userID).
+				Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return errAlreadyRedeemed
+			}
 
-		// Increment used count
-		db.Model(&voucher).Update("used_count", gorm.Expr("used_count + 1"))
+			if err := tx.Create(&models.VoucherRedemption{
+				VoucherID: voucher.ID,
+				UserID:    userID,
+			}).Error; err != nil {
+				// Balapan dua request bersamaan: unique index gabungan
+				// menjadi penjaga terakhir.
+				if strings.Contains(err.Error(), "duplicate key") {
+					return errAlreadyRedeemed
+				}
+				return err
+			}
+
+			if err := tx.Model(&models.Voucher{}).Where("id = ?", voucher.ID).
+				Update("used_count", gorm.Expr("used_count + 1")).Error; err != nil {
+				return err
+			}
+
+			// Apply voucher based on type
+			switch voucher.Type {
+			case "trial":
+				// Extend subscription with trial days
+				if err := tx.Model(&models.User{}).Where("id = ?", userID).Update("plan", "trial").Error; err != nil {
+					return err
+				}
+			case "discount":
+				// Store discount for next payment
+			}
+			return nil
+		})
+		if err != nil {
+			if errors.Is(err, errAlreadyRedeemed) {
+				c.JSON(http.StatusConflict, gin.H{"message": "Voucher ini sudah pernah Anda gunakan"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menggunakan voucher"})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Voucher berhasil digunakan",
