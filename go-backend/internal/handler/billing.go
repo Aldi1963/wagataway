@@ -105,7 +105,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		kp := newClipkuPay(cfg)
+		kp := newClipkuPay(cfg, db)
 		if !kp.enabled() {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "Payment gateway belum dikonfigurasi"})
 			return
@@ -155,7 +155,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 
 // GET /api/billing/transactions/:id — cek status + sinkron dari Clipku Pay bila pending.
 func getBillingTransaction(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
-	kp := newClipkuPay(cfg)
+	kp := newClipkuPay(cfg, db)
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		var tx models.Transaction

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -34,6 +35,8 @@ import (
 
 type clipkuPay struct {
 	webhookURL string
+	apiKey     string
+	db         *gorm.DB
 }
 
 func clipkuCLIPath() string {
@@ -47,17 +50,33 @@ func getenvClipku(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
 }
 
-func newClipkuPay(cfg *config.Config) clipkuPay {
-	wh := strings.TrimSpace(cfg.ClipkuPayWebhookURL)
-	if wh == "" {
-		wh = "https://wa.clipku.com/api/billing/clipkupay/webhook"
+func newClipkuPay(cfg *config.Config, db *gorm.DB) clipkuPay {
+	wh := clipkuWebhookURLFromSettings(db, strings.TrimSpace(cfg.ClipkuPayWebhookURL))
+	return clipkuPay{
+		webhookURL: wh,
+		apiKey:     clipkuAPIKeyFromSettings(db),
+		db:         db,
 	}
-	return clipkuPay{webhookURL: wh}
 }
 
 func (k clipkuPay) enabled() bool {
+	if k.apiKey != "" {
+		return true
+	}
 	st, err := os.Stat(clipkuCLIPath())
 	return err == nil && !st.IsDir()
+}
+
+// mode mengembalikan "api_key" bila API key mentah tersedia,
+// "bridge" bila lewat CLI surrogate, atau "disabled".
+func (k clipkuPay) mode() string {
+	if k.apiKey != "" {
+		return "api_key"
+	}
+	if st, err := os.Stat(clipkuCLIPath()); err == nil && !st.IsDir() {
+		return "bridge"
+	}
+	return "disabled"
 }
 
 type clipkuTxData struct {
@@ -103,6 +122,53 @@ func (k clipkuPay) cliCall(args ...string) (map[string]any, error) {
 		return nil, fmt.Errorf("clipkupay: %s", msg)
 	}
 	return out.Response, nil
+}
+
+// directCall memanggil API Clipku Pay langsung via HTTP dengan Bearer API key.
+// Dipakai bila admin mengisi API key di halaman pengaturan.
+func (k clipkuPay) directCall(method, action, query string, body any) (map[string]any, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("clipkupay: %s", err.Error())
+		}
+		bodyReader = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method,
+		"https://m.clipku.com/api/?action="+action+query, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("clipkupay: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+k.apiKey)
+	req.Header.Set("User-Agent",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "+
+			"(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+	client := &http.Client{Timeout: 45 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("clipkupay: %s", err.Error())
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		out = map[string]any{"_error_body": string(raw)}
+	}
+	if resp.StatusCode >= 400 {
+		msg := fmt.Sprintf("http %d", resp.StatusCode)
+		if eb, ok := out["_error_body"]; ok {
+			if m := clipkuErrMsg(eb); m != "" {
+				msg = m
+			}
+		} else if m := clipkuErrMsg(out); m != "" {
+			msg = m
+		}
+		return nil, fmt.Errorf("clipkupay: %s", msg)
+	}
+	return out, nil
 }
 
 func clipkuErrMsg(v any) string {
@@ -182,16 +248,30 @@ func fetchQrisURL(paymentURL string) string {
 
 // createTransaction membuat transaksi pembayaran di Clipku Pay.
 func (k clipkuPay) createTransaction(orderID string, amount int64, customerName, customerEmail string) (*clipkuTxData, error) {
-	args := []string{
-		"create",
-		"--order-id", orderID,
-		"--amount", fmt.Sprintf("%d", amount),
-		"--channel", "qris",
-		"--name", customerName,
-		"--email", customerEmail,
-		"--webhook-url", k.webhookURL,
+	var out map[string]any
+	var err error
+	if k.apiKey != "" {
+		body := map[string]any{
+			"order_id":        orderID,
+			"amount":          amount,
+			"payment_channel": "qris",
+			"customer_name":   customerName,
+			"customer_email":  customerEmail,
+			"webhook_url":     k.webhookURL,
+		}
+		out, err = k.directCall("POST", "create_transaction", "", body)
+	} else {
+		args := []string{
+			"create",
+			"--order-id", orderID,
+			"--amount", fmt.Sprintf("%d", amount),
+			"--channel", "qris",
+			"--name", customerName,
+			"--email", customerEmail,
+			"--webhook-url", k.webhookURL,
+		}
+		out, err = k.cliCall(args...)
 	}
-	out, err := k.cliCall(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +288,13 @@ func (k clipkuPay) createTransaction(orderID string, amount int64, customerName,
 
 // getTransaction mengecek status transaksi di Clipku Pay (sumber kebenaran).
 func (k clipkuPay) getTransaction(orderID string) (*clipkuTxData, error) {
-	out, err := k.cliCall("get", "--order-id", orderID)
+	var out map[string]any
+	var err error
+	if k.apiKey != "" {
+		out, err = k.directCall("GET", "get_transaction", "&order_id="+url.QueryEscape(orderID), nil)
+	} else {
+		out, err = k.cliCall("get", "--order-id", orderID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +371,7 @@ func activateSubscription(db *gorm.DB, txID uint) error {
 
 // POST /api/billing/clipkupay/webhook — publik, diverifikasi via X-Signature.
 func clipkuPayWebhook(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
-	kp := newClipkuPay(cfg)
+	kp := newClipkuPay(cfg, db)
 	return func(c *gin.Context) {
 		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
 		if err != nil || len(raw) == 0 {
@@ -302,7 +388,7 @@ func clipkuPayWebhook(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		}
 		db.Create(&log)
 
-		apiKey := strings.TrimSpace(os.Getenv("CLIPKUPAY_API_KEY"))
+		apiKey := clipkuAPIKeyFromSettings(db)
 		if apiKey != "" && !verifyClipkuSignature(raw, c.GetHeader("X-Signature"), apiKey) {
 			db.Model(&log).Update("status", "invalid_signature")
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Signature tidak valid"})

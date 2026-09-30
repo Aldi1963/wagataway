@@ -40,6 +40,8 @@ func registerAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, w
 	rg.PUT("/maintenance", adminToggleMaintenance())
 	rg.GET("/activity-logs", adminActivityLogs(db))
 	rg.GET("/health", adminHealth(cfg, db))
+	rg.GET("/billing/gateway", adminGatewayStatus(cfg, db))
+	rg.POST("/billing/gateway/test", adminGatewayTest(cfg, db))
 	rg.POST("/broadcast-wa", adminBroadcastWA(db, wm))
 }
 
@@ -271,10 +273,22 @@ func adminGetSettings(db *gorm.DB) gin.HandlerFunc {
 		var settings []models.Setting
 		db.Find(&settings)
 		result := map[string]string{}
+		hasAPIKey := false
 		for _, s := range settings {
+			// Jangan kirim API key mentah ke frontend.
+			if s.Key == settingClipkuAPIKey {
+				if s.Value != "" {
+					hasAPIKey = true
+				}
+				result[s.Key] = ""
+				continue
+			}
 			result[s.Key] = s.Value
 		}
-		c.JSON(http.StatusOK, gin.H{"settings": result})
+		c.JSON(http.StatusOK, gin.H{
+			"settings":              result,
+			"has_clipkupay_api_key": hasAPIKey,
+		})
 	}
 }
 
@@ -286,8 +300,13 @@ func adminUpdateSettings(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		for key, value := range req {
+			// Nilai kosong untuk API key = jangan timpa yang sudah ada.
+			if key == settingClipkuAPIKey && value == "" {
+				continue
+			}
 			db.Where("key = ?", key).Assign(models.Setting{Key: key, Value: value}).
 				FirstOrCreate(&models.Setting{})
+			invalidateSettingCache(key)
 		}
 		logAdminAction(db, middleware.GetUserID(c), "update_settings", "setting",
 			"", "Kunci: "+summarizeStringMap(req))
@@ -477,7 +496,7 @@ func adminHealth(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		}
 
 		clipkuStatus := "disabled"
-		if newClipkuPay(cfg).enabled() {
+		if newClipkuPay(cfg, db).enabled() {
 			clipkuStatus = "ok"
 		}
 

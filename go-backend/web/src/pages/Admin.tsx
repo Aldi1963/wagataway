@@ -25,6 +25,10 @@ import {
   Wrench,
   Send,
   Download,
+  Eye,
+  EyeOff,
+  Copy,
+  CreditCard,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -1380,9 +1384,10 @@ interface KnownSetting {
   key: string;
   label: string;
   desc: string;
-  type: "text" | "number" | "toggle" | "select";
+  type: "text" | "number" | "toggle" | "select" | "password";
   def: string;
   options?: { value: string; label: string }[];
+  group?: "general" | "gateway";
 }
 
 const KNOWN_SETTINGS: KnownSetting[] = [
@@ -1428,6 +1433,23 @@ const KNOWN_SETTINGS: KnownSetting[] = [
     desc: "Jumlah maksimal perangkat WhatsApp per pengguna.",
     type: "number",
     def: "5",
+    group: "general",
+  },
+  {
+    key: "clipkupay_api_key",
+    label: "API Key Clipku Pay",
+    desc: "Kunci API payment gateway. Kosongkan untuk memakai koneksi aman server. Tidak pernah ditampilkan kembali setelah disimpan.",
+    type: "password",
+    def: "",
+    group: "gateway",
+  },
+  {
+    key: "clipkupay_webhook_url",
+    label: "Webhook URL",
+    desc: "URL yang dipanggil Clipku Pay saat status pembayaran berubah. Daftarkan URL ini di dashboard Clipku Pay.",
+    type: "text",
+    def: "https://wa.clipku.com/api/billing/clipkupay/webhook",
+    group: "gateway",
   },
 ];
 
@@ -1437,13 +1459,40 @@ function SettingsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [hasGatewayKey, setHasGatewayKey] = useState(false);
+  const [gateway, setGateway] = useState<{
+    mode: string;
+    webhook_url: string;
+    has_api_key: boolean;
+  } | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const knownKeys = useMemo(() => new Set(KNOWN_SETTINGS.map((s) => s.key)), []);
+
+  const generalSettings = useMemo(
+    () => KNOWN_SETTINGS.filter((s) => (s.group || "general") === "general"),
+    []
+  );
+  const gatewaySettings = useMemo(
+    () => KNOWN_SETTINGS.filter((s) => s.group === "gateway"),
+    []
+  );
+
+  const loadGateway = () => {
+    apiGet<{ mode: string; webhook_url: string; has_api_key: boolean }>(
+      "/admin/billing/gateway"
+    )
+      .then((res) => setGateway(res))
+      .catch(() => setGateway(null));
+  };
 
   const load = () => {
     setLoading(true);
     setError(null);
-    apiGet<{ settings: Record<string, string> }>("/admin/settings")
+    apiGet<{ settings: Record<string, string>; has_clipkupay_api_key?: boolean }>(
+      "/admin/settings"
+    )
       .then((res) => {
         const s = res.settings || {};
         const v: Record<string, string> = {};
@@ -1458,9 +1507,11 @@ function SettingsTab() {
         }
         setValues(v);
         setCustomRows(custom);
+        setHasGatewayKey(!!res.has_clipkupay_api_key);
       })
       .catch((e) => setError(errMsg(e, "Gagal memuat pengaturan")))
       .finally(() => setLoading(false));
+    loadGateway();
   };
 
   useEffect(load, []);
@@ -1489,6 +1540,33 @@ function SettingsTab() {
       toast.error(errMsg(e, "Gagal menyimpan pengaturan"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestGateway = async () => {
+    setTesting(true);
+    try {
+      const res = await apiPost<{ ok: boolean; message: string }>(
+        "/admin/billing/gateway/test",
+        {}
+      );
+      if (res.ok) toast.success(res.message);
+      else toast.error(res.message);
+    } catch (e) {
+      toast.error(errMsg(e, "Gagal menguji koneksi"));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const copyWebhookUrl = async () => {
+    const url = gateway?.webhook_url || values["clipkupay_webhook_url"] || "";
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Webhook URL disalin");
+    } catch {
+      toast.error("Gagal menyalin");
     }
   };
 
@@ -1536,6 +1614,32 @@ function SettingsTab() {
             className="w-28"
           />
         );
+      case "password":
+        return (
+          <div className="flex items-center gap-2">
+            <Input
+              type={showPassword ? "text" : "password"}
+              value={val}
+              onChange={(e) => setVal(ks.key, e.target.value)}
+              placeholder={
+                ks.key === "clipkupay_api_key" && hasGatewayKey
+                  ? "•••••••• (tersimpan)"
+                  : "Masukkan API key baru"
+              }
+              className="w-full sm:max-w-xs font-mono"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={() => setShowPassword((s) => !s)}
+              aria-label={showPassword ? "Sembunyikan" : "Tampilkan"}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </Button>
+          </div>
+        );
       default:
         return (
           <Input
@@ -1568,7 +1672,7 @@ function SettingsTab() {
                 Pengaturan utama aplikasi.
               </p>
               <div className="divide-y divide-border">
-                {KNOWN_SETTINGS.map((ks) => (
+                {generalSettings.map((ks) => (
                   <div
                     key={ks.key}
                     className="py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
@@ -1580,6 +1684,84 @@ function SettingsTab() {
                     <div className="shrink-0">{renderControl(ks)}</div>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <CreditCard className="w-4 h-4" /> Payment Gateway
+                </h3>
+                {gateway && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
+                      gateway.mode === "disabled"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        gateway.mode === "disabled" ? "bg-muted-foreground" : "bg-emerald-500"
+                      }`}
+                    />
+                    {gateway.mode === "disabled"
+                      ? "Tidak dikonfigurasi"
+                      : gateway.mode === "api_key"
+                        ? "Terhubung (API Key)"
+                        : "Terhubung (Server)"}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Clipku Pay untuk pembayaran langganan. Tanpa API key, sistem memakai
+                koneksi aman dari server.
+              </p>
+              <div className="divide-y divide-border">
+                {gatewaySettings.map((ks) => (
+                  <div
+                    key={ks.key}
+                    className="py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{ks.label}</p>
+                      <p className="text-xs text-muted-foreground">{ks.desc}</p>
+                    </div>
+                    <div className="shrink-0">{renderControl(ks)}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 rounded-lg border border-border bg-muted/50 p-3">
+                <p className="text-xs font-medium text-foreground mb-1.5">
+                  Link Webhook — daftarkan di dashboard Clipku Pay
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 min-w-0 truncate text-xs font-mono bg-background border border-border rounded-md px-2.5 py-2">
+                    {gateway?.webhook_url || values["clipkupay_webhook_url"] || "—"}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={copyWebhookUrl}
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Salin
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestGateway}
+                  disabled={testing}
+                >
+                  {testing ? "Menguji..." : "Test Koneksi"}
+                </Button>
               </div>
             </CardContent>
           </Card>
