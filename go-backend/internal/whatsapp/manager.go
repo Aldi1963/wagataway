@@ -747,10 +747,13 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	// Extract text content
 	text := extractMessageText(msg)
 	sender := msg.Info.Sender.User
+	// JID lengkap pengirim (bisa @lid atau @s.whatsapp.net) — disimpan agar
+	// balasan tidak perlu lookup PN→LID yang bisa gagal ("no LID found").
+	senderJID := msg.Info.Sender.String()
 
 	// AI auto-reply hook — non-blocking, gagal diam-diam (hanya log).
 	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
-	go m.checkAIReply(sess, sender, text, msg.Info.IsGroup)
+	go m.checkAIReply(sess, senderJID, text, msg.Info.IsGroup)
 
 	// Aturan grup (anti-link, anti-spam) — non-blocking, gagal diam-diam.
 	if msg.Info.IsGroup {
@@ -773,6 +776,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		UserID:    sess.UserID,
 		DeviceID:  sess.DeviceID,
 		Phone:     sender,
+		SenderJID: senderJID,
 		Name:      msg.Info.PushName,
 		Content:   text,
 		Type:      getMessageType(msg),
@@ -782,7 +786,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	m.db.Create(&inbox)
 
 	// Update or create conversation
-	m.updateConversation(sess, sender, msg.Info.PushName, text)
+	m.updateConversation(sess, sender, senderJID, msg.Info.PushName, text)
 
 	// Fire webhook
 	go m.fireWebhooks(sess.UserID, sess.DeviceID, "message.received", map[string]interface{}{
@@ -794,7 +798,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	})
 
 	// Check auto-reply rules
-	go m.checkAutoReply(sess, sender, text)
+	go m.checkAutoReply(sess, senderJID, text)
 
 	// Fire message handler callback
 	if m.onMessage != nil {
@@ -826,7 +830,7 @@ func (m *Manager) handleReceipt(sess *SessionState, receipt *events.Receipt) {
 }
 
 // checkAutoReply checks if an incoming message matches any auto-reply rules
-func (m *Manager) checkAutoReply(sess *SessionState, sender, text string) {
+func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
 	if text == "" {
 		return
 	}
@@ -844,12 +848,13 @@ func (m *Manager) checkAutoReply(sess *SessionState, sender, text string) {
 				continue
 			}
 
-			// Send auto-reply
-			err := m.SendMessage(sess.DeviceID, sender, rule.ReplyType, rule.ReplyContent, rule.MediaURL)
+			// Send auto-reply — senderJID bisa berupa "user@lid", parseJID menanganinya
+			// tanpa lookup PN→LID.
+			err := m.SendMessage(sess.DeviceID, senderJID, rule.ReplyType, rule.ReplyContent, rule.MediaURL)
 			if err != nil {
 				log.Error().Err(err).Uint("ruleID", rule.ID).Msg("Auto-reply failed")
 			} else {
-				log.Info().Uint("ruleID", rule.ID).Str("to", sender).Msg("Auto-reply sent")
+				log.Info().Uint("ruleID", rule.ID).Str("to", senderJID).Msg("Auto-reply sent")
 			}
 			return // Only first matching rule fires
 		}
@@ -857,7 +862,7 @@ func (m *Manager) checkAutoReply(sess *SessionState, sender, text string) {
 }
 
 // updateConversation creates or updates a chat conversation record
-func (m *Manager) updateConversation(sess *SessionState, phone, pushName, lastMsg string) {
+func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushName, lastMsg string) {
 	var conv models.ChatConversation
 	result := m.db.Where("user_id = ? AND device_id = ? AND phone = ?",
 		sess.UserID, sess.DeviceID, phone).First(&conv)
@@ -869,6 +874,7 @@ func (m *Manager) updateConversation(sess *SessionState, phone, pushName, lastMs
 			UserID:       sess.UserID,
 			DeviceID:     sess.DeviceID,
 			Phone:        phone,
+			SenderJID:    senderJID,
 			ContactName:  pushName,
 			LastMessage:  truncate(lastMsg, 200),
 			UnreadCount:  1,
@@ -876,13 +882,17 @@ func (m *Manager) updateConversation(sess *SessionState, phone, pushName, lastMs
 		}
 		m.db.Create(&conv)
 	} else {
-		// Update existing
-		m.db.Model(&conv).Updates(map[string]interface{}{
+		// Update existing — refresh SenderJID juga agar percakapan lama ikut terkoreksi
+		updates := map[string]interface{}{
 			"contact_name":  pushName,
 			"last_message":  truncate(lastMsg, 200),
 			"unread_count":  gorm.Expr("unread_count + 1"),
 			"last_activity": now,
-		})
+		}
+		if senderJID != "" {
+			updates["sender_jid"] = senderJID
+		}
+		m.db.Model(&conv).Updates(updates)
 	}
 }
 

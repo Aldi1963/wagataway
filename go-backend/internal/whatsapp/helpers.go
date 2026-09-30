@@ -19,8 +19,27 @@ import (
 // relatif terhadap CWD server. Dibuat otomatis saat startup.
 const UploadsDir = "./uploads"
 
-// parseJID converts a phone number string to a WhatsApp JID
+// parseJID converts a phone number string to a WhatsApp JID.
+// Menerima dua format:
+//   - nomor telepon biasa ("628123456789", "+628123456789") → user@s.whatsapp.net
+//   - JID lengkap ("123456@lid", "628xx@s.whatsapp.net") → dipakai apa adanya,
+//     PENTING agar balasan ke pengirim LID tidak gagal lookup PN→LID.
 func parseJID(phone string) (types.JID, error) {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return types.JID{}, fmt.Errorf("nomor telepon kosong")
+	}
+
+	if strings.Contains(phone, "@") {
+		parts := strings.SplitN(phone, "@", 2)
+		user := strings.TrimSpace(parts[0])
+		server := strings.TrimSpace(parts[1])
+		if user == "" || server == "" {
+			return types.JID{}, fmt.Errorf("format JID tidak valid")
+		}
+		return types.NewJID(user, server), nil
+	}
+
 	phone = strings.TrimPrefix(phone, "+")
 	phone = strings.TrimPrefix(phone, "0")
 	phone = strings.ReplaceAll(phone, " ", "")

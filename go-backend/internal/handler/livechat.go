@@ -106,8 +106,9 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			req.Type = "text"
 		}
 
-		// Send via WhatsApp
-		err := wm.SendMessage(req.DeviceID, req.Phone, req.Type, req.Content, "")
+		// Send via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
+		to := resolveSenderJID(db, userID, req.DeviceID, req.Phone)
+		err := wm.SendMessage(req.DeviceID, to, req.Type, req.Content, "")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengirim: " + err.Error()})
 			return
@@ -160,6 +161,18 @@ func truncateStr(s string, max int) string {
 		return s
 	}
 	return s[:max]
+}
+
+// resolveSenderJID mengembalikan JID lengkap tujuan kirim.
+// Jika percakapan menyimpan SenderJID (mis. "123@lid"), pakai itu agar
+// pengiriman tidak gagal lookup PN→LID. Fallback ke phone apa adanya.
+func resolveSenderJID(db *gorm.DB, userID, deviceID uint, phone string) string {
+	var conv models.ChatConversation
+	if err := db.Where("user_id = ? AND device_id = ? AND phone = ?",
+		userID, deviceID, phone).First(&conv).Error; err == nil && conv.SenderJID != "" {
+		return conv.SenderJID
+	}
+	return phone
 }
 
 
@@ -248,8 +261,9 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Send AI response via WhatsApp
-		sendErr := wm.SendMessage(req.DeviceID, req.Phone, "text", aiResp.Content, "")
+		// Send AI response via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
+		to := resolveSenderJID(db, userID, req.DeviceID, req.Phone)
+		sendErr := wm.SendMessage(req.DeviceID, to, "text", aiResp.Content, "")
 		if sendErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "Gagal mengirim balasan AI: " + sendErr.Error(),

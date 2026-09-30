@@ -146,6 +146,7 @@ type ChatInbox struct {
 	UserID    uint      `gorm:"index;not null" json:"userId"`
 	DeviceID  uint      `gorm:"index;not null" json:"deviceId"`
 	Phone     string    `gorm:"size:20;not null;index" json:"phone"`
+	SenderJID string    `gorm:"size:60" json:"senderJid"` // JID lengkap pengirim, mis. "123@lid" — dipakai untuk balas tanpa lookup PN→LID
 	Name      string    `gorm:"size:255" json:"name"`
 	Content   string    `gorm:"type:text" json:"content"`
 	Type      string    `gorm:"size:20;default:text" json:"type"`
@@ -163,6 +164,7 @@ type ChatConversation struct {
 	UserID       uint      `gorm:"index;not null" json:"userId"`
 	DeviceID     uint      `gorm:"index;not null" json:"deviceId"`
 	Phone        string    `gorm:"size:20;not null" json:"phone"`
+	SenderJID    string    `gorm:"size:60" json:"senderJid"` // JID lengkap, mis. "123@lid" — dipakai untuk balas tanpa lookup PN→LID
 	ContactName  string    `gorm:"size:255" json:"contactName"`
 	LastMessage  string    `gorm:"type:text" json:"lastMessage"`
 	UnreadCount  int       `gorm:"default:0" json:"unreadCount"`

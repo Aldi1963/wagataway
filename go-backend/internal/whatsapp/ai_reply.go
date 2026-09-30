@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (m *Manager) checkAIReply(sess *SessionState, sender, text string, isGroup bool) {
+func (m *Manager) checkAIReply(sess *SessionState, senderJID, text string, isGroup bool) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
@@ -44,16 +44,16 @@ func (m *Manager) checkAIReply(sess *SessionState, sender, text string, isGroup 
 			continue
 		}
 
-		if err := m.SendMessage(sess.DeviceID, sender, "text", reply, ""); err != nil {
+		if err := m.SendMessage(sess.DeviceID, senderJID, "text", reply, ""); err != nil {
 			log.Error().Err(err).
 				Uint("deviceID", sess.DeviceID).
-				Str("to", sender).
+				Str("to", senderJID).
 				Msg("AI reply send failed")
 		} else {
 			log.Info().
 				Uint("deviceID", sess.DeviceID).
 				Uint("configID", cfg.ID).
-				Str("to", sender).
+				Str("to", senderJID).
 				Msg("AI reply sent")
 		}
 		return // hanya config pertama yang cocok yang membalas
