@@ -587,15 +587,20 @@ export default function Dashboard() {
                               type="button"
                               onClick={() => openEdit(d)}
                               title={d.webhookUrl}
-                              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap cursor-pointer"
-                              style={{ backgroundColor: `${NAVY}1a`, color: NAVY }}
+                              className="inline-flex max-w-[140px] items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-mono text-muted-foreground cursor-pointer hover:bg-muted/80"
                             >
-                              Terpasang
+                              <span className="truncate">
+                                {d.webhookUrl.replace(/^https?:\/\//, "https://").slice(0, 18)}...
+                              </span>
                             </button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Belum dipasang
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(d)}
+                              className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground cursor-pointer hover:bg-muted/80"
+                            >
+                              <span className="truncate">https://...</span>
+                            </button>
                           )}
                         </td>
                         <td className="py-3 pr-4">
