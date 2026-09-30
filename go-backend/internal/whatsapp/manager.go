@@ -878,6 +878,33 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 
 		go m.deliverWebhook(hook, deviceID, event, payload)
 	}
+
+	// Webhook URL per-device (diisi dari modal Tambah/Edit Perangkat):
+	// kirim envelope payload yang sama ke URL tersebut.
+	var dev models.Device
+	if err := m.db.Select("webhook_url").Where("id = ?", deviceID).First(&dev).Error; err == nil {
+		if url := strings.TrimSpace(dev.WebhookURL); url != "" {
+			go func() {
+				body := map[string]interface{}{
+					"event":     event,
+					"device_id": deviceID,
+					"payload":   payload,
+					"sent_at":   time.Now().UTC().Format(time.RFC3339),
+				}
+				raw, err := json.Marshal(body)
+				if err != nil {
+					log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to marshal device webhook payload")
+					return
+				}
+				statusCode, success, errMsg, _ := DeliverWebhookPayload(url, "", event, raw)
+				if !success {
+					log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Str("error", errMsg).Msg("Device webhook delivery failed")
+				} else {
+					log.Info().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Msg("Device webhook delivered")
+				}
+			}()
+		}
+	}
 }
 
 // webhookWantsEvent: true jika event ada di JSON array events milik hook,
