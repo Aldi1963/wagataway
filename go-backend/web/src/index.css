@@ -4,12 +4,11 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * DESIGN SYSTEM: Monochrome (Vercel/Linear inspired)
- * - No gradients, ever
- * - Black & white with gray scale
- * - Solid colors, sharp borders
+ * DESIGN SYSTEM: Navy brand (#243370), no gradients
+ * - Light mode: white surfaces, navy primary actions
+ * - Dark mode: deep navy surfaces
+ * - Pill buttons with soft tints (MPWA-style): navy / green / amber / red
  * - Clean typography (Inter)
- * - Generous whitespace
  */
 
 @theme inline {
@@ -54,8 +53,8 @@
   --input-color: #e5e5e5;
   --ring-color: #0a0a0a;
 
-  --primary-color: #0a0a0a;
-  --primary-fg: #fafafa;
+  --primary-color: #243370;
+  --primary-fg: #ffffff;
   --secondary-color: #f5f5f5;
   --secondary-fg: #0a0a0a;
   --muted-color: #f5f5f5;
@@ -71,31 +70,31 @@
   --sidebar-border-color: #262626;
 }
 
-/* ── DARK MODE ──────────────────────────────────────────────────────────────── */
+/* ── DARK MODE: navy ────────────────────────────────────────────────────────── */
 .dark {
-  --bg: #0a0a0a;
-  --fg: #fafafa;
-  --card-bg: #141414;
-  --card-fg: #fafafa;
-  --border-color: #262626;
-  --input-color: #262626;
-  --ring-color: #fafafa;
+  --bg: #0a1030;
+  --fg: #eef1ff;
+  --card-bg: #121a42;
+  --card-fg: #eef1ff;
+  --border-color: #27326a;
+  --input-color: #27326a;
+  --ring-color: #8fa3f5;
 
-  --primary-color: #fafafa;
-  --primary-fg: #0a0a0a;
-  --secondary-color: #1a1a1a;
-  --secondary-fg: #fafafa;
-  --muted-color: #1a1a1a;
-  --muted-fg: #a3a3a3;
-  --accent-color: #1a1a1a;
-  --accent-fg: #fafafa;
-  --destructive-color: #ef4444;
+  --primary-color: #4c63d2;
+  --primary-fg: #ffffff;
+  --secondary-color: #1a2350;
+  --secondary-fg: #eef1ff;
+  --muted-color: #1a2350;
+  --muted-fg: #9aa5d6;
+  --accent-color: #1a2350;
+  --accent-fg: #eef1ff;
+  --destructive-color: #f87171;
   --destructive-fg: #ffffff;
-  --success-color: #22c55e;
+  --success-color: #4ade80;
 
-  --sidebar-color: #0a0a0a;
-  --sidebar-fg: #fafafa;
-  --sidebar-border-color: #262626;
+  --sidebar-color: #080d28;
+  --sidebar-fg: #eef1ff;
+  --sidebar-border-color: #232c5e;
 }
 
 @layer base {

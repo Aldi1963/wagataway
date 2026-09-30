@@ -440,11 +440,11 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
         )}
         <div className="flex flex-wrap gap-2">
           <SyncWAButton kind="contacts" onDone={() => load(search)} />
-          <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5">
+          <Button variant="success" onClick={() => setShowImport(true)} className="gap-1.5">
             <Upload className="w-4 h-4" />
             Import
           </Button>
-          <Button variant="outline" onClick={exportAllCsv} className="gap-1.5">
+          <Button variant="warning" onClick={exportAllCsv} className="gap-1.5">
             <Download className="w-4 h-4" />
             Export
           </Button>
