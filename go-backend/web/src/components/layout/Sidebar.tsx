@@ -50,9 +50,15 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Urutan: Dashboard di atas (tanpa section), lalu grup sub-menu collapsible
+// Urutan: item langsung dulu, lalu grup sub-menu collapsible (hanya untuk grup berisi 2+ item)
 const topItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutGrid },
+  { label: "Jadwal", href: "/schedule", icon: Clock },
+  { label: "Otomatisasi", href: "/automation", icon: Bot },
+  { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
+  { label: "Kontak", href: "/contacts", icon: Users },
+  { label: "Developer", href: "/developer", icon: CodeXml },
+  { label: "Akun", href: "/settings", icon: Settings },
 ];
 
 const sections: NavSection[] = [
@@ -64,35 +70,11 @@ const sections: NavSection[] = [
     ],
   },
   {
-    label: "Jadwal",
-    items: [{ label: "Jadwal", href: "/schedule", icon: Clock }],
-  },
-  {
-    label: "Otomatisasi",
-    items: [{ label: "Otomatisasi", href: "/automation", icon: Bot }],
-  },
-  {
-    label: "Live Chat",
-    items: [{ label: "Live Chat", href: "/live-chat", icon: MessagesSquare }],
-  },
-  {
     label: "Laporan",
     items: [
       { label: "Laporan", href: "/reports", icon: BarChart3 },
       { label: "Links", href: "/links", icon: Link2 },
     ],
-  },
-  {
-    label: "Developer",
-    items: [{ label: "Developer", href: "/developer", icon: CodeXml }],
-  },
-  {
-    label: "Kontak",
-    items: [{ label: "Kontak", href: "/contacts", icon: Users }],
-  },
-  {
-    label: "Akun",
-    items: [{ label: "Akun", href: "/settings", icon: Settings }],
   },
 ];
 
@@ -285,6 +267,7 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
 
 export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
+  const { user } = useAuth();
   const search = useSearch();
   const [openSections, setOpenSections] = useState<string[]>(loadOpenSections);
   const [badges, setBadges] = useState<Record<string, number>>({});
@@ -536,6 +519,9 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
         ) : (
           <>
             {topItems.map(renderItem)}
+
+            {user?.role === "admin" &&
+              renderItem({ label: "Paket", href: "/admin?tab=paket", icon: Package })}
 
             {sections.map((section) => {
           if (collapsed) {
