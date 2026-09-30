@@ -227,11 +227,11 @@ function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
             const id = Number(e.target.value);
             setActiveDevice(devices.find((d) => d.id === id) ?? null);
           }}
-          className="flex h-10 w-full rounded-full border border-white/10 bg-white/5 pl-9 pr-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+          className="flex h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
         >
-          <option value="" className="bg-[#0a1030]">Select Device</option>
+          <option value="" className="bg-white dark:bg-[#0a1030]">Select Device</option>
           {devices.map((d) => (
-            <option key={d.id} value={d.id} className="bg-[#0a1030]">
+            <option key={d.id} value={d.id} className="bg-white dark:bg-[#0a1030]">
               {d.name}
               {d.phone ? ` (${d.phone})` : ""}
               {d.status !== "connected" ? ` — ${d.status}` : ""}
@@ -249,16 +249,16 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
   if (collapsed || !user) return null;
   const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
   return (
-    <div className="px-4 py-3 border-t border-white/10">
+    <div className="px-4 py-3 border-t border-slate-200 dark:border-white/10">
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-base font-bold text-white">
           {initial}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-white">
+          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">
             {user.name || user.email}
           </span>
-          <span className="block truncate text-xs text-slate-500 capitalize">
+          <span className="block truncate text-xs text-slate-400 dark:text-slate-500 capitalize">
             {user.plan || user.role || "Member"}
           </span>
         </span>
@@ -266,7 +266,7 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
           onClick={logout}
           aria-label="Keluar"
           title="Keluar"
-          className="p-2 rounded-full text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+          className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-white dark:hover:bg-white/10 transition-colors"
         >
           <LogOut className="w-4 h-4" />
         </button>
@@ -383,7 +383,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
           isActive
             ? "rounded-full bg-blue-600 text-white font-semibold shadow-[0_4px_14px_rgba(37,99,235,0.4)]"
-            : "rounded-full text-slate-400 hover:text-white hover:bg-white/5",
+            : "rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
           collapsed && "lg:justify-center lg:px-0"
         )}
         title={collapsed ? item.label : undefined}
@@ -415,7 +415,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
           isActive
             ? "rounded-full bg-blue-600 text-white font-semibold shadow-[0_4px_14px_rgba(37,99,235,0.4)]"
-            : "rounded-full text-slate-400 hover:text-white hover:bg-white/5",
+            : "rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
           collapsed && "lg:justify-center lg:px-0"
         )}
         title={collapsed ? item.label : undefined}
@@ -429,7 +429,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   return (
     <aside
       className={cn(
-        "flex h-screen h-dvh flex-col bg-[#0a1030] text-slate-200 border-r border-white/10",
+        "flex h-screen h-dvh flex-col border-r border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-[#0a1030] dark:text-slate-200",
         "fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
         "pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:pb-0",
@@ -443,7 +443,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           <Send className="w-5 h-5 text-white" />
         </span>
         <span className={cn("min-w-0", collapsed && "lg:hidden")}>
-          <span className="block text-[17px] font-bold tracking-tight text-white leading-tight">
+          <span className="block text-[17px] font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
             WaGataway
           </span>
           <span className="mt-0.5 inline-block rounded-full bg-green-500/15 px-2 py-px text-[10px] font-bold tracking-wider text-green-400">
@@ -454,7 +454,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           onClick={onClose}
           aria-label="Tutup menu"
           className={cn(
-            "ml-auto p-2 -mr-2 rounded-full text-slate-500 hover:text-white hover:bg-white/10 lg:hidden"
+            "ml-auto p-2 -mr-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-white dark:hover:bg-white/10 lg:hidden"
           )}
         >
           <X className="w-5 h-5" />
@@ -491,7 +491,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
                       e.stopPropagation();
                       toggleAdminSection(section.label);
                     }}
-                    className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+                    className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
                   >
                     <span>{section.label}</span>
                     <ChevronDown
@@ -513,7 +513,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
               <Link
                 href="/"
                 className={cn(
-                  "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors rounded-full text-slate-400 hover:text-white hover:bg-white/5",
+                  "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
                   collapsed && "lg:justify-center lg:px-0"
                 )}
                 title={collapsed ? "Kembali ke Dashboard" : undefined}
@@ -547,7 +547,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
                   e.stopPropagation();
                   toggleSection(section.label);
                 }}
-                className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
               >
                 <span>{section.label}</span>
                 <ChevronDown

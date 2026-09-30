@@ -34,7 +34,7 @@ type Subscription struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
-	Plan Plan `gorm:"foreignKey:PlanID" json:"-"`
+	Plan Plan `gorm:"foreignKey:PlanID" json:"Plan,omitempty"`
 }
 
 type Transaction struct {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -146,6 +147,39 @@ func clipkuDataOf(out map[string]any) *clipkuTxData {
 	}
 }
 
+// fetchQrisURL mengambil URL gambar QR QRIS dari halaman pembayaran Clipku Pay.
+// Halaman pay.php me-render QR via api.qrserver.com dengan payload EMV;
+// fungsi ini mengekstrak URL tersebut. Gagal → "" (fallback: tanpa QR).
+func fetchQrisURL(paymentURL string) string {
+	fetchURL := paymentURL
+	if strings.Contains(fetchURL, "?") {
+		fetchURL += "&select_method=QRIS-A"
+	} else {
+		fetchURL += "?select_method=QRIS-A"
+	}
+	req, err := http.NewRequest(http.MethodGet, fetchURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html")
+	client := &http.Client{Timeout: 25 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	html := string(raw)
+	// pola: https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=<EMV>
+	re := regexp.MustCompile(`https://api\.qrserver\.com/v1/create-qr-code/\?size=320x320(?:&amp;|&)margin=0(?:&amp;|&)data=([0-9A-Za-z%\+\._\-~]+)`)
+	m := re.FindStringSubmatch(html)
+	if len(m) < 2 {
+		return ""
+	}
+	return "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + m[1]
+}
+
 // createTransaction membuat transaksi pembayaran di Clipku Pay.
 func (k clipkuPay) createTransaction(orderID string, amount int64, customerName, customerEmail string) (*clipkuTxData, error) {
 	args := []string{
@@ -164,6 +198,10 @@ func (k clipkuPay) createTransaction(orderID string, amount int64, customerName,
 	data := clipkuDataOf(out)
 	if data == nil || data.OrderID == "" {
 		return nil, fmt.Errorf("clipkupay: respon transaksi kosong")
+	}
+	// Lengkapi QR QRIS bila API tidak memberikannya
+	if data.QrURL == "" && data.PaymentURL != "" {
+		data.QrURL = fetchQrisURL(data.PaymentURL)
 	}
 	return data, nil
 }
