@@ -62,7 +62,7 @@ function Modal({
 
 const emptyForm = { name: "", keyword: "", matchType: "contains", replyContent: "", deviceId: "" };
 
-export default function AutoReply() {
+export default function AutoReply({ embedded = false }: { embedded?: boolean }) {
   const [rules, setRules] = useState<Rule[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,10 +175,12 @@ export default function AutoReply() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Auto Reply</h2>
-          <p className="text-sm text-muted-foreground">Balas pesan otomatis berdasarkan keyword</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Auto Reply</h2>
+            <p className="text-sm text-muted-foreground">Balas pesan otomatis berdasarkan keyword</p>
+          </div>
+        )}
         <Button size="sm" className="gap-1.5" onClick={openAdd}>
           <Plus className="w-3.5 h-3.5" />
           Tambah Rule

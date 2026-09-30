@@ -73,7 +73,7 @@ function fmtNextRun(s?: string | null) {
   } catch { return "-"; }
 }
 
-export default function RecurringSchedules() {
+export default function RecurringSchedules({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<Recurring[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,10 +164,12 @@ export default function RecurringSchedules() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Jadwal Berulang</h1>
-          <p className="text-sm text-muted-foreground">Pesan otomatis yang terkirim berulang: harian, mingguan, atau bulanan.</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Jadwal Berulang</h1>
+            <p className="text-sm text-muted-foreground">Pesan otomatis yang terkirim berulang: harian, mingguan, atau bulanan.</p>
+          </div>
+        )}
         <Button size="sm" onClick={() => openModal()} className="gap-1.5">
           <Plus className="w-4 h-4" /> Tambah Jadwal
         </Button>

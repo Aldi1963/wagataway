@@ -47,7 +47,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
-export default function ChatLabels() {
+export default function ChatLabels({ embedded = false }: { embedded?: boolean }) {
   const [tab, setTab] = useState<"labels" | "assign">("labels");
   const [labels, setLabels] = useState<ChatLabel[]>([]);
   const [assigns, setAssigns] = useState<Assignment[]>([]);
@@ -136,7 +136,9 @@ export default function ChatLabels() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold text-foreground">Label & Assign Chat</h1>
+        {!embedded && (
+          <h1 className="text-xl font-bold text-foreground">Label & Assign Chat</h1>
+        )}
         <div className="flex flex-wrap gap-2">
           {tab === "labels" ? (
             <Button size="sm" onClick={() => openLabelModal()} className="gap-1.5">

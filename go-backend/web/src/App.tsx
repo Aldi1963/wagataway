@@ -17,27 +17,16 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Send = lazy(() => import("@/pages/Send"));
 const ScheduleHub = lazy(() => import("@/pages/ScheduleHub"));
 const ContactsHub = lazy(() => import("@/pages/ContactsHub"));
-const AutoReply = lazy(() => import("@/pages/AutoReply"));
-const Templates = lazy(() => import("@/pages/Templates"));
+const AutomationHub = lazy(() => import("@/pages/AutomationHub"));
+const ReportHub = lazy(() => import("@/pages/ReportHub"));
+const DeveloperHub = lazy(() => import("@/pages/DeveloperHub"));
+const LiveChatHub = lazy(() => import("@/pages/LiveChatHub"));
 const FileManager = lazy(() => import("@/pages/FileManager"));
-const Analytics = lazy(() => import("@/pages/Analytics"));
-const LiveChat = lazy(() => import("@/pages/LiveChat"));
 const Links = lazy(() => import("@/pages/Links"));
 const Admin = lazy(() => import("@/pages/Admin"));
-const Billing = lazy(() => import("@/pages/Billing"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
-const ChatLabels = lazy(() => import("@/pages/ChatLabels"));
-const CannedResponses = lazy(() => import("@/pages/CannedResponses"));
-const Reports = lazy(() => import("@/pages/Reports"));
-const RecurringSchedules = lazy(() => import("@/pages/RecurringSchedules"));
-const GroupRules = lazy(() => import("@/pages/GroupRules"));
-const Followups = lazy(() => import("@/pages/Followups"));
-const WebhookLogs = lazy(() => import("@/pages/WebhookLogs"));
-const ApiPlayground = lazy(() => import("@/pages/ApiPlayground"));
-const Team = lazy(() => import("@/pages/Team"));
-const Affiliate = lazy(() => import("@/pages/Affiliate"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Landing = lazy(() => import("@/pages/Landing"));
 
@@ -141,80 +130,89 @@ function AppRouter() {
         <Route path="/send">
           <ProtectedRoute><Send /></ProtectedRoute>
         </Route>
+        <Route path="/bulk">
+          <ProtectedRoute><Send /></ProtectedRoute>
+        </Route>
+        <Route path="/followups">
+          <ProtectedRoute><Send /></ProtectedRoute>
+        </Route>
+        <Route path="/templates">
+          <ProtectedRoute><Send /></ProtectedRoute>
+        </Route>
+        <Route path="/canned-responses">
+          <ProtectedRoute><Send /></ProtectedRoute>
+        </Route>
+        <Route path="/schedule">
+          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
+        </Route>
+        <Route path="/drip">
+          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
+        </Route>
+        <Route path="/recurring">
+          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
+        </Route>
+        <Route path="/automation">
+          <ProtectedRoute><AutomationHub /></ProtectedRoute>
+        </Route>
+        <Route path="/auto-reply">
+          <ProtectedRoute><AutomationHub /></ProtectedRoute>
+        </Route>
+        <Route path="/ai-reply">
+          <ProtectedRoute><AutomationHub /></ProtectedRoute>
+        </Route>
+        <Route path="/group-rules">
+          <ProtectedRoute><AutomationHub /></ProtectedRoute>
+        </Route>
+        <Route path="/live-chat">
+          <ProtectedRoute><LiveChatHub /></ProtectedRoute>
+        </Route>
+        <Route path="/chat-labels">
+          <ProtectedRoute><LiveChatHub /></ProtectedRoute>
+        </Route>
+        <Route path="/reports">
+          <ProtectedRoute><ReportHub /></ProtectedRoute>
+        </Route>
+        <Route path="/analytics">
+          <ProtectedRoute><ReportHub /></ProtectedRoute>
+        </Route>
+        <Route path="/developer">
+          <ProtectedRoute><DeveloperHub /></ProtectedRoute>
+        </Route>
+        <Route path="/api-playground">
+          <ProtectedRoute><DeveloperHub /></ProtectedRoute>
+        </Route>
+        <Route path="/webhook-logs">
+          <ProtectedRoute><DeveloperHub /></ProtectedRoute>
+        </Route>
+        <Route path="/team">
+          <Redirect to="/settings?tab=tim" />
+        </Route>
+        <Route path="/affiliate">
+          <Redirect to="/settings?tab=afiliasi" />
+        </Route>
+        <Route path="/billing">
+          <Redirect to="/settings?tab=langganan" />
+        </Route>
         <Route path="/contacts">
           <ProtectedRoute><ContactsHub /></ProtectedRoute>
         </Route>
         <Route path="/contact-groups">
           <ProtectedRoute><ContactsHub /></ProtectedRoute>
         </Route>
-        <Route path="/bulk">
-          <ProtectedRoute><Send /></ProtectedRoute>
-        </Route>
-        <Route path="/schedule">
-          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
-        </Route>
-        <Route path="/auto-reply">
-          <ProtectedRoute><AutoReply /></ProtectedRoute>
-        </Route>
-        <Route path="/templates">
-          <ProtectedRoute><Templates /></ProtectedRoute>
+        <Route path="/blacklist">
+          <ProtectedRoute><ContactsHub /></ProtectedRoute>
         </Route>
         <Route path="/files">
           <ProtectedRoute><FileManager /></ProtectedRoute>
         </Route>
-        <Route path="/analytics">
-          <ProtectedRoute><Analytics /></ProtectedRoute>
-        </Route>
-        <Route path="/live-chat">
-          <ProtectedRoute><LiveChat /></ProtectedRoute>
-        </Route>
-        <Route path="/drip">
-          <ProtectedRoute><ScheduleHub /></ProtectedRoute>
-        </Route>
         <Route path="/links">
           <ProtectedRoute><Links /></ProtectedRoute>
-        </Route>
-        <Route path="/blacklist">
-          <ProtectedRoute><ContactsHub /></ProtectedRoute>
-        </Route>
-        <Route path="/billing">
-          <ProtectedRoute><Billing /></ProtectedRoute>
         </Route>
         <Route path="/api-docs">
           <ApiDocs />
         </Route>
         <Route path="/notifications">
           <ProtectedRoute><Notifications /></ProtectedRoute>
-        </Route>
-        <Route path="/chat-labels">
-          <ProtectedRoute><ChatLabels /></ProtectedRoute>
-        </Route>
-        <Route path="/canned-responses">
-          <ProtectedRoute><CannedResponses /></ProtectedRoute>
-        </Route>
-        <Route path="/reports">
-          <ProtectedRoute><Reports /></ProtectedRoute>
-        </Route>
-        <Route path="/recurring">
-          <ProtectedRoute><RecurringSchedules /></ProtectedRoute>
-        </Route>
-        <Route path="/group-rules">
-          <ProtectedRoute><GroupRules /></ProtectedRoute>
-        </Route>
-        <Route path="/followups">
-          <ProtectedRoute><Followups /></ProtectedRoute>
-        </Route>
-        <Route path="/webhook-logs">
-          <ProtectedRoute><WebhookLogs /></ProtectedRoute>
-        </Route>
-        <Route path="/api-playground">
-          <ProtectedRoute><ApiPlayground /></ProtectedRoute>
-        </Route>
-        <Route path="/team">
-          <ProtectedRoute><Team /></ProtectedRoute>
-        </Route>
-        <Route path="/affiliate">
-          <ProtectedRoute><Affiliate /></ProtectedRoute>
         </Route>
         <Route path="/profile">
           <Redirect to="/settings" />

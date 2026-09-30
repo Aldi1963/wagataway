@@ -663,7 +663,7 @@ function EndpointRow({
 
 /* ── Isi dokumentasi ────────────────────────────────── */
 
-function DocsContent({ isPublic }: { isPublic: boolean }) {
+function DocsContent({ isPublic, embedded = false }: { isPublic: boolean; embedded?: boolean }) {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const groups = useMemo(() => buildGroups(baseUrl), [baseUrl]);
   const [tryKey, setTryKey] = useState(() => {
@@ -685,14 +685,16 @@ function DocsContent({ isPublic }: { isPublic: boolean }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <FlaskConical className="w-5 h-5" /> Dokumentasi API
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Integrasikan WaGataway ke aplikasi Anda lewat REST API. Setiap endpoint bisa dicoba langsung dari halaman ini.
-        </p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <FlaskConical className="w-5 h-5" /> Dokumentasi API
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Integrasikan WaGataway ke aplikasi Anda lewat REST API. Setiap endpoint bisa dicoba langsung dari halaman ini.
+          </p>
+        </div>
+      )}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -823,7 +825,7 @@ function PublicHeader() {
   );
 }
 
-export default function ApiDocs() {
+export default function ApiDocs({ embedded = false }: { embedded?: boolean }) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -835,6 +837,9 @@ export default function ApiDocs() {
   }
 
   if (user) {
+    if (embedded) {
+      return <DocsContent isPublic={false} embedded />;
+    }
     return (
       <DashboardLayout>
         <DocsContent isPublic={false} />

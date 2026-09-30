@@ -8,13 +8,10 @@ import {
   LayoutGrid,
   Send,
   Users,
-  MessageSquare,
   MessagesSquare,
   Clock,
   Link2,
   BarChart3,
-  CreditCard,
-  LayoutTemplate,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -32,16 +29,7 @@ import {
   HeartPulse,
   BellRing,
   ArrowLeft,
-  Tags,
-  Zap,
-  FileBarChart,
-  Repeat,
-  ShieldCheck,
-  Timer,
-  Webhook,
-  FlaskConical,
-  UserPlus,
-  Gift,
+  Bot,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -72,46 +60,39 @@ const sections: NavSection[] = [
     label: "Pesan",
     items: [
       { label: "Kirim Pesan", href: "/send", icon: Send },
-      { label: "Jadwal", href: "/schedule", icon: Clock },
-      { label: "Jadwal Berulang", href: "/recurring", icon: Repeat },
-      { label: "Follow-up", href: "/followups", icon: Timer },
-      { label: "Templates", href: "/templates", icon: LayoutTemplate },
-      { label: "Canned Responses", href: "/canned-responses", icon: Zap },
-      { label: "Auto Reply", href: "/auto-reply", icon: MessageSquare },
-      { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
-      { label: "Label & Assign", href: "/chat-labels", icon: Tags },
-      { label: "Aturan Grup", href: "/group-rules", icon: ShieldCheck },
       { label: "File Manager", href: "/files", icon: FolderOpen },
     ],
+  },
+  {
+    label: "Jadwal",
+    items: [{ label: "Jadwal", href: "/schedule", icon: Clock }],
+  },
+  {
+    label: "Otomatisasi",
+    items: [{ label: "Otomatisasi", href: "/automation", icon: Bot }],
+  },
+  {
+    label: "Live Chat",
+    items: [{ label: "Live Chat", href: "/live-chat", icon: MessagesSquare }],
+  },
+  {
+    label: "Laporan",
+    items: [
+      { label: "Laporan", href: "/reports", icon: BarChart3 },
+      { label: "Links", href: "/links", icon: Link2 },
+    ],
+  },
+  {
+    label: "Developer",
+    items: [{ label: "Developer", href: "/developer", icon: CodeXml }],
   },
   {
     label: "Kontak",
     items: [{ label: "Kontak", href: "/contacts", icon: Users }],
   },
   {
-    label: "Data",
-    items: [
-      { label: "Analytics", href: "/analytics", icon: BarChart3 },
-      { label: "Laporan Broadcast", href: "/reports", icon: FileBarChart },
-      { label: "Links", href: "/links", icon: Link2 },
-    ],
-  },
-  {
-    label: "Pengembang",
-    items: [
-      { label: "API Developer", href: "/api-docs", icon: CodeXml },
-      { label: "API Playground", href: "/api-playground", icon: FlaskConical },
-      { label: "Webhook Logs", href: "/webhook-logs", icon: Webhook },
-    ],
-  },
-  {
     label: "Akun",
-    items: [
-      { label: "Langganan", href: "/billing", icon: CreditCard },
-      { label: "Tim", href: "/team", icon: UserPlus },
-      { label: "Afiliasi", href: "/affiliate", icon: Gift },
-      { label: "Setting", href: "/settings", icon: Settings },
-    ],
+    items: [{ label: "Akun", href: "/settings", icon: Settings }],
   },
 ];
 
@@ -176,9 +157,14 @@ function loadOpenAdminSections(): string[] {
 
 // URL lama tetap valid dan menandai menu gabungan sebagai aktif
 const ACTIVE_ALIASES: Record<string, string[]> = {
-  "/send": ["/send", "/bulk"],
+  "/send": ["/send", "/bulk", "/followups", "/templates", "/canned-responses"],
   "/contacts": ["/contacts", "/contact-groups", "/blacklist"],
-  "/schedule": ["/schedule", "/drip"],
+  "/schedule": ["/schedule", "/drip", "/recurring"],
+  "/automation": ["/automation", "/auto-reply", "/ai-reply", "/group-rules"],
+  "/live-chat": ["/live-chat", "/chat-labels"],
+  "/reports": ["/reports", "/analytics"],
+  "/developer": ["/developer", "/api-docs", "/api-playground", "/webhook-logs"],
+  "/settings": ["/settings", "/team", "/affiliate", "/billing", "/profile"],
 };
 
 function isItemActive(location: string, href: string) {

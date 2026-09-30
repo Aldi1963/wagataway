@@ -30,7 +30,7 @@ function statusBadge(status: string) {
   return <Badge variant="secondary">{status}</Badge>;
 }
 
-export default function Reports() {
+export default function Reports({ embedded = false }: { embedded?: boolean }) {
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const [selected, setSelected] = useState("");
   const [details, setDetails] = useState<DetailRow[]>([]);
@@ -79,7 +79,9 @@ export default function Reports() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-foreground">Laporan Broadcast</h1>
+      {!embedded && (
+        <h1 className="text-xl font-bold text-foreground">Laporan Broadcast</h1>
+      )}
 
       {loading ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>

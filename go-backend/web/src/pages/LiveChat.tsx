@@ -40,7 +40,7 @@ interface ChatMsg {
   createdAt: string;
 }
 
-export default function LiveChat() {
+export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activePhone, setActivePhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);

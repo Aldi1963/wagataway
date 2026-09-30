@@ -34,7 +34,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-export default function Team() {
+export default function Team({ embedded = false }: { embedded?: boolean }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
@@ -100,10 +100,12 @@ export default function Team() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Tim</h1>
-          <p className="text-sm text-muted-foreground">Kelola anggota tim / CS yang bisa akses akun ini.</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Tim</h1>
+            <p className="text-sm text-muted-foreground">Kelola anggota tim / CS yang bisa akses akun ini.</p>
+          </div>
+        )}
         <Button size="sm" onClick={() => { setShowInvite(true); setNewPassword(null); }} className="gap-1.5">
           <Plus className="w-4 h-4" /> Undang Anggota
         </Button>

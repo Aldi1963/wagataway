@@ -93,7 +93,7 @@ function renderPreview(
   return parts;
 }
 
-export default function Templates() {
+export default function Templates({ embedded = false }: { embedded?: boolean }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -219,12 +219,14 @@ export default function Templates() {
 
   return (
     <div className="space-y-6"> <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Template Pesan</h2>
-          <p className="text-sm text-muted-foreground">
-            Template reusable dengan variabel
-          </p>
-        </div>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Template Pesan</h2>
+            <p className="text-sm text-muted-foreground">
+              Template reusable dengan variabel
+            </p>
+          </div>
+        )}
         <Button size="sm" className="gap-1.5" onClick={() => setShowAdd(true)}>
           <Plus className="w-3.5 h-3.5" />
           Tambah Template

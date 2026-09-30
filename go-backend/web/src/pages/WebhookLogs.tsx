@@ -30,7 +30,7 @@ function fmtTime(s: string) {
   } catch { return s; }
 }
 
-export default function WebhookLogs() {
+export default function WebhookLogs({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<Delivery[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,10 +77,12 @@ export default function WebhookLogs() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Webhook Logs</h1>
-          <p className="text-sm text-muted-foreground">Riwayat pengiriman webhook per device.</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Webhook Logs</h1>
+            <p className="text-sm text-muted-foreground">Riwayat pengiriman webhook per device.</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Dropdown
             value={filter}

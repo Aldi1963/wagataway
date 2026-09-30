@@ -44,7 +44,7 @@ function rupiah(n: number) {
   return `Rp ${n.toLocaleString("id-ID")}`;
 }
 
-export default function Billing() {
+export default function Billing({ embedded = false }: { embedded?: boolean }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,10 +143,12 @@ export default function Billing() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Langganan</h2>
-        <p className="text-sm text-muted-foreground">Pilih paket yang sesuai kebutuhan</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Langganan</h2>
+          <p className="text-sm text-muted-foreground">Pilih paket yang sesuai kebutuhan</p>
+        </div>
+      )}
 
       {/* Current Plan */}
       <Card>

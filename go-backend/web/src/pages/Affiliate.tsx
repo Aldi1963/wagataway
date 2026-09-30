@@ -30,7 +30,7 @@ function fmtRp(n: number) {
   return "Rp" + n.toLocaleString("id-ID");
 }
 
-export default function Affiliate() {
+export default function Affiliate({ embedded = false }: { embedded?: boolean }) {
   const [info, setInfo] = useState<Affiliate | null>(null);
   const [stats, setStats] = useState<AffiliateStats>({ pending: 0, paid: 0, referrals: 0 });
   const [earnings, setEarnings] = useState<Earning[]>([]);
@@ -82,10 +82,12 @@ export default function Affiliate() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Afiliasi</h1>
-        <p className="text-sm text-muted-foreground">Ajak orang berlangganan dan dapatkan komisi.</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-xl font-bold text-foreground">Afiliasi</h1>
+          <p className="text-sm text-muted-foreground">Ajak orang berlangganan dan dapatkan komisi.</p>
+        </div>
+      )}
 
       {loading ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>

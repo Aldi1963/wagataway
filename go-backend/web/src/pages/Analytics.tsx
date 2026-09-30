@@ -60,7 +60,7 @@ function dayLabel(dateStr: string, short: boolean): string {
     : d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
-export default function Analytics() {
+export default function Analytics({ embedded = false }: { embedded?: boolean }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [stats, setStats] = useState<DayStat[]>([]);
   const [days, setDays] = useState<7 | 30>(7);
@@ -102,12 +102,14 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Analytics</h2>
-        <p className="text-sm text-muted-foreground">
-          Ringkasan pengiriman pesan {days} hari terakhir
-        </p>
-      </div>
+      {!embedded && (
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Analytics</h2>
+          <p className="text-sm text-muted-foreground">
+            Ringkasan pengiriman pesan {days} hari terakhir
+          </p>
+        </div>
+      )}
 
       {error && (
         <Card className="border-destructive/50">

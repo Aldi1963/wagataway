@@ -50,7 +50,7 @@ const PRESETS: Preset[] = [
 const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
-export default function ApiPlayground() {
+export default function ApiPlayground({ embedded = false }: { embedded?: boolean }) {
   const [method, setMethod] = useState<"GET" | "POST">("POST");
   const [path, setPath] = useState("/messages/send");
   const [body, setBody] = useState(PRESETS[0].body);
@@ -107,10 +107,12 @@ export default function ApiPlayground() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">API Playground</h1>
-        <p className="text-sm text-muted-foreground">Coba endpoint API langsung dari dashboard.</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-xl font-bold text-foreground">API Playground</h1>
+          <p className="text-sm text-muted-foreground">Coba endpoint API langsung dari dashboard.</p>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
