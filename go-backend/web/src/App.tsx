@@ -9,6 +9,8 @@ import { Toaster } from "sonner";
 // ── Lazy Pages ────────────────────────────────────────────────────────────────
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Send = lazy(() => import("@/pages/Send"));
 const ScheduleHub = lazy(() => import("@/pages/ScheduleHub"));
@@ -110,6 +112,12 @@ function AppRouter() {
         </Route>
         <Route path="/register">
           <GuestRoute><Register /></GuestRoute>
+        </Route>
+        <Route path="/forgot-password">
+          <GuestRoute><ForgotPassword /></GuestRoute>
+        </Route>
+        <Route path="/reset-password">
+          <GuestRoute><ResetPassword /></GuestRoute>
         </Route>
         <Route path="/">
           <HomeRoute />

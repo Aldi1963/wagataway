@@ -33,6 +33,8 @@ func registerAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 		auth.POST("/google", handleGoogleLogin(cfg, db))
 		auth.GET("/me", middleware.AuthRequired(cfg), handleGetMe(db))
 		auth.POST("/logout", handleLogout())
+		auth.POST("/forgot-password", handleForgotPassword(cfg, db))
+		auth.POST("/reset-password", handleResetPassword(cfg, db))
 	}
 }
 

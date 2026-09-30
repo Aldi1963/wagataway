@@ -59,6 +59,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ChatConversation{},
 		&models.MessageTemplate{},
 		&models.EmailOtp{},
+		&models.PasswordResetToken{},
 		&models.WalletTransaction{},
 		&models.PaymentWebhookLog{},
 		&models.CannedResponse{},
