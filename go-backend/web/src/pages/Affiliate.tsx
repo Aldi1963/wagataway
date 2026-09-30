@@ -134,26 +134,26 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <Card>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <span className="w-11 h-11 rounded-2xl bg-[#243370] flex items-center justify-center shrink-0">
+                <CardContent className="p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+                  <span className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#243370] flex items-center justify-center shrink-0">
                     <Wallet className="w-5 h-5 text-white" />
                   </span>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Komisi</p>
-                    <p className="text-xl font-bold text-foreground">{fmtRp(stats.pending + stats.paid)}</p>
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-[11px] uppercase tracking-wide text-muted-foreground truncate">Total Komisi</p>
+                    <p className="text-lg sm:text-xl font-bold text-foreground truncate">{fmtRp(stats.pending + stats.paid)}</p>
                   </div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <span className="w-11 h-11 rounded-2xl bg-[#243370] flex items-center justify-center shrink-0">
+                <CardContent className="p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+                  <span className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#243370] flex items-center justify-center shrink-0">
                     <Users className="w-5 h-5 text-white" />
                   </span>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Referral</p>
-                    <p className="text-xl font-bold text-foreground">{stats.referrals}</p>
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-[11px] uppercase tracking-wide text-muted-foreground truncate">Referral</p>
+                    <p className="text-lg sm:text-xl font-bold text-foreground truncate">{stats.referrals}</p>
                   </div>
                 </CardContent>
               </Card>
