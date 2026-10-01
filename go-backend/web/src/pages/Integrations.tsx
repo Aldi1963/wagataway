@@ -8,6 +8,7 @@ import {
   Trash2,
   Pencil,
   ScrollText,
+  Search,
   X,
   Check,
   BookOpen,
@@ -23,10 +24,43 @@ import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import {
   PLATFORMS,
   getPlatform,
+  platformLogoUrl,
   INBOX_PLACEHOLDER,
   type PlatformGuide,
 } from "@/lib/integration-platforms";
 import { cn } from "@/lib/utils";
+
+// ── Ikon platform: logo asli, fallback ke tile inisial ───────────────────
+
+function PlatformIcon({ slug, size = "w-9 h-9" }: { slug: string; size?: string }) {
+  const p = getPlatform(slug);
+  const url = platformLogoUrl(p);
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={p?.name ?? slug}
+        onError={() => setFailed(true)}
+        className={cn(
+          size,
+          "rounded-lg object-contain bg-white border border-border p-1 shrink-0"
+        )}
+      />
+    );
+  }
+  return (
+    <span
+      className={cn(
+        size,
+        "rounded-lg text-white text-xs font-bold flex items-center justify-center shrink-0",
+        p?.tile ?? "bg-[#243370]"
+      )}
+    >
+      {p?.initials ?? slug.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
 
 // ── Tipe ────────────────────────────────────────────────────────────────
 
@@ -208,6 +242,12 @@ export default function Integrations({ embedded = false }: { embedded?: boolean 
   const [created, setCreated] = useState<CreatedResult | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Integration | null>(null);
   const [confirmRegen, setConfirmRegen] = useState<Integration | null>(null);
+  const [catalogQuery, setCatalogQuery] = useState("");
+
+  const connectedSlugs = new Set(items.filter((it) => it.isActive).map((it) => it.platform));
+  const filteredPlatforms = PLATFORMS.filter((p) =>
+    p.name.toLowerCase().includes(catalogQuery.trim().toLowerCase())
+  );
 
   const load = async () => {
     setLoading(true);
@@ -323,20 +363,12 @@ export default function Integrations({ embedded = false }: { embedded?: boolean 
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((it) => {
-              const p = getPlatform(it.platform);
               return (
                 <Card key={it.id} className={!it.isActive ? "opacity-70" : ""}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className={cn(
-                            "shrink-0 w-9 h-9 rounded-lg text-white text-xs font-bold flex items-center justify-center",
-                            p?.tile ?? "bg-[#243370]"
-                          )}
-                        >
-                          {p?.initials ?? it.platform.slice(0, 2).toUpperCase()}
-                        </span>
+                        <PlatformIcon slug={it.platform} />
                         <div className="min-w-0">
                           <p className="font-semibold text-sm truncate">{it.name}</p>
                           <p className="text-xs text-muted-foreground truncate">
@@ -399,25 +431,41 @@ export default function Integrations({ embedded = false }: { embedded?: boolean 
 
       {/* ── Katalog platform ── */}
       <section>
-        <h2 className="text-sm font-semibold mb-1">Katalog Platform</h2>
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <h2 className="text-sm font-semibold">Katalog Platform</h2>
+          <div className="relative w-44 sm:w-56">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              value={catalogQuery}
+              onChange={(e) => setCatalogQuery(e.target.value)}
+              placeholder="Cari platform…"
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground mb-3">
           Pilih platform → Hubungkan → salin URL inbox → ikuti panduan setup. Semua lewat webhook generik,
           tanpa klaim integrasi native palsu.
         </p>
+        {filteredPlatforms.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-6 text-center">
+            Tidak ada platform yang cocok dengan “{catalogQuery}”.
+          </p>
+        ) : (
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-          {PLATFORMS.map((p) => (
+          {filteredPlatforms.map((p) => {
+            const connected = connectedSlugs.has(p.slug);
+            return (
             <Card key={p.slug} className="hover:border-[#243370]/50 transition-colors">
               <CardContent className="p-4 flex flex-col gap-2 h-full">
                 <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "w-9 h-9 rounded-lg text-white text-xs font-bold flex items-center justify-center shrink-0",
-                      p.tile
-                    )}
-                  >
-                    {p.initials}
-                  </span>
-                  <p className="font-semibold text-sm leading-tight">{p.name}</p>
+                  <PlatformIcon slug={p.slug} />
+                  <p className="font-semibold text-sm leading-tight flex-1">{p.name}</p>
+                  {connected && (
+                    <Badge variant="success" className="text-[10px] shrink-0">
+                      <Check className="w-3 h-3 mr-0.5" /> Terhubung
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground flex-1">{p.desc}</p>
                 <div className="flex gap-1.5">
@@ -436,8 +484,10 @@ export default function Integrations({ embedded = false }: { embedded?: boolean 
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
+        )}
       </section>
 
       {/* ── Modal buat ── */}

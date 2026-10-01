@@ -11,10 +11,12 @@ export interface PlatformGuide {
   slug: string;
   name: string;
   desc: string;
-  /** Inisial untuk tile kartu (2 huruf). */
+  /** Inisial untuk tile kartu (2 huruf) — fallback bila logo gagal dimuat. */
   initials: string;
-  /** Warna tile kartu (kelas Tailwind bg). */
+  /** Warna tile kartu (kelas Tailwind bg) — fallback. */
   tile: string;
+  /** Nama file logo asli di ./integration-logos/ (svg/png). */
+  logo?: string;
   steps: string[];
   payloadExample: string;
   codes?: PlatformCodeBlock[];
@@ -30,6 +32,7 @@ const genericPayload = `{
 export const PLATFORMS: PlatformGuide[] = [
   {
     slug: "google_forms",
+    logo: "googleforms.svg",
     name: "Google Forms",
     desc: "Kirim WA otomatis setiap ada responden mengisi form.",
     initials: "GF",
@@ -73,6 +76,7 @@ export const PLATFORMS: PlatformGuide[] = [
   },
   {
     slug: "google_sheets",
+    logo: "googlesheets.svg",
     name: "Google Sheets",
     desc: "Kirim WA saat baris baru ditambahkan / sel berubah.",
     initials: "GS",
@@ -111,6 +115,7 @@ export const PLATFORMS: PlatformGuide[] = [
   },
   {
     slug: "woocommerce",
+    logo: "woocommerce.svg",
     name: "WooCommerce",
     desc: "Notifikasi WA otomatis untuk order baru / status berubah.",
     initials: "WC",
@@ -134,6 +139,7 @@ export const PLATFORMS: PlatformGuide[] = [
   },
   {
     slug: "wordpress",
+    logo: "wordpress.svg",
     name: "WordPress",
     desc: "Notifikasi user baru, komentar baru, atau event custom.",
     initials: "WP",
@@ -183,6 +189,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "shopify",
+    logo: "shopify.svg",
     name: "Shopify",
     desc: "Notifikasi order baru & pembayaran via Shopify webhooks.",
     initials: "SH",
@@ -204,6 +211,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "typeform",
+    logo: "typeform.svg",
     name: "Typeform",
     desc: "Kirim WA setiap ada respons Typeform baru.",
     initials: "TF",
@@ -222,6 +230,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "tally",
+    logo: "tally.png",
     name: "Tally",
     desc: "Webhook Tally → notifikasi WA instan.",
     initials: "TA",
@@ -239,6 +248,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "jotform",
+    logo: "jotform.png",
     name: "Jotform",
     desc: "Kirim WA untuk setiap submission Jotform.",
     initials: "JF",
@@ -256,6 +266,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "zapier",
+    logo: "zapier.svg",
     name: "Zapier",
     desc: "Hubungkan 7000+ aplikasi Zapier ke WA via Webhooks.",
     initials: "ZA",
@@ -271,6 +282,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "make",
+    logo: "make.svg",
     name: "Make (Integromat)",
     desc: "Skenario Make → modul HTTP POST ke inbox.",
     initials: "MK",
@@ -286,6 +298,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "pabbly",
+    logo: "pabbly.png",
     name: "Pabbly Connect",
     desc: "Workflow Pabbly → API/Webhook POST.",
     initials: "PB",
@@ -300,6 +313,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "ifttt",
+    logo: "ifttt.svg",
     name: "IFTTT",
     desc: "Applet IFTTT → Webhooks POST ke WaGataway.",
     initials: "IF",
@@ -317,6 +331,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "stripe",
+    logo: "stripe.svg",
     name: "Stripe",
     desc: "Notifikasi pembayaran Stripe berhasil/gagal.",
     initials: "ST",
@@ -336,6 +351,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "midtrans",
+    logo: "midtrans.png",
     name: "Midtrans",
     desc: "Notifikasi status transaksi Midtrans.",
     initials: "MT",
@@ -355,6 +371,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "xendit",
+    logo: "xendit.png",
     name: "Xendit",
     desc: "Callback invoice & payment Xendit → WA.",
     initials: "XE",
@@ -374,6 +391,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "telegram",
+    logo: "telegram.svg",
     name: "Telegram",
     desc: "Teruskan pesan/event bot Telegram ke WA.",
     initials: "TG",
@@ -391,6 +409,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "discord",
+    logo: "discord.svg",
     name: "Discord",
     desc: "Webhook Discord → notifikasi WA.",
     initials: "DC",
@@ -404,6 +423,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "slack",
+    logo: "slack.svg",
     name: "Slack",
     desc: "Event Slack (Workflow Builder) → WA.",
     initials: "SL",
@@ -417,6 +437,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "github",
+    logo: "github.svg",
     name: "GitHub",
     desc: "Notifikasi push, release, issue, PR ke WA.",
     initials: "GH",
@@ -436,6 +457,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "trello",
+    logo: "trello.svg",
     name: "Trello",
     desc: "Notifikasi kartu Trello dibuat/dipindah.",
     initials: "TR",
@@ -454,6 +476,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "notion",
+    logo: "notion.svg",
     name: "Notion",
     desc: "Automations Notion → kirim WA.",
     initials: "NO",
@@ -467,6 +490,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "airtable",
+    logo: "airtable.svg",
     name: "Airtable",
     desc: "Automation Airtable → WA otomatis.",
     initials: "AT",
@@ -480,6 +504,7 @@ add_action('comment_post', function($comment_id) {
   },
   {
     slug: "hubspot",
+    logo: "hubspot.svg",
     name: "HubSpot",
     desc: "Workflow HubSpot → notifikasi WA untuk deal/kontak.",
     initials: "HS",
@@ -500,4 +525,14 @@ add_action('comment_post', function($comment_id) {
 
 export function getPlatform(slug: string): PlatformGuide | undefined {
   return PLATFORMS.find((p) => p.slug === slug);
+}
+
+// Logo asli tiap platform (di-vendor ke repo agar tidak tergantung CDN).
+const logoModules = import.meta.glob<{ default: string }>("./integration-logos/*.{svg,png}", {
+  eager: true,
+});
+
+export function platformLogoUrl(p: PlatformGuide | undefined): string | undefined {
+  if (!p?.logo) return undefined;
+  return logoModules[`./integration-logos/${p.logo}`]?.default;
 }
