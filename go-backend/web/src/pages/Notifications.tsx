@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Bell, BellOff, CheckCheck, Trash2, RefreshCw, Smartphone, Send, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { apiGet, apiPut, apiDelete } from "@/lib/api";
+import { useLang, timeAgo } from "@/lib/i18n";
 import { toast } from "sonner";
 
 interface Notification {
@@ -12,18 +13,6 @@ interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "baru saja";
-  if (mins < 60) return mins + " menit lalu";
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return hours + " jam lalu";
-  const days = Math.floor(hours / 24);
-  if (days < 30) return days + " hari lalu";
-  return new Date(iso).toLocaleDateString("id-ID");
 }
 
 const typeIcon: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -36,6 +25,7 @@ const typeIcon: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 export default function Notifications() {
+  const { t, lang } = useLang();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +35,7 @@ export default function Notifications() {
     setError(null);
     apiGet<{ notifications: Notification[] }>("/notifications")
       .then((d) => setNotifications(d.notifications || []))
-      .catch((e) => setError(e.message || "Gagal memuat notifikasi"))
+      .catch((e) => setError(e.message || t("notifications.loadFail")))
       .finally(() => setLoading(false));
   };
 
@@ -53,11 +43,11 @@ export default function Notifications() {
 
   const readAll = async () => {
     try {
-      await apiPost("/notifications/read-all");
+      await apiPut("/notifications/read-all");
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      toast.success("Semua notifikasi ditandai dibaca");
+      toast.success(t("notifications.markedRead"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menandai dibaca");
+      toast.error(e instanceof Error ? e.message : t("notifications.markReadFail"));
     }
   };
 
@@ -65,9 +55,9 @@ export default function Notifications() {
     try {
       await apiDelete(`/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-      toast.success("Notifikasi dihapus");
+      toast.success(t("notifications.deleted"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus");
+      toast.error(e instanceof Error ? e.message : t("notifications.deleteFail"));
     }
   };
 
@@ -77,15 +67,15 @@ export default function Notifications() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Notifikasi</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("notifications.title")}</h2>
           <p className="text-sm text-muted-foreground">
-            {unreadCount > 0 ? `${unreadCount} belum dibaca` : "Semua sudah dibaca"}
+            {unreadCount > 0 ? `${unreadCount} ${t("notifications.unread")}` : t("notifications.allRead")}
           </p>
         </div>
         {unreadCount > 0 && (
           <Button size="sm" variant="outline" className="gap-1.5" onClick={readAll}>
             <CheckCheck className="w-3.5 h-3.5" />
-            Tandai semua dibaca
+            {t("notifications.markAllRead")}
           </Button>
         )}
       </div>
@@ -101,7 +91,7 @@ export default function Notifications() {
           <CardContent className="p-10 text-center space-y-3">
             <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+              <RefreshCw className="w-3.5 h-3.5" /> {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -109,9 +99,9 @@ export default function Notifications() {
         <Card>
           <CardContent className="p-10 text-center">
             <BellOff className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium">Belum ada notifikasi</p>
+            <p className="font-medium">{t("notifications.empty")}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Pemberitahuan penting akan muncul di sini
+              {t("notifications.emptyHint")}
             </p>
           </CardContent>
         </Card>
@@ -139,7 +129,7 @@ export default function Notifications() {
                         {n.message}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {timeAgo(n.createdAt)}
+                        {timeAgo(n.createdAt, lang)}
                       </p>
                     </div>
                     <Button
@@ -147,7 +137,7 @@ export default function Notifications() {
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => remove(n.id)}
-                      aria-label="Hapus notifikasi"
+                      aria-label={t("notifications.deleteNotif")}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>

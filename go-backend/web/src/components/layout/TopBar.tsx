@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import {
-  Bell,
   Moon,
   Sun,
   Search,
@@ -15,29 +14,38 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { apiGet } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
+import { NotificationDropdown } from "./NotificationDropdown";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
-const routeLabels: Record<string, string> = {
-  "/": "Dashboard",
-  "/send": "Kirim Pesan",
-  "/bulk": "Blast Pesan",
-  "/schedule": "Jadwal Pesan",
-  "/contacts": "Kontak",
-  "/auto-reply": "Auto Reply",
-  "/live-chat": "Live Chat",
-  "/cs-bot": "CS Bot AI",
-  "/drip": "Drip Campaign",
-  "/links": "Link Shortener",
-  "/analytics": "Analytics",
-  "/anti-banned": "Anti-Banned",
-  "/billing": "Langganan",
-  "/affiliate": "Afiliasi",
-  "/settings": "Setting",
-  "/templates": "Templates",
-  "/contact-groups": "Grup Kontak",
-  "/blacklist": "Blacklist",
-  "/api-docs": "API Developer",
-  "/notifications": "Notifikasi",
+const routeTitleKeys: Record<string, string> = {
+  "/": "title.dashboard",
+  "/send": "title.send",
+  "/bulk": "title.bulk",
+  "/schedule": "title.schedule",
+  "/history": "title.history",
+  "/contacts": "title.contacts",
+  "/contact-groups": "title.contactGroups",
+  "/blacklist": "title.blacklist",
+  "/automation": "title.automation",
+  "/auto-reply": "title.autoReply",
+  "/live-chat": "title.liveChat",
+  "/cs-bot": "title.csBot",
+  "/drip": "title.drip",
+  "/files": "title.files",
+  "/links": "title.links",
+  "/analytics": "title.analytics",
+  "/anti-banned": "title.antiBanned",
+  "/billing": "title.billing",
+  "/affiliate": "title.affiliate",
+  "/settings": "title.settings",
+  "/templates": "title.templates",
+  "/api-docs": "title.apiDocs",
+  "/integrations": "title.integrations",
+  "/api-playground": "title.apiPlayground",
+  "/webhook-logs": "title.webhookLogs",
+  "/notifications": "title.notifications",
+  "/admin": "title.admin",
 };
 
 interface TopBarProps {
@@ -75,27 +83,8 @@ export function TopBar({ onMenu }: TopBarProps) {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { t } = useLang();
   const [profileOpen, setProfileOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchUnread = () => {
-      apiGet<{ notifications: { isRead: boolean }[] }>("/notifications")
-        .then((d) => {
-          if (!cancelled) {
-            setUnreadCount((d.notifications || []).filter((n) => !n.isRead).length);
-          }
-        })
-        .catch(() => {});
-    };
-    fetchUnread();
-    const t = setInterval(fetchUnread, 60000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, []);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -111,7 +100,7 @@ export function TopBar({ onMenu }: TopBarProps) {
     setProfileOpen(false);
   }, [location]);
 
-  const pageLabel = routeLabels[location] || "Dashboard";
+  const pageLabel = t(routeTitleKeys[location] || "title.dashboard");
   const initials = (user?.name || "U").charAt(0).toUpperCase();
 
   const go = (path: string) => {
@@ -126,7 +115,7 @@ export function TopBar({ onMenu }: TopBarProps) {
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Buka menu"
+          aria-label={t("header.openMenu")}
           onClick={onMenu}
           className="lg:hidden -ml-2 text-muted-foreground shrink-0"
         >
@@ -138,7 +127,7 @@ export function TopBar({ onMenu }: TopBarProps) {
       {/* Right actions */}
       <div className="flex items-center gap-1 shrink-0">
         {/* Search */}
-        <Button variant="ghost" size="icon" className="text-muted-foreground hidden sm:inline-flex">
+        <Button variant="ghost" size="icon" aria-label={t("header.search")} className="text-muted-foreground hidden sm:inline-flex">
           <Search className="w-4 h-4" />
         </Button>
 
@@ -156,17 +145,11 @@ export function TopBar({ onMenu }: TopBarProps) {
           )}
         </Button>
 
-        {/* Notifications */}
-        <Link href="/notifications">
-          <Button variant="ghost" size="icon" className="text-muted-foreground relative" aria-label="Notifikasi">
-            <Bell className="w-4 h-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-destructive text-destructive-foreground text-[9px] font-semibold flex items-center justify-center">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </Button>
-        </Link>
+        {/* Language switcher */}
+        <LanguageSwitcher />
+
+        {/* Notifications dropdown */}
+        <NotificationDropdown />
 
         {/* Profile dropdown */}
         <div className="relative ml-2 pl-2 border-l border-border">
@@ -174,7 +157,7 @@ export function TopBar({ onMenu }: TopBarProps) {
             onClick={() => setProfileOpen((v) => !v)}
             aria-haspopup="menu"
             aria-expanded={profileOpen}
-            aria-label="Menu profil"
+            aria-label={t("header.profileMenu")}
             className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors ${
               profileOpen ? "bg-secondary" : "hover:bg-secondary/70"
             }`}
@@ -221,7 +204,7 @@ export function TopBar({ onMenu }: TopBarProps) {
                       {user?.email || ""}
                     </p>
                     <p className="text-[10px] text-muted-foreground capitalize mt-0.5">
-                      Paket {user?.plan || "free"}
+                      {t("header.plan")} {user?.plan || "free"}
                     </p>
                   </div>
                 </div>
@@ -229,20 +212,20 @@ export function TopBar({ onMenu }: TopBarProps) {
                 <div className="p-1.5">
                   <ProfileMenuItem
                     icon={Settings}
-                    label="Setting"
+                    label={t("header.settings")}
                     onClick={() => go("/settings")}
                   />
                   {user?.role === "admin" && (
                     <ProfileMenuItem
                       icon={ShieldCheck}
-                      label="Dashboard Admin"
+                      label={t("header.adminDashboard")}
                       onClick={() => go("/admin")}
                     />
                   )}
                   <div className="my-1.5 border-t border-border" />
                   <ProfileMenuItem
                     icon={LogOut}
-                    label="Keluar"
+                    label={t("header.logout")}
                     danger
                     onClick={() => {
                       setProfileOpen(false);

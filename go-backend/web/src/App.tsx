@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ActiveDeviceProvider } from "@/hooks/use-active-device";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { LanguageProvider } from "@/lib/i18n";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageTransitionLoader } from "@/components/ui/page-transition";
 import { Toaster } from "sonner";
@@ -246,6 +247,7 @@ function AppRouter() {
 export default function App() {
   return (
     <ThemeProvider>
+      <LanguageProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ActiveDeviceProvider>
@@ -256,6 +258,7 @@ export default function App() {
           </ActiveDeviceProvider>
         </AuthProvider>
       </QueryClientProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

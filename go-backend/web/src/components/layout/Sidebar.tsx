@@ -38,6 +38,7 @@ import {
   Gift,
   History,
 } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -47,50 +48,51 @@ interface SidebarProps {
 }
 
 interface NavItem {
-  label: string;
+  labelKey: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
 interface NavSection {
-  label: string;
+  key: string;
   items: NavItem[];
 }
 
 // Urutan: Dashboard, Pesan dulu, lalu alur kerja, Developer grup sendiri, Akun di bawah
+// labelKey merujuk ke kamus t("nav.<labelKey>") — stabil antar bahasa.
 const topItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutGrid },
-  { label: "Jadwal", href: "/schedule", icon: Clock },
-  { label: "Otomatisasi", href: "/automation", icon: Bot },
-  { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
-  { label: "Kontak", href: "/contacts", icon: Users },
-  { label: "Langganan", href: "/billing", icon: CreditCard },
-  { label: "Afiliasi", href: "/affiliate", icon: Gift },
+  { labelKey: "dashboard", href: "/", icon: LayoutGrid },
+  { labelKey: "schedule", href: "/schedule", icon: Clock },
+  { labelKey: "automation", href: "/automation", icon: Bot },
+  { labelKey: "liveChat", href: "/live-chat", icon: MessagesSquare },
+  { labelKey: "contacts", href: "/contacts", icon: Users },
+  { labelKey: "billing", href: "/billing", icon: CreditCard },
+  { labelKey: "affiliate", href: "/affiliate", icon: Gift },
 ];
 
 const sections: NavSection[] = [
   {
-    label: "Pesan",
+    key: "messages",
     items: [
-      { label: "Kirim Pesan", href: "/send", icon: Send },
-      { label: "Riwayat Pesan", href: "/history", icon: History },
-      { label: "File Manager", href: "/files", icon: FolderOpen },
+      { labelKey: "send", href: "/send", icon: Send },
+      { labelKey: "messageHistory", href: "/history", icon: History },
+      { labelKey: "fileManager", href: "/files", icon: FolderOpen },
     ],
   },
   {
-    label: "Laporan",
+    key: "reports",
     items: [
-      { label: "Laporan", href: "/reports", icon: BarChart3 },
-      { label: "Links", href: "/links", icon: Link2 },
+      { labelKey: "report", href: "/reports", icon: BarChart3 },
+      { labelKey: "links", href: "/links", icon: Link2 },
     ],
   },
   {
-    label: "Developer",
+    key: "developer",
     items: [
-      { label: "API Docs", href: "/api-docs", icon: CodeXml },
-      { label: "Integrasi", href: "/integrations", icon: PlugZap },
-      { label: "Playground", href: "/api-playground", icon: FlaskConical },
-      { label: "Webhook Logs", href: "/webhook-logs", icon: Webhook },
+      { labelKey: "apiDocs", href: "/api-docs", icon: CodeXml },
+      { labelKey: "integrations", href: "/integrations", icon: PlugZap },
+      { labelKey: "playground", href: "/api-playground", icon: FlaskConical },
+      { labelKey: "webhookLogs", href: "/webhook-logs", icon: Webhook },
     ],
   },
 ];
@@ -103,36 +105,36 @@ interface AdminNavItem extends NavItem {
 }
 
 const adminTopItems: AdminNavItem[] = [
-  { label: "Ringkasan", href: "/admin?tab=ringkasan", icon: LayoutDashboard, tab: "ringkasan" },
+  { labelKey: "overview", href: "/admin?tab=ringkasan", icon: LayoutDashboard, tab: "ringkasan" },
 ];
 
 interface AdminNavSection {
-  label: string;
+  key: string;
   items: AdminNavItem[];
 }
 
 const adminSections: AdminNavSection[] = [
   {
-    label: "Manajemen",
+    key: "management",
     items: [
-      { label: "Pengguna", href: "/admin?tab=pengguna", icon: Users, tab: "pengguna" },
-      { label: "Paket", href: "/admin?tab=paket", icon: Package, tab: "paket" },
-      { label: "Voucher", href: "/admin?tab=voucher", icon: Ticket, tab: "voucher" },
-      { label: "Transaksi", href: "/admin?tab=transaksi", icon: ReceiptText, tab: "transaksi" },
+      { labelKey: "users", href: "/admin?tab=pengguna", icon: Users, tab: "pengguna" },
+      { labelKey: "packages", href: "/admin?tab=paket", icon: Package, tab: "paket" },
+      { labelKey: "vouchers", href: "/admin?tab=voucher", icon: Ticket, tab: "voucher" },
+      { labelKey: "transactions", href: "/admin?tab=transaksi", icon: ReceiptText, tab: "transaksi" },
     ],
   },
   {
-    label: "Sistem",
+    key: "system",
     items: [
-      { label: "Log Aktivitas", href: "/admin?tab=log", icon: ScrollText, tab: "log" },
-      { label: "Kesehatan Sistem", href: "/admin?tab=kesehatan", icon: HeartPulse, tab: "kesehatan" },
-      { label: "Pengaturan", href: "/admin?tab=pengaturan", icon: Settings, tab: "pengaturan" },
+      { labelKey: "activityLog", href: "/admin?tab=log", icon: ScrollText, tab: "log" },
+      { labelKey: "systemHealth", href: "/admin?tab=kesehatan", icon: HeartPulse, tab: "kesehatan" },
+      { labelKey: "settings", href: "/admin?tab=pengaturan", icon: Settings, tab: "pengaturan" },
     ],
   },
   {
-    label: "Komunikasi",
+    key: "communication",
     items: [
-      { label: "Notifikasi", href: "/admin?tab=notifikasi", icon: BellRing, tab: "notifikasi" },
+      { labelKey: "notifications", href: "/admin?tab=notifikasi", icon: BellRing, tab: "notifikasi" },
     ],
   },
 ];
@@ -145,13 +147,15 @@ function loadOpenAdminSections(): string[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter((x) => typeof x === "string");
+        const valid = new Set(adminSections.map((s) => s.key));
+        const filtered = parsed.filter((x) => typeof x === "string" && valid.has(x));
+        if (filtered.length > 0) return filtered;
       }
     }
   } catch {
     // abaikan, pakai default
   }
-  return adminSections.map((s) => s.label);
+  return adminSections.map((s) => s.key);
 }
 
 // URL lama tetap valid dan menandai menu gabungan sebagai aktif
@@ -179,13 +183,15 @@ function loadOpenSections(): string[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter((x) => typeof x === "string");
+        const valid = new Set(sections.map((s) => s.key));
+        const filtered = parsed.filter((x) => typeof x === "string" && valid.has(x));
+        if (filtered.length > 0) return filtered;
       }
     }
   } catch {
     // abaikan, pakai default
   }
-  return sections.map((s) => s.label);
+  return sections.map((s) => s.key);
 }
 
 function badgeColorFor(href: string): string {
@@ -195,6 +201,7 @@ function badgeColorFor(href: string): string {
 // ── Active Device selector (ala MPWA), tema navy ─────────────────────────────
 function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
   const { activeDevice, setActiveDevice } = useActiveDevice();
+  const { t } = useLang();
   const [devices, setDevices] = useState<ActiveDevice[]>([]);
 
   useEffect(() => {
@@ -223,7 +230,7 @@ function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="px-4 pb-3">
       <p className="px-1 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        Active Device
+        {t("nav.activeDevice")}
       </p>
       <div className="relative">
         <Dropdown
@@ -236,8 +243,8 @@ function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
             value: String(d.id),
             label: `${d.name}${d.phone ? ` (${d.phone})` : ""}${d.status !== "connected" ? ` — ${d.status}` : ""}`,
           }))}
-          placeholder="Pilih Device"
-          ariaLabel="Pilih device aktif"
+          placeholder={t("nav.selectDevice")}
+          ariaLabel={t("nav.selectDeviceAria")}
           className="[&_button]:rounded-full [&_button]:pl-9"
         />
         <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
@@ -249,6 +256,7 @@ function ActiveDeviceSelector({ collapsed }: { collapsed: boolean }) {
 // ── Kartu user bawah (ala merchant portal) ───────────────────────────────────
 function UserCard({ collapsed }: { collapsed: boolean }) {
   const { user, logout } = useAuth();
+  const { t } = useLang();
   if (collapsed || !user) return null;
   const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
   return (
@@ -267,8 +275,8 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
         </span>
         <button
           onClick={logout}
-          aria-label="Keluar"
-          title="Keluar"
+          aria-label={t("nav.logout")}
+          title={t("nav.logout")}
           className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-white dark:hover:bg-white/10 transition-colors"
         >
           <LogOut className="w-4 h-4" />
@@ -281,6 +289,7 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
 export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const search = useSearch();
+  const { t } = useLang();
   const [openSections, setOpenSections] = useState<string[]>(loadOpenSections);
   const [badges, setBadges] = useState<Record<string, number>>({});
 
@@ -295,7 +304,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
     const active = adminSections.find((s) => s.items.some((i) => i.tab === activeTab));
     if (active) {
       setOpenAdminSections((prev) =>
-        prev.includes(active.label) ? prev : [...prev, active.label]
+        prev.includes(active.key) ? prev : [...prev, active.key]
       );
     }
   }, [isAdminArea, activeTab]);
@@ -328,7 +337,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
     );
     if (active) {
       setOpenSections((prev) =>
-        prev.includes(active.label) ? prev : [...prev, active.label]
+        prev.includes(active.key) ? prev : [...prev, active.key]
       );
     }
   }, [location]);
@@ -378,6 +387,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   const renderItem = (item: NavItem) => {
     const isActive = isItemActive(location, item.href);
     const badge = badges[item.href] || 0;
+    const label = t(`nav.${item.labelKey}`);
     return (
       <Link
         key={item.href}
@@ -389,10 +399,10 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
             : "rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
           collapsed && "lg:justify-center lg:px-0"
         )}
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? label : undefined}
       >
         <item.icon className="w-[18px] h-[18px] shrink-0" />
-        <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
+        <span className={cn(collapsed && "lg:hidden")}>{label}</span>
         {badge > 0 && (
           <span
             className={cn(
@@ -410,6 +420,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
 
   const renderAdminItem = (item: AdminNavItem) => {
     const isActive = activeTab === item.tab;
+    const label = t(`nav.${item.labelKey}`);
     return (
       <Link
         key={item.tab}
@@ -421,10 +432,10 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
             : "rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
           collapsed && "lg:justify-center lg:px-0"
         )}
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? label : undefined}
       >
         <item.icon className="w-[18px] h-[18px] shrink-0" />
-        <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
+        <span className={cn(collapsed && "lg:hidden")}>{label}</span>
       </Link>
     );
   };
@@ -452,7 +463,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
         </span>
         <button
           onClick={onClose}
-          aria-label="Tutup menu"
+          aria-label={t("nav.closeMenu")}
           className={cn(
             "ml-auto p-2 -mr-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-white dark:hover:bg-white/10 lg:hidden"
           )}
@@ -476,24 +487,24 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
             {adminSections.map((section) => {
               if (collapsed) {
                 return (
-                  <div key={section.label} className="space-y-1 pt-1 hidden lg:block">
+                  <div key={section.key} className="space-y-1 pt-1 hidden lg:block">
                     {section.items.map(renderAdminItem)}
                   </div>
                 );
               }
-              const isOpen = openAdminSections.includes(section.label);
+              const isOpen = openAdminSections.includes(section.key);
               return (
-                <div key={section.label} className="pt-1">
+                <div key={section.key} className="pt-1">
                   <button
                     type="button"
                     aria-expanded={isOpen}
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggleAdminSection(section.label);
+                      toggleAdminSection(section.key);
                     }}
                     className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
                   >
-                    <span>{section.label}</span>
+                    <span>{t(`nav.${section.key}`)}</span>
                     <ChevronDown
                       className={cn(
                         "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
@@ -516,11 +527,11 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
                   "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
                   collapsed && "lg:justify-center lg:px-0"
                 )}
-                title={collapsed ? "Kembali ke Dashboard" : undefined}
+                title={collapsed ? t("nav.backToDashboard") : undefined}
               >
                 <ArrowLeft className="w-[18px] h-[18px] shrink-0" />
                 <span className={cn(collapsed && "lg:hidden")}>
-                  Kembali ke Dashboard
+                  {t("nav.backToDashboard")}
                 </span>
               </Link>
             </div>
@@ -532,24 +543,24 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
             {sections.map((section) => {
           if (collapsed) {
             return (
-              <div key={section.label} className="space-y-1 pt-1 hidden lg:block">
+              <div key={section.key} className="space-y-1 pt-1 hidden lg:block">
                 {section.items.map(renderItem)}
               </div>
             );
           }
-          const isOpen = openSections.includes(section.label);
+          const isOpen = openSections.includes(section.key);
           return (
-            <div key={section.label} className="pt-1">
+            <div key={section.key} className="pt-1">
               <button
                 type="button"
                 aria-expanded={isOpen}
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleSection(section.label);
+                  toggleSection(section.key);
                 }}
                 className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
               >
-                <span>{section.label}</span>
+                <span>{t(`nav.${section.key}`)}</span>
                 <ChevronDown
                   className={cn(
                     "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
@@ -579,7 +590,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       <div className="px-4 py-2 border-t border-white/10 hidden lg:block">
         <button
           onClick={onToggle}
-          aria-label={collapsed ? "Buka sidebar" : "Tutup sidebar"}
+          aria-label={collapsed ? t("nav.openSidebar") : t("nav.closeSidebar")}
           className="w-full flex items-center justify-center py-2 rounded-full text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
         >
           {collapsed ? (

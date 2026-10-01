@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useLang } from "@/lib/i18n";
 import { useLocation } from "wouter";
 import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
 import GraceBanner from "@/components/GraceBanner";
@@ -213,6 +214,8 @@ function StatCard({
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { t, lang } = useLang();
+  const locale = lang === "id" ? "id-ID" : "en-US";
   const [, navigate] = useLocation();
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
@@ -299,7 +302,7 @@ export default function Dashboard() {
         setMessagesTotal(msgTotal);
         setSubscription(sub);
       })
-      .catch((e) => setError(e.message || "Gagal memuat data"))
+      .catch((e) => setError(e.message || t("dashboard.loadFail")))
       .finally(() => setLoading(false));
   };
 
@@ -354,7 +357,7 @@ export default function Dashboard() {
       await apiPut(`/devices/${d.id}`, { [field]: value });
     } catch {
       setDevices(prev);
-      toast.error("Gagal memperbarui pengaturan");
+      toast.error(t("dashboard.updateSettingFail"));
     } finally {
       setToggling((t) => {
         const n = { ...t };
@@ -381,7 +384,7 @@ export default function Dashboard() {
       );
       if (q && q.qr) setQrCode(q.qr);
     } catch (e) {
-      setQrError(e instanceof Error ? e.message : "Gagal memulai koneksi");
+      setQrError(e instanceof Error ? e.message : t("dashboard.connectFail"));
     } finally {
       setQrLoading(false);
     }
@@ -400,7 +403,7 @@ export default function Dashboard() {
       setPairCode(res.code || "");
       if (!res.code) setPairError("Kode tidak diterima dari server");
     } catch (e) {
-      setPairError(e instanceof Error ? e.message : "Gagal meminta kode pairing");
+      setPairError(e instanceof Error ? e.message : t("dashboard.pairFail"));
     } finally {
       setPairLoading(false);
     }
@@ -421,9 +424,9 @@ export default function Dashboard() {
     }
     try {
       await navigator.clipboard.writeText(editSecret);
-      toast.success("Webhook secret disalin");
+      toast.success(t("dashboard.secretCopied"));
     } catch {
-      toast.error("Gagal menyalin");
+      toast.error(t("dashboard.copyFail"));
     }
   };
 
@@ -445,9 +448,9 @@ export default function Dashboard() {
       setEditSecret(s);
       setShowSecret(true);
       setEditing({ ...editing, webhookSecret: s });
-      toast.success("Webhook secret diperbarui");
+      toast.success(t("dashboard.secretUpdated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal membuat secret baru");
+      toast.error(e instanceof Error ? e.message : t("dashboard.secretUpdateFail"));
     } finally {
       setRegenBusy(false);
     }
@@ -457,7 +460,7 @@ export default function Dashboard() {
     if (!editing || savingEdit) return;
     const name = editName.trim();
     if (!name) {
-      toast.error("Nama perangkat wajib diisi");
+      toast.error(t("dashboard.deviceNameRequired"));
       return;
     }
     setSavingEdit(true);
@@ -470,7 +473,7 @@ export default function Dashboard() {
       setEditing(null);
       loadDevices();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memperbarui perangkat");
+      toast.error(e instanceof Error ? e.message : t("dashboard.editDeviceFail"));
     } finally {
       setSavingEdit(false);
     }
@@ -483,7 +486,7 @@ export default function Dashboard() {
       toast.success("Perangkat diputuskan");
       loadDevices();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memutuskan perangkat");
+      toast.error(e instanceof Error ? e.message : t("dashboard.disconnectFail"));
     } finally {
       setBusyId(null);
     }
@@ -498,7 +501,7 @@ export default function Dashboard() {
       setDeleting(null);
       loadDevices();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus perangkat");
+      toast.error(e instanceof Error ? e.message : t("dashboard.deleteDeviceFail"));
     } finally {
       setDeletingBusy(false);
     }
@@ -507,7 +510,7 @@ export default function Dashboard() {
   const handleAdd = async () => {
     const name = addName.trim();
     if (!name) {
-      toast.error("Nama perangkat wajib diisi");
+      toast.error(t("dashboard.deviceNameRequired"));
       return;
     }
     setSavingAdd(true);
@@ -529,7 +532,7 @@ export default function Dashboard() {
         : list.filter((d) => d.name === name).pop();
       if (dev) handleConnect(dev);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menambah perangkat");
+      toast.error(e instanceof Error ? e.message : t("dashboard.addDeviceFail"));
     } finally {
       setSavingAdd(false);
     }
@@ -548,19 +551,19 @@ export default function Dashboard() {
   const isExpiredSub = subState === "expired";
   // Versi ringkas untuk kartu (sebaris dengan kuota).
   const subEndShort = subscription
-    ? `s/d ${new Date(subscription.endDate).toLocaleDateString("id-ID", {
+    ? `${t("dashboard.until")} ${new Date(subscription.endDate).toLocaleDateString(locale, {
         day: "numeric",
         month: "short",
         year: "numeric",
       })}`
-    : "Tidak ada langganan aktif";
+    : t("dashboard.noSubscription");
   // Aksi kartu sebagai link teks ringkas (bukan tombol, supaya kartu tetap pendek).
   const subAction = isTrialSub
-    ? { label: "Upgrade", href: "/billing" }
+    ? { label: t("dashboard.upgrade"), href: "/billing" }
     : !subscription
-      ? { label: "Pilih Paket", href: "/billing" }
+      ? { label: t("dashboard.choosePlan"), href: "/billing" }
       : canRenew
-        ? { label: "Perpanjang", href: "/billing?perpanjang=1" }
+        ? { label: t("dashboard.renew"), href: "/billing?perpanjang=1" }
         : null;
 
   return (
@@ -574,17 +577,17 @@ export default function Dashboard() {
             <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-destructive">
-                Kuota pesan paket {quota.planName} habis ({quota.usedThisMonth.toLocaleString("id-ID")}/{quota.limit.toLocaleString("id-ID")})
+                {t("dashboard.quotaExhausted").replace("{plan}", quota.planName)} ({quota.usedThisMonth.toLocaleString(locale)}/{quota.limit.toLocaleString(locale)})
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Pengiriman pesan baru akan ditolak. Perpanjang atau upgrade paket untuk menambah kuota.
+                {t("dashboard.quotaExhaustedDetail")}
               </p>
               <Button
                 size="sm"
                 variant="tint"
                 onClick={() => navigate("/billing?perpanjang=1")}
               >
-                Perpanjang / Upgrade
+                {t("dashboard.renewUpgrade")}
               </Button>
             </div>
           </CardContent>
@@ -596,10 +599,12 @@ export default function Dashboard() {
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-amber-700 dark:text-amber-500">
-                Kuota pesan hampir habis ({quota.percentUsed}% terpakai)
+                {t("dashboard.quotaAlmostOut")} ({t("dashboard.quotaUsed").replace("{pct}", String(quota.percentUsed))})
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {quota.usedThisMonth.toLocaleString("id-ID")} dari {quota.limit.toLocaleString("id-ID")} pesan bulan ini. Pertimbangkan upgrade paket.
+                {t("dashboard.quotaHint")
+                  .replace("{used}", quota.usedThisMonth.toLocaleString(locale))
+                  .replace("{limit}", quota.limit.toLocaleString(locale))}
               </p>
             </div>
           </CardContent>
@@ -608,53 +613,53 @@ export default function Dashboard() {
 
       {/* Empat kartu statistik */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Total Devices" icon={Smartphone} tile={NAVY} loading={loading}>
+        <StatCard label={t("dashboard.totalDevices")} icon={Smartphone} tile={NAVY} loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {devices.length}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Limit: {deviceLimit !== null ? deviceLimit : "-"}
+            {t("dashboard.limit")}: {deviceLimit !== null ? deviceLimit : "-"}
           </p>
         </StatCard>
 
-        <StatCard label="Blast / Bulk" icon={Megaphone} tile="#1e2a5c" loading={loading}>
+        <StatCard label={t("dashboard.blastBulk")} icon={Megaphone} tile="#1e2a5c" loading={loading}>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             <span className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 text-[11px] font-semibold px-2 py-0.5">
-              {bulkStats.wait} Wait
+              {bulkStats.wait} {t("dashboard.wait")}
             </span>
             <span
               className="inline-flex items-center rounded-full text-[11px] font-semibold px-2 py-0.5"
               style={{ backgroundColor: `${NAVY}1a`, color: NAVY }}
             >
-              {bulkStats.sent} Sent
+              {bulkStats.sent} {t("dashboard.sent")}
             </span>
             <span className="inline-flex items-center rounded-full bg-red-500/15 text-red-700 text-[11px] font-semibold px-2 py-0.5">
-              {bulkStats.failed} Fail
+              {bulkStats.failed} {t("dashboard.fail")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            {bulkStats.jobs} Campaigns
+            {bulkStats.jobs} {t("dashboard.campaigns")}
           </p>
         </StatCard>
 
-        <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading}>
+        <StatCard label={t("dashboard.subscription")} icon={Star} tile="#2e4186" loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {subPlanName}
             {/* Fitur 7: label Trial */}
             {isTrialSub && (
               <span className="ml-2 align-middle inline-flex items-center rounded-full bg-[#243370]/10 text-[#243370] dark:text-blue-400 text-[11px] font-semibold px-2 py-0.5">
-                Trial
+                {t("dashboard.trial")}
               </span>
             )}
             {/* BONUS: badge status grace/expired di kartu, selaras banner */}
             {isGraceSub && (
               <span className="ml-2 align-middle inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-500 text-[11px] font-semibold px-2 py-0.5">
-                Masa Tenggang
+                {t("dashboard.gracePeriod")}
               </span>
             )}
             {isExpiredSub && (
               <span className="ml-2 align-middle inline-flex items-center rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-semibold px-2 py-0.5">
-                Berakhir
+                {t("dashboard.expired")}
               </span>
             )}
           </p>
@@ -663,11 +668,11 @@ export default function Dashboard() {
             <p className="text-[11px] text-muted-foreground truncate">
               {quota && !quota.isUnlimited && (
                 <span className={cn(quota.warning && "text-amber-600 font-semibold")}>
-                  {quota.usedThisMonth.toLocaleString("id-ID")}/
-                  {quota.limit.toLocaleString("id-ID")} ({quota.percentUsed}%) ·{" "}
+                  {quota.usedThisMonth.toLocaleString(locale)}/
+                  {quota.limit.toLocaleString(locale)} ({quota.percentUsed}%) ·{" "}
                 </span>
               )}
-              {quota?.isUnlimited ? `${subEndShort} · Unlimited` : subEndShort}
+              {quota?.isUnlimited ? `${subEndShort} · ${t("dashboard.unlimited")}` : subEndShort}
             </p>
             {subAction && (
               <button
@@ -694,11 +699,11 @@ export default function Dashboard() {
           )}
         </StatCard>
 
-        <StatCard label="Messages Sent" icon={MessageSquare} tile="#1a2a5e" loading={loading}>
+        <StatCard label={t("dashboard.messagesSent")} icon={MessageSquare} tile="#1a2a5e" loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
-            {messagesTotal !== null ? messagesTotal.toLocaleString("id-ID") : "-"}
+            {messagesTotal !== null ? messagesTotal.toLocaleString(locale) : "-"}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">From histories</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t("dashboard.fromHistories")}</p>
         </StatCard>
       </div>
 
@@ -708,7 +713,7 @@ export default function Dashboard() {
           <CardContent className="p-5 flex items-center justify-between">
             <p className="text-sm text-destructive">{error}</p>
             <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+              <RefreshCw className="w-3.5 h-3.5" /> {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -719,10 +724,10 @@ export default function Dashboard() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold">
-              WhatsApp Accounts
+              {t("dashboard.whatsappAccounts")}
             </CardTitle>
             <Button size="sm" className="gap-1.5 shrink-0" onClick={() => setShowAdd(true)}>
-              <Plus className="w-4 h-4" /> Add Device
+              <Plus className="w-4 h-4" /> {t("dashboard.addDevice")}
             </Button>
           </div>
         </CardHeader>
@@ -736,14 +741,14 @@ export default function Dashboard() {
           ) : devices.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-sm text-muted-foreground">
-                Belum ada perangkat terhubung.
+                {t("dashboard.noDevices")}
               </p>
               <Button
                 size="sm"
                 className="mt-3 gap-1.5"
                 onClick={() => setShowAdd(true)}
               >
-                <Plus className="w-4 h-4" /> Tambah Perangkat
+                <Plus className="w-4 h-4" /> {t("dashboard.addDevice")}
               </Button>
             </div>
           ) : (
@@ -753,31 +758,31 @@ export default function Dashboard() {
                   <thead>
                     <tr className="border-b border-border text-left">
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Number
+                        {t("dashboard.colNumber")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Webhook URL
+                        {t("dashboard.colWebhook")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Read
+                        {t("dashboard.colRead")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Reject Call
+                        {t("dashboard.colRejectCall")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Online
+                        {t("dashboard.colOnline")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Typing
+                        {t("dashboard.colTyping")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Sent
+                        {t("dashboard.colSent")}
                       </th>
                       <th className="py-2 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Status
+                        {t("dashboard.colStatus")}
                       </th>
                       <th className="py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">
-                        Action
+                        {t("dashboard.colAction")}
                       </th>
                     </tr>
                   </thead>
@@ -863,8 +868,8 @@ export default function Dashboard() {
                                 className="h-8 w-8"
                                 disabled={busyId === d.id}
                                 onClick={() => handleDisconnect(d)}
-                                aria-label="Putuskan"
-                                title="Putuskan"
+                                aria-label={t("dashboard.disconnect")}
+                                title={t("dashboard.disconnect")}
                               >
                                 <WifiOff className="w-4 h-4" />
                               </Button>
@@ -874,8 +879,8 @@ export default function Dashboard() {
                                 size="icon"
                                 className="h-8 w-8"
                                 onClick={() => handleConnect(d)}
-                                aria-label="Hubungkan"
-                                title="Hubungkan"
+                                aria-label={t("dashboard.connect")}
+                                title={t("dashboard.connect")}
                               >
                                 <Smartphone className="w-4 h-4" />
                               </Button>
@@ -896,8 +901,8 @@ export default function Dashboard() {
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                               onClick={() => setDeleting(d)}
-                              aria-label="Hapus"
-                              title="Hapus"
+                              aria-label={t("common.delete")}
+                              title={t("common.delete")}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -925,16 +930,16 @@ export default function Dashboard() {
 
       {/* Dialog tambah perangkat */}
       {showAdd && (
-        <Modal title="Tambah Perangkat" onClose={() => setShowAdd(false)}>
+        <Modal title={t("dashboard.addDeviceTitle")} onClose={() => setShowAdd(false)}>
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
-                Nama perangkat
+                {t("dashboard.deviceName")}
               </label>
               <Input
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
-                placeholder="cth: CS Bot"
+                placeholder={t("dashboard.exDeviceName")}
                 maxLength={60}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAdd();
@@ -943,12 +948,12 @@ export default function Dashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
-                Webhook URL <span className="text-muted-foreground">(opsional)</span>
+                {t("dashboard.colWebhook")} <span className="text-muted-foreground">({t("dashboard.optional")})</span>
               </label>
               <Input
                 value={addWebhook}
                 onChange={(e) => setAddWebhook(e.target.value)}
-                placeholder="cth: https://contoh.com/webhook"
+                placeholder={t("dashboard.exWebhook")}
                 maxLength={500}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAdd();
@@ -962,10 +967,10 @@ export default function Dashboard() {
                 onClick={() => setShowAdd(false)}
                 disabled={savingAdd}
               >
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button size="sm" onClick={handleAdd} disabled={savingAdd}>
-                {savingAdd ? "Menyimpan..." : "Simpan & Hubungkan"}
+                {savingAdd ? t("dashboard.saving") : t("dashboard.saveConnect")}
               </Button>
             </div>
           </div>
@@ -974,16 +979,16 @@ export default function Dashboard() {
 
       {/* Dialog ubah perangkat */}
       {editing && (
-        <Modal title="Ubah Perangkat" onClose={() => setEditing(null)}>
+        <Modal title={t("dashboard.editDeviceTitle")} onClose={() => setEditing(null)}>
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
-                Nama perangkat
+                {t("dashboard.deviceName")}
               </label>
               <Input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="cth: CS Bot"
+                placeholder={t("dashboard.exDeviceName")}
                 maxLength={60}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleEditSave();
@@ -992,12 +997,12 @@ export default function Dashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
-                Webhook URL
+                {t("dashboard.colWebhook")}
               </label>
               <Input
                 value={editWebhook}
                 onChange={(e) => setEditWebhook(e.target.value)}
-                placeholder="cth: https://contoh.com/webhook"
+                placeholder={t("dashboard.exWebhook")}
                 maxLength={500}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleEditSave();
@@ -1006,7 +1011,7 @@ export default function Dashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
-                Webhook Secret{" "}
+                {t("dashboard.webhookSecret")}{" "}
                 <span className="text-muted-foreground">(HMAC-SHA256)</span>
               </label>
               <div className="flex gap-2">
@@ -1014,7 +1019,7 @@ export default function Dashboard() {
                   type={showSecret ? "text" : "password"}
                   value={editSecret}
                   readOnly
-                  placeholder="Otomatis dibuat"
+                  placeholder={t("dashboard.autoGenerated")}
                   className="font-mono text-xs"
                 />
                 <Button
@@ -1022,8 +1027,8 @@ export default function Dashboard() {
                   size="icon"
                   className="shrink-0"
                   onClick={() => setShowSecret(!showSecret)}
-                  aria-label={showSecret ? "Sembunyikan secret" : "Tampilkan secret"}
-                  title={showSecret ? "Sembunyikan" : "Tampilkan"}
+                  aria-label={showSecret ? t("dashboard.hideSecret") : t("dashboard.showSecret")}
+                  title={showSecret ? t("dashboard.hide") : t("dashboard.show")}
                 >
                   {showSecret ? (
                     <EyeOff className="w-4 h-4" />
@@ -1036,8 +1041,8 @@ export default function Dashboard() {
                   size="icon"
                   className="shrink-0"
                   onClick={handleCopySecret}
-                  aria-label="Salin secret"
-                  title="Salin"
+                  aria-label={t("dashboard.copySecret")}
+                  title={t("dashboard.copy")}
                 >
                   <Copy className="w-4 h-4" />
                 </Button>
@@ -1047,8 +1052,8 @@ export default function Dashboard() {
                   className="shrink-0"
                   onClick={handleRegenerateSecret}
                   disabled={regenBusy}
-                  aria-label="Buat ulang secret"
-                  title="Buat ulang"
+                  aria-label={t("dashboard.regenSecret")}
+                  title={t("dashboard.regen")}
                 >
                   <RefreshCw
                     className={cn("w-4 h-4", regenBusy && "animate-spin")}
@@ -1056,10 +1061,9 @@ export default function Dashboard() {
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Setiap webhook dikirim dengan header{" "}
-                <span className="font-mono">X-Wagataway-Signature</span>{" "}
-                (HMAC-SHA256 dari body memakai secret ini) agar penerima bisa
-                memverifikasi keasliannya.
+                {t("dashboard.webhookHint").split("X-Wagataway-Signature")[0]}
+                <span className="font-mono">X-Wagataway-Signature</span>
+                {t("dashboard.webhookHint").split("X-Wagataway-Signature")[1]}
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -1069,10 +1073,10 @@ export default function Dashboard() {
                 onClick={() => setEditing(null)}
                 disabled={savingEdit}
               >
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button size="sm" onClick={handleEditSave} disabled={savingEdit}>
-                {savingEdit ? "Menyimpan..." : "Simpan"}
+                {savingEdit ? t("dashboard.saving") : t("common.save")}
               </Button>
             </div>
           </div>
@@ -1081,7 +1085,7 @@ export default function Dashboard() {
 
       {/* Dialog hubungkan: Scan QR / Kode Pairing */}
       {qrDevice && (
-        <Modal title={`Hubungkan ${qrDevice.name}`} onClose={() => setQrDevice(null)}>
+        <Modal title={t("dashboard.connectDevice").replace("{name}", qrDevice.name)} onClose={() => setQrDevice(null)}>
           <div className="flex gap-2 mb-4">
             <Button
               size="sm"
@@ -1089,7 +1093,7 @@ export default function Dashboard() {
               className="flex-1"
               onClick={() => setConnectTab("qr")}
             >
-              Scan QR
+              {t("dashboard.scanQr")}
             </Button>
             <Button
               size="sm"
@@ -1097,14 +1101,14 @@ export default function Dashboard() {
               className="flex-1"
               onClick={() => setConnectTab("pair")}
             >
-              Kode Pairing
+              {t("dashboard.pairingCode")}
             </Button>
           </div>
 
           {connectTab === "qr" ? (
             <div className="flex flex-col items-center space-y-3">
               {qrLoading && (
-                <p className="text-sm text-muted-foreground">Menyiapkan kode QR...</p>
+                <p className="text-sm text-muted-foreground">{t("dashboard.preparingQr")}</p>
               )}
               {!qrLoading && qrError && (
                 <>
@@ -1120,19 +1124,17 @@ export default function Dashboard() {
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(
                       qrCode
                     )}`}
-                    alt="Kode QR WhatsApp"
+                    alt={t("dashboard.qrAlt")}
                     className="w-60 h-60 rounded-lg border border-border"
                   />
                   <p className="text-xs text-muted-foreground text-center">
-                    Pindai dengan WhatsApp di HP kamu.
-                    <br />
-                    Kode diperbarui otomatis, menunggu hingga 60 detik.
+                    {t("dashboard.qrScanHint")}
                   </p>
                 </>
               )}
               {!qrLoading && !qrError && !qrCode && (
                 <p className="text-sm text-muted-foreground">
-                  Menunggu kode QR dari WhatsApp...
+                  {t("dashboard.waitingQr")}
                 </p>
               )}
             </div>
@@ -1142,12 +1144,12 @@ export default function Dashboard() {
                 <>
                   <div className="w-full space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Nomor WhatsApp HP kamu
+                      {t("dashboard.yourWaNumber")}
                     </label>
                     <Input
                       value={pairPhone}
                       onChange={(e) => setPairPhone(e.target.value)}
-                      placeholder="cth: 62812xxxxxxx"
+                      placeholder={t("dashboard.exPhone")}
                       inputMode="tel"
                       maxLength={20}
                       onKeyDown={(e) => {
@@ -1164,7 +1166,7 @@ export default function Dashboard() {
                     onClick={requestPairCode}
                     disabled={pairLoading || !pairPhone.trim()}
                   >
-                    {pairLoading ? "Meminta kode..." : "Minta Kode Pairing"}
+                    {pairLoading ? t("dashboard.requestingCode") : t("dashboard.requestPairCode")}
                   </Button>
                 </>
               ) : (
@@ -1173,10 +1175,7 @@ export default function Dashboard() {
                     {pairCode}
                   </p>
                   <p className="text-xs text-muted-foreground text-center">
-                    Buka WhatsApp di HP → Perangkat Tertaut → Tautkan Perangkat
-                    → “Tautkan dengan nomor telepon”, lalu masukkan kode di atas.
-                    <br />
-                    Kode berlaku 120 detik.
+                    {t("dashboard.pairSteps")}
                   </p>
                   {pairError && (
                     <p className="text-sm text-destructive text-center">{pairError}</p>
@@ -1187,7 +1186,7 @@ export default function Dashboard() {
                     onClick={requestPairCode}
                     disabled={pairLoading}
                   >
-                    {pairLoading ? "Meminta kode..." : "Minta Kode Baru"}
+                    {pairLoading ? t("dashboard.requestingCode") : t("dashboard.requestNewCode")}
                   </Button>
                 </>
               )}
@@ -1198,14 +1197,11 @@ export default function Dashboard() {
 
       {/* Dialog konfirmasi hapus */}
       {deleting && (
-        <Modal title="Hapus Perangkat" onClose={() => setDeleting(null)}>
+        <Modal title={t("dashboard.deleteDeviceTitle")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground">
-            Hapus perangkat{" "}
-            <span className="font-semibold text-foreground">{deleting.name}</span>
-            {deleting.phone ? (
-              <span className="font-mono"> ({deleting.phone})</span>
-            ) : null}
-            ? Tindakan ini tidak dapat dibatalkan.
+            {t("dashboard.deleteDeviceConfirm")
+              .replace("{name}", deleting.name)
+              .replace("{phone}", deleting.phone ? ` (${deleting.phone})` : "")}
           </p>
           <div className="flex justify-end gap-2 mt-5">
             <Button
@@ -1222,7 +1218,7 @@ export default function Dashboard() {
               onClick={handleDelete}
               disabled={deletingBusy}
             >
-              {deletingBusy ? "Menghapus..." : "Hapus"}
+              {deletingBusy ? t("dashboard.deleting") : t("common.delete")}
             </Button>
           </div>
         </Modal>
