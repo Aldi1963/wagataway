@@ -25,6 +25,8 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 		b.GET("/subscription", getSubscription(db))
 		b.GET("/usage", getBillingUsage(db))
 		b.POST("/subscribe", createSubscription(cfg, db))
+		// Fitur 4: kalkulasi ganti paket prorata (tanpa efek samping)
+		b.GET("/prorate", getProrateQuote(db))
 		b.GET("/transactions", listTransactions(db))
 		b.GET("/transactions/:id", getBillingTransaction(cfg, db))
 		b.GET("/transactions/:id/invoice.pdf", getInvoicePDF(db))
@@ -117,22 +119,55 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 
 		orderID := fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix())
 
+		// Fitur 4 (prorata): bila user punya langganan aktif yang belum
+		// expired dan memilih paket BERBEDA, hitung sisa nilai paket lama.
+		q, err := prorateQuote(db, userID, &plan)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghitung prorata"})
+			return
+		}
+		amount := q.PayableAmount
+		metadata := ""
+		if q.Prorate {
+			metadata = prorateMetadataJSON(q)
+		}
+
 		// Catat transaksi lokal dulu sebagai pending
 		tx := models.Transaction{
 			UserID:        userID,
 			PlanID:        &req.PlanID,
-			Amount:        plan.Price,
+			Amount:        amount,
 			Status:        "pending",
 			PaymentMethod: "clipkupay",
 			ExternalID:    orderID,
+			Metadata:      metadata,
 		}
 		if err := db.Create(&tx).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
 			return
 		}
 
+		// Fitur 4: sisa nilai menutupi penuh → bayar 0, langsung aktif tanpa
+		// ke Clipku Pay. Aktivasi lewat activateSubscription (titik yang sama
+		// dipakai webhook & sinkronisasi status), yang menonaktifkan langganan
+		// lama dan membuat yang baru mulai sekarang.
+		if q.Prorate && amount == 0 {
+			if err := activateSubscription(db, tx.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengaktifkan paket"})
+				return
+			}
+			c.JSON(http.StatusCreated, gin.H{
+				"transaction": tx,
+				"plan":        plan,
+				"quote":       q,
+				"activated":   true,
+				"message":     "Paket berhasil diganti — sisa nilai paket lama menutupi penuh",
+			})
+			return
+		}
+
 		// Buat transaksi di Clipku Pay
-		data, err := kp.createTransaction(orderID, plan.Price, user.Name, user.Email)
+		data, err := kp.createTransaction(orderID, amount, user.Name, user.Email)
 		if err != nil {
 			db.Model(&tx).Update("status", "failed")
 			c.JSON(http.StatusBadGateway, gin.H{"message": "Gagal membuat pembayaran: " + err.Error()})
@@ -143,6 +178,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusCreated, gin.H{
 			"transaction": tx,
 			"plan":        plan,
+			"quote":       q,
 			"orderId":     orderID,
 			"paymentUrl":  data.PaymentURL,
 			"qrUrl":       data.QrURL,
