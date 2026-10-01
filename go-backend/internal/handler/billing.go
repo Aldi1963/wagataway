@@ -180,6 +180,7 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 				}
 			}
 		}
+		tx.InvoiceNumber = invoiceNumber(tx.ID, tx.CreatedAt)
 		c.JSON(http.StatusOK, gin.H{"transaction": tx})
 	}
 }
@@ -190,8 +191,23 @@ func listTransactions(db *gorm.DB) gin.HandlerFunc {
 		var txs []models.Transaction
 		db.Where("user_id = ?", userID).Preload("Plan").
 			Order("created_at DESC").Limit(50).Find(&txs)
+		for i := range txs {
+			txs[i].InvoiceNumber = invoiceNumber(txs[i].ID, txs[i].CreatedAt)
+		}
 		c.JSON(http.StatusOK, gin.H{"transactions": txs})
 	}
+}
+
+// invoiceNumber mengembalikan nomor invoice deterministik dari ID transaksi.
+// Memakai tahun & bulan dari CreatedAt sehingga stabil (tidak berubah antar
+// request) tanpa perlu kolom baru di DB.
+func invoiceNumber(txID uint, createdAt time.Time) string {
+	romans := [12]string{"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"}
+	m := int(createdAt.Month())
+	if m < 1 || m > 12 {
+		m = 1
+	}
+	return fmt.Sprintf("INV/%04d/%s/%06d", createdAt.Year(), romans[m-1], txID)
 }
 
 // errAlreadyRedeemed menandai percobaan redeem ganda oleh user yang sama.

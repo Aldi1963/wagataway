@@ -57,6 +57,12 @@ type Transaction struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 
+	// InvoiceNumber dihitung deterministik dari ID transaksi (TIDAK disimpan di
+	// DB, tanpa perubahan skema): format INV/<tahun>/<bulan romawi>/<id 6 digit>,
+	// mis. INV/2026/X/000123. Tahun & bulan diambil dari CreatedAt sehingga
+	// stabil dan tidak berubah antar request. Diisi oleh handler billing.
+	InvoiceNumber string `gorm:"-" json:"invoiceNumber"`
+
 	User User  `gorm:"foreignKey:UserID" json:"-"`
 	Plan *Plan `gorm:"foreignKey:PlanID" json:"-"`
 }
