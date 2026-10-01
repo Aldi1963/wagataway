@@ -127,17 +127,6 @@ export default function Settings() {
 
   return (
     <div className={cn("space-y-6", WIDE_TABS.has(active) ? "max-w-5xl" : "max-w-2xl")}>
-      {/* ── Kepala profil ─────────────────────────────── */}
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center text-xl font-bold shrink-0">
-          {user?.name?.charAt(0).toUpperCase() || "U"}
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-foreground truncate">{user?.name}</p>
-          <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-        </div>
-      </div>
-
       {/* ── Menu vertikal polos ala profil PPOB (tanpa card) ── */}
       <div className="border-y border-border divide-y divide-border -mx-4 px-4 sm:mx-0 sm:px-0">
         {TABS.map((t) => {
