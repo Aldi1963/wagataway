@@ -15,6 +15,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/rs/zerolog/log"
+	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
 
@@ -39,6 +40,24 @@ const (
 	spamWindow    = 10 * time.Second // ...dalam 10 detik = spam
 	spamWarnCooldown = 1 * time.Minute // peringatan maksimal 1x per menit per sender
 )
+
+// buildWelcomeText menyusun teks sambutan: WelcomeMsg + mention teks polos
+// (@nomor, dipisah spasi) untuk tiap anggota baru. Anggota tanpa User
+// dan device sendiri dilewati. Mengembalikan "" bila tidak ada yang
+// perlu disambut. Fungsi murni — bisa di-unit-test tanpa DB/klien WA.
+func buildWelcomeText(welcomeMsg string, join []types.JID, selfUser string) string {
+	mentions := ""
+	for _, j := range join {
+		if j.User == "" || j.User == selfUser {
+			continue
+		}
+		mentions += "@" + j.User + " "
+	}
+	if mentions == "" {
+		return ""
+	}
+	return welcomeMsg + "\n" + mentions
+}
 
 // handleGroupParticipantChange menangani event *events.GroupInfo.
 // Bila ada anggota baru yang join (evt.Join), cari GroupRule aktif untuk
@@ -66,18 +85,11 @@ func (m *Manager) handleGroupParticipantChange(sess *SessionState, evt *events.G
 		selfUser = sess.Client.Store.ID.User
 	}
 
-	mentions := ""
-	for _, j := range evt.Join {
-		if j.User == "" || j.User == selfUser {
-			continue
-		}
-		mentions += "@" + j.User + " "
-	}
-	if mentions == "" {
+	text := buildWelcomeText(rule.WelcomeMsg, evt.Join, selfUser)
+	if text == "" {
 		return
 	}
 
-	text := rule.WelcomeMsg + "\n" + mentions
 	if err := m.SendMessage(sess.DeviceID, groupJID, "text", text, ""); err != nil {
 		log.Error().Err(err).
 			Uint("deviceID", sess.DeviceID).
@@ -87,7 +99,7 @@ func (m *Manager) handleGroupParticipantChange(sess *SessionState, evt *events.G
 		log.Info().
 			Uint("deviceID", sess.DeviceID).
 			Str("group", groupJID).
-			Str("mentions", mentions).
+			Str("text", text).
 			Msg("Group rule welcome message sent")
 	}
 }
