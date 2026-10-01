@@ -183,7 +183,7 @@ function StatCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("min-w-0 min-h-[160px]", className)}>
+    <Card className={cn("min-w-0 min-h-[172px]", className)}>
       <CardContent className="p-5">
         <div className="flex items-center gap-4">
           <div
@@ -657,17 +657,30 @@ export default function Dashboard() {
               </>
             )}
           </p>
-          {/* Kuota pesan bulanan (Fitur 3) — teks pendek selebar kartu lain */}
+          {/* Kuota pesan bulanan — teks + garis statistik pemakaian */}
           {quota && !quota.isUnlimited && (
-            <p
-              className={cn(
-                "text-[11px] text-muted-foreground mt-1",
-                quota.warning && "text-amber-600 font-semibold"
-              )}
-            >
-              {quota.usedThisMonth.toLocaleString("id-ID")}/
-              {quota.limit.toLocaleString("id-ID")} pesan ({quota.percentUsed}%)
-            </p>
+            <div className="mt-1.5">
+              <p
+                className={cn(
+                  "text-[11px] text-muted-foreground",
+                  quota.warning && "text-amber-600 font-semibold"
+                )}
+              >
+                {quota.usedThisMonth.toLocaleString("id-ID")}/
+                {quota.limit.toLocaleString("id-ID")} pesan ({quota.percentUsed}%)
+              </p>
+              <div className="h-1.5 mt-1 rounded-full bg-black/10 dark:bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    quota.warning ? "bg-amber-500" : "bg-[#243370] dark:bg-blue-400"
+                  )}
+                  style={{
+                    width: `${quota.usedThisMonth > 0 ? Math.max(2, Math.min(100, quota.percentUsed)) : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
           )}
           {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar;
               BONUS: tombol Pilih Paket bila belum ada langganan aktif */}
