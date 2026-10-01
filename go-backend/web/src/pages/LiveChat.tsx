@@ -36,6 +36,19 @@ interface ChatMsg {
 }
 
 // Avatar kontak: coba foto profil WA asli, fallback ke inisial nama.
+// Cache foto profil per device+phone + antrean max 3 fetch bersamaan
+// (daftar percakapan bisa puluhan baris; jangan hantam WhatsApp sekaligus).
+const photoCache = new Map<string, string | null>();
+const photoQueue: (() => void)[] = [];
+let photoQueueRunning = 0;
+function pumpPhotoQueue() {
+  while (photoQueueRunning < 3 && photoQueue.length > 0) {
+    const job = photoQueue.shift()!;
+    photoQueueRunning++;
+    job();
+  }
+}
+
 function ChatAvatar({
   deviceId,
   phone,
@@ -55,27 +68,45 @@ function ChatAvatar({
       setPhotoUrl(null);
       return;
     }
+    const key = `${deviceId}:${phone}`;
+    if (photoCache.has(key)) {
+      setPhotoUrl(photoCache.get(key) ?? null);
+      return;
+    }
     let alive = true;
     const ctrl = new AbortController();
-    (async () => {
+    const run = async () => {
       try {
         const res = await apiFetch(
           `/chat/profile-pic?deviceId=${deviceId}&phone=${encodeURIComponent(phone)}`,
           { signal: ctrl.signal }
         );
-        if (!res.ok) return;
+        if (!res.ok) {
+          photoCache.set(key, null);
+          return;
+        }
         const blob = await res.blob();
         if (alive && blob.size > 0) {
           const url = URL.createObjectURL(blob);
+          photoCache.set(key, url);
           setPhotoUrl(url);
+        } else {
+          photoCache.set(key, null);
         }
       } catch {
-        /* abaikan: pakai inisial */
+        photoCache.set(key, null);
+      } finally {
+        photoQueueRunning--;
+        pumpPhotoQueue();
       }
-    })();
+    };
+    photoQueue.push(run);
+    pumpPhotoQueue();
     return () => {
       alive = false;
       ctrl.abort();
+      const i = photoQueue.indexOf(run);
+      if (i >= 0) photoQueue.splice(i, 1);
     };
   }, [deviceId, phone]);
   useEffect(() => {
@@ -383,9 +414,11 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                     : "hover:bg-secondary/50"
                 )}
               >
-                <div className="w-8 h-8 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center text-xs font-semibold shrink-0">
-                  {(convo.contactName || convo.phone).charAt(0).toUpperCase()}
-                </div>
+                <ChatAvatar
+                  deviceId={activeDeviceId}
+                  phone={convo.phone}
+                  name={convo.contactName || convo.phone}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-foreground truncate">
