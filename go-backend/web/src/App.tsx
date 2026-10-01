@@ -26,7 +26,6 @@ const LiveChatHub = lazy(() => import("@/pages/LiveChatHub"));
 const FileManager = lazy(() => import("@/pages/FileManager"));
 const Links = lazy(() => import("@/pages/Links"));
 const Admin = lazy(() => import("@/pages/Admin"));
-const Otp = lazy(() => import("@/pages/Otp"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Langganan = lazy(() => import("@/pages/Langganan"));
@@ -191,9 +190,6 @@ function AppRouter() {
         </Route>
         <Route path="/bot-logs">
           <ProtectedRoute><DeveloperHub /></ProtectedRoute>
-        </Route>
-        <Route path="/otp">
-          <ProtectedRoute><Otp /></ProtectedRoute>
         </Route>
         <Route path="/team">
           <Redirect to="/settings?tab=tim" />

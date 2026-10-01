@@ -80,7 +80,6 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerAutoReplyRoutes(protected, db)
 			registerAIReplyRoutes(protected, db)
 			registerMenuBotRoutes(protected, db)
-			registerOtpRoutes(protected, db, waManager) // Fitur 3: API OTP via WA
 			registerApiKeyRoutes(protected, db)
 			registerBillingRoutes(protected, cfg, db)
 			registerScheduleRoutes(protected, db)

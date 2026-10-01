@@ -36,7 +36,6 @@ import {
   CreditCard,
   Gift,
   History,
-  KeyRound,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -90,7 +89,6 @@ const sections: NavSection[] = [
       { label: "API Docs", href: "/api-docs", icon: CodeXml },
       { label: "Playground", href: "/api-playground", icon: FlaskConical },
       { label: "Webhook Logs", href: "/webhook-logs", icon: Webhook },
-      { label: "OTP", href: "/otp", icon: KeyRound },
     ],
   },
 ];
