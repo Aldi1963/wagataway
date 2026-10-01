@@ -51,6 +51,8 @@ interface Plan {
 
 interface BillingSubscription {
   endDate: string;
+  // Fitur 7: penanda trial otomatis 7 hari.
+  isTrial?: boolean;
   Plan?: { name: string; price: number };
 }
 
@@ -534,6 +536,8 @@ export default function Dashboard() {
     : "-";
   const subPlanName = subscription?.Plan?.name || planName;
   const canRenew = !!subscription?.Plan && subscription.Plan.price > 0;
+  // Fitur 7: user dalam masa trial otomatis 7 hari.
+  const isTrialSub = !!subscription?.isTrial;
   const subEndLabel = subscription
     ? `Berakhir ${new Date(subscription.endDate).toLocaleDateString("id-ID", {
         day: "numeric",
@@ -619,6 +623,12 @@ export default function Dashboard() {
         <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {subPlanName}
+            {/* Fitur 7: label Trial */}
+            {isTrialSub && (
+              <span className="ml-2 align-middle inline-flex items-center rounded-full bg-[#243370]/10 text-[#243370] dark:text-blue-400 text-[11px] font-semibold px-2 py-0.5">
+                Trial
+              </span>
+            )}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">{subEndLabel}</p>
           {/* Meter kuota pesan bulanan (Fitur 3) */}
@@ -664,14 +674,25 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {canRenew && (
+          {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar */}
+          {isTrialSub ? (
             <Button
               size="sm"
               className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
-              onClick={() => navigate("/billing?perpanjang=1")}
+              onClick={() => navigate("/billing")}
             >
-              Perpanjang
+              Upgrade sekarang
             </Button>
+          ) : (
+            canRenew && (
+              <Button
+                size="sm"
+                className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+                onClick={() => navigate("/billing?perpanjang=1")}
+              >
+                Perpanjang
+              </Button>
+            )
           )}
         </StatCard>
 

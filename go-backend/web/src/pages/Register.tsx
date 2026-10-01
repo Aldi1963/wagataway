@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { AlertCircle, Check, Loader2 } from "lucide-react";
+import { AlertCircle, Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
@@ -129,6 +129,12 @@ export default function Register() {
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
           {loading ? "Memproses..." : "Daftar"}
         </Button>
+
+        {/* Fitur 7: info trial otomatis */}
+        <p className="flex items-center justify-center gap-1.5 text-[12px] text-muted-foreground">
+          <Sparkles className="w-3.5 h-3.5 text-[#243370] dark:text-blue-400 shrink-0" />
+          Daftar sekarang, gratis 7 hari paket Lite.
+        </p>
 
         <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
           Dengan mendaftar, Anda menyetujui Syarat Layanan dan Kebijakan Privasi

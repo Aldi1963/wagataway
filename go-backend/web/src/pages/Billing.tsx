@@ -28,6 +28,8 @@ interface Subscription {
   status: string;
   startDate: string;
   endDate: string;
+  // Fitur 7: penanda trial otomatis 7 hari.
+  isTrial?: boolean;
   Plan: Plan;
 }
 
@@ -272,18 +274,38 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
 
       {/* Current Plan */}
       <Card>
-        <CardContent className="p-4 flex items-center justify-between">
-          <div>
+        <CardContent className="p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
               Paket saat ini: <span className="font-bold">{currentPlanName}</span>
+              {/* Fitur 7: label Trial */}
+              {sub?.isTrial && (
+                <span className="ml-2 align-middle inline-flex items-center rounded-full bg-[#243370]/10 text-[#243370] dark:text-blue-400 text-[11px] font-semibold px-2 py-0.5">
+                  Trial
+                </span>
+              )}
             </p>
             <p className="text-xs text-muted-foreground">
               {sub
                 ? `Aktif sampai ${new Date(sub.endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
                 : "Paket dasar gratis"}
             </p>
+            {/* Fitur 7: ajakan upgrade untuk user trial */}
+            {sub?.isTrial && (
+              <Button
+                size="sm"
+                className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+                onClick={() =>
+                  document
+                    .getElementById("daftar-paket")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+              >
+                Upgrade sekarang
+              </Button>
+            )}
           </div>
-          <Badge variant="outline">Aktif</Badge>
+          <Badge variant="outline" className="shrink-0">Aktif</Badge>
         </CardContent>
       </Card>
 
@@ -293,7 +315,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div id="daftar-paket" className="grid grid-cols-1 md:grid-cols-3 gap-4 scroll-mt-4">
           {plans.map((plan, i) => {
             const isCurrent = sub?.planId === plan.id || (!sub && plan.price === 0);
             // Fitur 4: langganan aktif memilih paket lain = ganti paket (prorata)
