@@ -2,12 +2,14 @@ import { useLocation } from "wouter";
 import ApiDocs from "./ApiDocs";
 import ApiPlayground from "./ApiPlayground";
 import WebhookLogs from "./WebhookLogs";
+import BotDeliveryLogs from "./BotDeliveryLogs";
 import { PageTabs } from "@/components/ui/tabs";
 
 const TABS = [
   { id: "api-docs", label: "API Docs", href: "/developer" },
   { id: "playground", label: "Playground", href: "/api-playground" },
   { id: "webhook-logs", label: "Webhook Logs", href: "/webhook-logs" },
+  { id: "bot-logs", label: "Riwayat Bot", href: "/bot-logs" },
 ];
 
 /** Halaman gabungan "Developer": dokumentasi API, playground, dan log webhook. */
@@ -18,7 +20,9 @@ export default function DeveloperHub() {
       ? "playground"
       : location === "/webhook-logs"
         ? "webhook-logs"
-        : "api-docs";
+        : location === "/bot-logs"
+          ? "bot-logs"
+          : "api-docs";
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -33,6 +37,8 @@ export default function DeveloperHub() {
         <ApiPlayground embedded />
       ) : active === "webhook-logs" ? (
         <WebhookLogs embedded />
+      ) : active === "bot-logs" ? (
+        <BotDeliveryLogs embedded />
       ) : (
         <ApiDocs embedded />
       )}

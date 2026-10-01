@@ -185,6 +185,9 @@ function AppRouter() {
         <Route path="/webhook-logs">
           <ProtectedRoute><DeveloperHub /></ProtectedRoute>
         </Route>
+        <Route path="/bot-logs">
+          <ProtectedRoute><DeveloperHub /></ProtectedRoute>
+        </Route>
         <Route path="/team">
           <Redirect to="/settings?tab=tim" />
         </Route>

@@ -26,6 +26,7 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 		devices.GET("/:id/qr", getDeviceQR(db, wm))
 		devices.POST("/:id/pair-code", requestPairCode(db, wm))
 		devices.GET("/:id/status", getDeviceStatus(db, wm))
+		devices.GET("/:id/bot-deliveries", listBotDeliveries(db))
 	}
 }
 
@@ -277,5 +278,34 @@ func getDeviceStatus(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		status := wm.GetStatus(uint(id))
 		c.JSON(http.StatusOK, gin.H{"status": status})
+	}
+}
+
+// listBotDeliveries — GET /api/devices/:id/bot-deliveries
+// Riwayat pengiriman webhook bot PPOB (event wamp.bot) untuk satu device,
+// paginasi sederhana (default 20/page).
+func listBotDeliveries(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+
+		page, limit := getPageLimit(c)
+		query := db.Where("user_id = ? AND device_id = ? AND event = ?", userID, device.ID, "wamp.bot")
+		var total int64
+		query.Model(&models.WebhookDeliveryLog{}).Count(&total)
+		var items []models.WebhookDeliveryLog
+		query.Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&items)
+		c.JSON(http.StatusOK, gin.H{
+			"deliveries": items,
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+		})
 	}
 }

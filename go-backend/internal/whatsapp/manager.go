@@ -933,7 +933,7 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 	var dev models.Device
 	if err := m.db.Select("webhook_url").Where("id = ?", deviceID).First(&dev).Error; err == nil {
 		if url := strings.TrimSpace(dev.WebhookURL); url != "" {
-			go m.deliverDeviceWebhook(deviceID, url, event, payload)
+			go m.deliverDeviceWebhook(userID, deviceID, url, event, payload)
 		}
 	}
 }
@@ -941,7 +941,7 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 // deliverDeviceWebhook mengirim webhook per-device. Bila URL mengarah ke bot
 // PPOB (path berakhiran /whatsapp/bot), kirim format WAMP {from, message}
 // yang dimengerti WhatsappBotController; selain itu kirim envelope standar.
-func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload map[string]interface{}) {
+func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, event string, payload map[string]interface{}) {
 	var raw []byte
 	if isWampBotURL(url) {
 		if event != "message.received" {
@@ -962,11 +962,30 @@ func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload
 			log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to marshal WAMP bot payload")
 			return
 		}
-		// POST ke endpoint bot PPOB, baca JSON balasan {"text": ...},
+		// POST ke endpoint bot PPOB dengan retry, baca JSON balasan {"text": ...},
 		// lalu kirim teks balasan itu ke pengirim via device ini.
-		replyText, statusCode, err := postWampBot(url, raw)
+		// Payload yang dicatat ke DB TANPA secret.
+		safePayload, _ := json.Marshal(map[string]interface{}{
+			"from": from, "message": truncate(text, 200),
+		})
+		replyText, statusCode, attempts, err := postWampBotWithRetry(url, raw)
+		errStr := ""
 		if err != nil {
-			log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Str("error", err.Error()).Msg("WAMP bot webhook failed")
+			errStr = err.Error()
+		}
+		m.db.Create(&models.WebhookDeliveryLog{
+			UserID:     userID,
+			DeviceID:   deviceID,
+			URL:        url,
+			Event:      "wamp.bot",
+			Payload:    string(safePayload),
+			StatusCode: statusCode,
+			Success:    err == nil,
+			ErrorMsg:   truncate(errStr, 500),
+			RetryCount: attempts - 1,
+		})
+		if err != nil {
+			log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Int("attempts", attempts).Str("error", errStr).Msg("WAMP bot webhook failed")
 			return
 		}
 		log.Info().Uint("deviceID", deviceID).Int("status", statusCode).Msg("WAMP bot webhook delivered")
@@ -1008,15 +1027,44 @@ func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload
 	}
 }
 
-// postWampBot: POST payload ke endpoint bot PPOB (/whatsapp/bot) dan kembalikan
-// teks balasan dari JSON respons {"text": "..."}.
+// postWampBotWithRetry: POST payload ke endpoint bot PPOB (/whatsapp/bot) dengan
+// 3x percobaan dan backoff 2s, 5s. Retry HANYA untuk network error/timeout dan
+// HTTP 5xx; 4xx (termasuk 404 dari middleware PPOB) dan respons non-JSON tidak
+// di-retry. Mengembalikan teks balasan, status code, jumlah percobaan, error.
+func postWampBotWithRetry(url string, raw []byte) (string, int, int, error) {
+	backoffs := []time.Duration{2 * time.Second, 5 * time.Second}
+	var lastErr error
+	var statusCode int
+	attempts := 0
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			time.Sleep(backoffs[i-1])
+		}
+		attempts++
+		replyText, sc, err, retryable := postWampBotOnce(url, raw)
+		statusCode = sc
+		if err == nil {
+			return replyText, sc, attempts, nil
+		}
+		lastErr = err
+		if !retryable {
+			break
+		}
+		log.Warn().Int("attempt", attempts).Int("status", sc).Str("error", err.Error()).Msg("WAMP bot webhook retrying")
+	}
+	return "", statusCode, attempts, lastErr
+}
+
+// postWampBotOnce: satu kali POST ke endpoint bot PPOB dan kembalikan teks
+// balasan dari JSON respons {"text": "..."}. retryable=true hanya untuk
+// network error/timeout dan HTTP 5xx.
 // Pakai HTTP client yang sadar proxy (ProxyFromEnvironment): client aman generik
 // (SafeClient, dial langsung) tidak bisa keluar dari sandbox ini karena semua
 // TCP diintersep ke egress proxy. URL webhook diset admin sendiri, jadi aman.
-func postWampBot(url string, raw []byte) (string, int, error) {
+func postWampBotOnce(url string, raw []byte) (string, int, error, bool) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
-		return "", 0, err
+		return "", 0, err, false
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-Event", "message.received")
@@ -1029,21 +1077,24 @@ func postWampBot(url string, raw []byte) (string, int, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", 0, err
+		return "", 0, err, true
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 500 {
+		return "", resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode), true
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return "", resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode), false
 	}
 	var parsed struct {
 		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", resp.StatusCode, fmt.Errorf("respon bukan JSON: %w", err)
+		return "", resp.StatusCode, fmt.Errorf("respon bukan JSON: %w", err), false
 	}
-	return strings.TrimSpace(parsed.Text), resp.StatusCode, nil
+	return strings.TrimSpace(parsed.Text), resp.StatusCode, nil, false
 }
 
 // isWampBotURL: true bila path URL berakhiran /whatsapp/bot (endpoint bot PPOB).
