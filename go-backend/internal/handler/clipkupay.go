@@ -209,8 +209,23 @@ func clipkuDataOf(out map[string]any) *clipkuTxData {
 		TotalAmount: num(d["total_amount"]),
 		Status:      str(d["status"]),
 		PaymentURL:  str(d["payment_url"]),
-		QrURL:       str(d["qr_url"]),
+		QrURL:       normalizeQrURL(str(d["qr_url"])),
 	}
+}
+
+// normalizeQrURL: API Clipku Pay mengembalikan qr_url sebagai payload EMV
+// mentah (string "00020101..."), BUKAN URL gambar. Ubah menjadi URL gambar
+// QR via api.qrserver.com agar bisa langsung dipakai di <img>. Bila sudah
+// berupa URL http(s), dipakai apa adanya.
+func normalizeQrURL(qr string) string {
+	qr = strings.TrimSpace(qr)
+	if qr == "" {
+		return ""
+	}
+	if strings.HasPrefix(qr, "http://") || strings.HasPrefix(qr, "https://") {
+		return qr
+	}
+	return "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + url.QueryEscape(qr)
 }
 
 // fetchQrisURL mengambil URL gambar QR QRIS dari halaman pembayaran Clipku Pay.
