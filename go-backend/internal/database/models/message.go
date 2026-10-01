@@ -21,6 +21,9 @@ type Message struct {
 	MessageID  string         `gorm:"size:100;index" json:"messageId"` // WA message ID
 	Direction  string         `gorm:"size:10;default:outgoing" json:"direction"` // outgoing, incoming
 	RetryCount int            `gorm:"default:0" json:"retryCount"`
+	// Kunci idempotency untuk /messages/send: request dengan key yang sama
+	// tidak dikirim ulang (anti pesan dobel saat retry network).
+	IdempotencyKey string `gorm:"size:100;index" json:"idempotencyKey"`
 	SentAt     *time.Time     `json:"sentAt"`
 	CreatedAt  time.Time      `json:"createdAt"`
 	UpdatedAt  time.Time      `json:"updatedAt"`

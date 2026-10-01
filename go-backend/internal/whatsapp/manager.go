@@ -19,7 +19,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waCompanionReg"
-	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
@@ -248,85 +247,6 @@ func (m *Manager) GetClient(deviceID uint) *whatsmeow.Client {
 	defer sess.mu.RUnlock()
 
 	return sess.Client
-}
-
-// SendMessage sends a WhatsApp message through a device
-func (m *Manager) SendMessage(deviceID uint, to, msgType, content, mediaURL string) error {
-	m.mu.RLock()
-	sess, exists := m.sessions[deviceID]
-	m.mu.RUnlock()
-
-	if !exists || sess.Status != "connected" {
-		return fmt.Errorf("device %d tidak terhubung", deviceID)
-	}
-
-	if sess.Client == nil {
-		return fmt.Errorf("device %d client not initialized", deviceID)
-	}
-
-	// Parse recipient JID
-	jid, err := parseJID(to)
-	if err != nil {
-		return fmt.Errorf("nomor tidak valid: %w", err)
-	}
-
-	// Indikator "mengetik..." bila flag typingIndicator aktif.
-	// Dikirim sebelum pesan (composing), dihentikan setelah pesan terkirim (paused).
-	sess.mu.RLock()
-	typing := sess.TypingIndicator
-	sess.mu.RUnlock()
-	if typing {
-		tpCtx, tpCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer tpCancel()
-		_ = sess.Client.SendChatPresence(tpCtx, jid, types.ChatPresenceComposing, types.ChatPresenceMediaText)
-		defer func() {
-			_ = sess.Client.SendChatPresence(context.Background(), jid, types.ChatPresencePaused, types.ChatPresenceMediaText)
-		}()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	switch msgType {
-	case "text", "":
-		msg := &waE2E.Message{
-			Conversation: proto.String(content),
-		}
-		_, err = sess.Client.SendMessage(ctx, jid, msg)
-
-	case "image":
-		if mediaURL == "" {
-			return fmt.Errorf("mediaURL wajib untuk tipe image")
-		}
-		// Upload and send image
-		err = m.sendImageMessage(ctx, sess.Client, jid, mediaURL, content)
-
-	case "document":
-		if mediaURL == "" {
-			return fmt.Errorf("mediaURL wajib untuk tipe document")
-		}
-		err = m.sendDocumentMessage(ctx, sess.Client, jid, mediaURL, content)
-
-	default:
-		// Default to text
-		msg := &waE2E.Message{
-			Conversation: proto.String(content),
-		}
-		_, err = sess.Client.SendMessage(ctx, jid, msg)
-	}
-
-	if err != nil {
-		log.Error().Err(err).Uint("deviceID", deviceID).Str("to", to).Msg("Failed to send message")
-		return err
-	}
-
-	log.Info().
-		Uint("deviceID", deviceID).
-		Str("to", to).
-		Str("type", msgType).
-		Msg("WhatsApp message sent")
-
-	return nil
 }
 
 // CheckNumberRegistered checks if a phone number is registered on WhatsApp
@@ -839,6 +759,19 @@ func (m *Manager) handleReceipt(sess *SessionState, receipt *events.Receipt) {
 		m.db.Model(&models.Message{}).
 			Where("message_id = ? AND device_id = ?", msgID, sess.DeviceID).
 			Update("status", status)
+
+		// Fire webhook bila pesan ini milik kita (punya MessageID tercatat).
+		var msg models.Message
+		if err := m.db.Select("id", `"to"`).
+			Where("message_id = ? AND device_id = ?", msgID, sess.DeviceID).
+			First(&msg).Error; err == nil {
+			go m.fireWebhooks(sess.UserID, sess.DeviceID, "message."+status, map[string]interface{}{
+				"messageId": msgID,
+				"dbId":      msg.ID,
+				"to":        msg.To,
+				"status":    status,
+			})
+		}
 	}
 }
 
@@ -1167,71 +1100,6 @@ func (m *Manager) deliverWebhook(hook models.Webhook, deviceID uint, event strin
 	if !success {
 		log.Warn().Uint("webhookID", hook.ID).Str("event", event).Str("error", errMsg).Msg("Webhook delivery failed")
 	}
-}
-
-// sendImageMessage uploads and sends an image
-func (m *Manager) sendImageMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL, caption string) error {
-	// Download image dari URL, atau baca langsung bila path lokal (file://).
-	data, err := loadMediaData(mediaURL)
-	if err != nil {
-		return fmt.Errorf("gagal download image: %w", err)
-	}
-
-	// Upload to WhatsApp
-	uploaded, err := client.Upload(ctx, data, whatsmeow.MediaImage)
-	if err != nil {
-		return fmt.Errorf("gagal upload image: %w", err)
-	}
-
-	msg := &waE2E.Message{
-		ImageMessage: &waE2E.ImageMessage{
-			Caption:       proto.String(caption),
-			URL:           proto.String(uploaded.URL),
-			DirectPath:    proto.String(uploaded.DirectPath),
-			MediaKey:      uploaded.MediaKey,
-			Mimetype:      proto.String("image/jpeg"),
-			FileEncSHA256: uploaded.FileEncSHA256,
-			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(data))),
-		},
-	}
-
-	_, err = client.SendMessage(ctx, jid, msg)
-	return err
-}
-
-// sendDocumentMessage uploads and sends a document
-func (m *Manager) sendDocumentMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL, filename string) error {
-	data, err := loadMediaData(mediaURL)
-	if err != nil {
-		return fmt.Errorf("gagal download document: %w", err)
-	}
-
-	uploaded, err := client.Upload(ctx, data, whatsmeow.MediaDocument)
-	if err != nil {
-		return fmt.Errorf("gagal upload document: %w", err)
-	}
-
-	if filename == "" {
-		filename = "document"
-	}
-
-	msg := &waE2E.Message{
-		DocumentMessage: &waE2E.DocumentMessage{
-			Title:         proto.String(filename),
-			FileName:      proto.String(filename),
-			URL:           proto.String(uploaded.URL),
-			DirectPath:    proto.String(uploaded.DirectPath),
-			MediaKey:      uploaded.MediaKey,
-			Mimetype:      proto.String("application/octet-stream"),
-			FileEncSHA256: uploaded.FileEncSHA256,
-			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(data))),
-		},
-	}
-
-	_, err = client.SendMessage(ctx, jid, msg)
-	return err
 }
 
 // autoReconnect restores sessions for devices that were previously connected

@@ -18,6 +18,7 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 		msgs.GET("", listMessages(db))
 		msgs.POST("/send", sendMessage(db, wm))
 		msgs.POST("/send-bulk", sendBulkMessage(db, wm))
+		registerMessageExtraRoutes(msgs, db, wm)
 	}
 }
 
@@ -52,13 +53,15 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		userID := middleware.GetUserID(c)
 
 		var req struct {
-			DeviceID uint   `json:"deviceId" binding:"required"`
-			To       string `json:"to" binding:"required"`
-			Type     string `json:"type"`
-			Content  string `json:"content" binding:"required"`
-			MediaURL string `json:"mediaUrl"`
-			FileID   *uint  `json:"fileId"`
-			Caption  string `json:"caption"`
+			DeviceID       uint   `json:"deviceId" binding:"required"`
+			To             string `json:"to" binding:"required"`
+			Type           string `json:"type"`
+			Content        string `json:"content" binding:"required"`
+			MediaURL       string `json:"mediaUrl"`
+			FileID         *uint  `json:"fileId"`
+			Caption        string `json:"caption"`
+			ReplyTo        string `json:"replyTo"`
+			IdempotencyKey string `json:"idempotencyKey"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -93,16 +96,27 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 		}
 
+		// Idempotency: key yang sama tidak dikirim ulang.
+		if req.IdempotencyKey != "" {
+			var existing models.Message
+			if err := db.Where("user_id = ? AND device_id = ? AND idempotency_key = ?",
+				userID, req.DeviceID, req.IdempotencyKey).First(&existing).Error; err == nil {
+				c.JSON(http.StatusOK, gin.H{"message": "Pesan sudah pernah dikirim (duplikat)", "duplicate": true, "data": existing})
+				return
+			}
+		}
+
 		// Create message record
 		msg := models.Message{
-			UserID:   userID,
-			DeviceID: req.DeviceID,
-			To:       req.To,
-			Type:     req.Type,
-			Content:  req.Content,
-			MediaURL: mediaURL,
-			Caption:  req.Caption,
-			Status:   "pending",
+			UserID:         userID,
+			DeviceID:       req.DeviceID,
+			To:             req.To,
+			Type:           req.Type,
+			Content:        req.Content,
+			MediaURL:       mediaURL,
+			Caption:        req.Caption,
+			Status:         "pending",
+			IdempotencyKey: req.IdempotencyKey,
 		}
 
 		if err := db.Create(&msg).Error; err != nil {
@@ -113,12 +127,18 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		// Send via WhatsApp
 		campaignID := "single-" + time.Now().Format("20060102150405")
 		go func() {
-			err := wm.SendMessage(req.DeviceID, req.To, req.Type, req.Content, mediaURL)
+			waID, err := wm.SendMessageWithOptions(req.DeviceID, req.To, whatsapp.SendOptions{
+				Type:     req.Type,
+				Content:  req.Content,
+				MediaURL: mediaURL,
+				ReplyTo:  req.ReplyTo,
+			})
 			if err != nil {
 				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
 				recordReport(db, userID, campaignID, req.To, "failed", err.Error())
 			} else {
-				db.Model(&msg).Update("status", "sent")
+				now := time.Now()
+				db.Model(&msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
 				recordReport(db, userID, campaignID, req.To, "sent", "")
 			}
 		}()

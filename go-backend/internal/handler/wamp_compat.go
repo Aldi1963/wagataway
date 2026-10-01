@@ -39,6 +39,7 @@ func wampSend(db *gorm.DB, wm *whatsapp.Manager, isMedia bool) gin.HandlerFunc {
 			URL       string `form:"url" json:"url"`
 			MediaType string `form:"media_type" json:"media_type"`
 			Caption   string `form:"caption" json:"caption"`
+			ReplyTo   string `form:"reply_to" json:"reply_to"`
 		}
 		// Dukung form-encoded (default WampService) maupun JSON.
 		_ = c.ShouldBind(&req)
@@ -112,11 +113,18 @@ func wampSend(db *gorm.DB, wm *whatsapp.Manager, isMedia bool) gin.HandlerFunc {
 
 		campaignID := "wamp-" + time.Now().Format("20060102150405")
 		go func() {
-			if err := wm.SendMessage(device.ID, req.Number, msgType, content, mediaURL); err != nil {
+			waID, err := wm.SendMessageWithOptions(device.ID, req.Number, whatsapp.SendOptions{
+				Type:     msgType,
+				Content:  content,
+				MediaURL: mediaURL,
+				ReplyTo:  req.ReplyTo,
+			})
+			if err != nil {
 				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
 				recordReport(db, ak.UserID, campaignID, req.Number, "failed", err.Error())
 			} else {
-				db.Model(&msg).Update("status", "sent")
+				now := time.Now()
+				db.Model(&msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
 				recordReport(db, ak.UserID, campaignID, req.Number, "sent", "")
 			}
 		}()
