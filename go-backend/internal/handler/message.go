@@ -23,6 +23,15 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 	}
 }
 
+// viaSource menentukan sumber pengiriman untuk kolom "Via" di Riwayat Pesan:
+// "api" bila request memakai X-API-Key (integrasi eksternal), "web" bila lewat dashboard.
+func viaSource(c *gin.Context) string {
+	if c.GetHeader("X-API-Key") != "" {
+		return "api"
+	}
+	return "web"
+}
+
 func listMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -127,6 +136,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			MediaURL:       mediaURL,
 			Caption:        req.Caption,
 			Status:         "pending",
+			Via:            viaSource(c),
 			IdempotencyKey: req.IdempotencyKey,
 		}
 

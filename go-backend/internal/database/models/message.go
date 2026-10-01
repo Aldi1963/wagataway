@@ -20,6 +20,7 @@ type Message struct {
 	ErrorMsg   string         `gorm:"type:text" json:"errorMsg"`
 	MessageID  string         `gorm:"size:100;index" json:"messageId"` // WA message ID
 	Direction  string         `gorm:"size:10;default:outgoing" json:"direction"` // outgoing, incoming
+	Via        string         `gorm:"size:20;default:web" json:"via"` // web, api
 	RetryCount int            `gorm:"default:0" json:"retryCount"`
 	// Kunci idempotency untuk /messages/send: request dengan key yang sama
 	// tidak dikirim ulang (anti pesan dobel saat retry network).

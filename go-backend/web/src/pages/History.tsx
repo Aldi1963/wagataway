@@ -13,6 +13,7 @@ interface HistoryMessage {
   type: string;
   content: string;
   status: string;
+  via: string;
   messageId: string;
   createdAt: string;
 }
@@ -67,7 +68,7 @@ export default function History() {
       setRows(m.messages ?? []);
       setTotal(m.total ?? 0);
       const map: Record<number, string> = {};
-      for (const dev of d.devices ?? []) map[dev.id] = dev.name || dev.phone;
+      for (const dev of d.devices ?? []) map[dev.id] = dev.phone || dev.name || `#${dev.id}`;
       setDevices(map);
       setPage(p);
     } catch (e: any) {
@@ -136,14 +137,14 @@ export default function History() {
                     {rows.map((m) => (
                       <tr key={m.id} className="border-b border-border last:border-0">
                         <td className="py-3 pr-4 font-mono text-[13px]">{m.id}</td>
-                        <td className="py-3 pr-4 text-[13px]">{devices[m.deviceId] ?? `#${m.deviceId}`}</td>
+                        <td className="py-3 pr-4 font-mono text-[13px]">{devices[m.deviceId] ?? `#${m.deviceId}`}</td>
                         <td className="py-3 pr-4 font-mono text-[13px]">{m.to}</td>
                         <td className="py-3 pr-4 text-xs text-muted-foreground max-w-[280px] truncate" title={m.content}>
                           {m.content || "-"}
                         </td>
                         <td className="py-3 pr-4">{statusBadge(m.status)}</td>
                         <td className="py-3 pr-4">
-                          <Badge variant="secondary">{m.type || "text"}</Badge>
+                          <Badge variant="secondary">{m.via || "-"}</Badge>
                         </td>
                         <td className="py-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">{formatDate(m.createdAt)}</td>
                         <td className="py-3">

@@ -133,6 +133,7 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Type:     "poll",
 			Content:  req.Question,
 			Status:   "pending",
+			Via:      viaSource(c),
 		}
 		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
 			Type:                 "poll",
@@ -189,6 +190,7 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 			Type:     "interactive",
 			Content:  req.Body,
 			Status:   "pending",
+			Via:      viaSource(c),
 		}
 		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
 			Type:    "interactive",
@@ -227,6 +229,7 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 			Type:     "sticker",
 			MediaURL: req.MediaURL,
 			Status:   "pending",
+			Via:      viaSource(c),
 		}
 		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "sticker", MediaURL: req.MediaURL})
 
@@ -260,6 +263,7 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 			Type:     "voicenote",
 			MediaURL: req.MediaURL,
 			Status:   "pending",
+			Via:      viaSource(c),
 		}
 		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "voicenote", MediaURL: req.MediaURL})
 
@@ -301,6 +305,7 @@ func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFu
 			Type:     "location",
 			Content:  req.Name,
 			Status:   "pending",
+			Via:      viaSource(c),
 		}
 		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
 			Type:         "location",

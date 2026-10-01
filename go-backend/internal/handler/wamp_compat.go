@@ -105,6 +105,7 @@ func wampSend(db *gorm.DB, wm *whatsapp.Manager, isMedia bool) gin.HandlerFunc {
 			MediaURL: mediaURL,
 			Caption:  req.Caption,
 			Status:   "pending",
+			Via:      "api",
 		}
 		if err := db.Create(&msg).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": false, "message": "Gagal menyimpan pesan"})
