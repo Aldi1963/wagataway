@@ -20,6 +20,8 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 		msgs.GET("", listMessages(db))
 		msgs.POST("/send", sendMessage(db, wm))
 		msgs.POST("/send-bulk", sendBulkMessage(db, wm))
+		msgs.POST("/check-recipients", checkRecipients(db, wm))
+		msgs.GET("/bulk-jobs", listBulkJobs(db))
 		msgs.GET("/bulk-stats", bulkStats(db))
 		registerMessageExtraRoutes(msgs, db, wm)
 	}
@@ -184,6 +186,11 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			FileID     *uint    `json:"fileId"`
 			MinDelay   int      `json:"minDelay"`
 			MaxDelay   int      `json:"maxDelay"`
+			// AutoClean (Fitur 4): bila true, nomor yang tidak terdaftar di WA
+			// dicoret otomatis SEBELUM blast — validasi berjalan sebelum job
+			// dibuat dan sebelum distribusi round-robin ke device pengirim.
+			// Default false agar perilaku lama tidak berubah.
+			AutoClean bool `json:"autoClean"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -266,19 +273,57 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 		}
 
+		// Fitur 4 — pembersih nomor otomatis: coret nomor yang tidak terdaftar di
+		// WA SEBELUM job dibuat dan SEBELUM distribusi round-robin ke device.
+		// Memakai device utama (deviceIDs[0]) untuk validasi. Default nonaktif.
+		recipients := req.Recipients
+		cleaned := gin.H{
+			"applied":    false,
+			"total":      len(recipients),
+			"valid":      len(recipients),
+			"excluded":   0,
+			"duplicates": 0,
+		}
+		var skippedJSON string
+		if req.AutoClean {
+			valid, excluded, dupCount, err := wm.FilterRegisteredNumbers(deviceIDs[0], recipients)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal validasi nomor: " + err.Error(), "code": "WA_ERROR"})
+				return
+			}
+			if len(valid) == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Semua nomor tidak terdaftar di WhatsApp — blast dibatalkan", "code": "NO_VALID_NUMBERS"})
+				return
+			}
+			skippedBytes, _ := json.Marshal(excluded)
+			skippedJSON = string(skippedBytes)
+			recipients = valid
+			cleaned = gin.H{
+				"applied":         true,
+				"total":           len(req.Recipients),
+				"valid":           len(valid),
+				"excluded":        len(excluded),
+				"duplicates":      dupCount,
+				"excludedNumbers": excluded,
+			}
+		}
+
 		// Create bulk job
 		idsJSON, _ := json.Marshal(deviceIDs)
 		job := models.BulkJob{
-			UserID:     userID,
-			DeviceID:   deviceIDs[0],
-			DeviceIDs:  string(idsJSON),
-			Type:       req.Type,
-			Content:    req.Content,
-			MediaURL:   mediaURL,
-			Status:     "pending",
-			TotalCount: len(req.Recipients),
-			MinDelay:   req.MinDelay,
-			MaxDelay:   req.MaxDelay,
+			UserID:         userID,
+			DeviceID:       deviceIDs[0],
+			DeviceIDs:      string(idsJSON),
+			Type:           req.Type,
+			Content:        req.Content,
+			MediaURL:       mediaURL,
+			Status:         "pending",
+			TotalCount:     len(recipients),
+			MinDelay:       req.MinDelay,
+			MaxDelay:       req.MaxDelay,
+			AutoClean:      req.AutoClean,
+			SkippedCount:   len(req.Recipients) - len(recipients),
+			SkippedNumbers: skippedJSON,
 		}
 
 		if err := db.Create(&job).Error; err != nil {
@@ -287,7 +332,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Create recipients
-		for _, phone := range req.Recipients {
+		for _, phone := range recipients {
 			recipient := models.BulkJobRecipient{
 				BulkJobID: job.ID,
 				Phone:     phone,
@@ -303,6 +348,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			"message":   "Bulk message dijadwalkan",
 			"job":       job,
 			"deviceIds": deviceIDs,
+			"cleaned":   cleaned,
 		})
 	}
 }
@@ -336,5 +382,88 @@ func bulkStats(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 		c.JSON(http.StatusOK, stats)
+	}
+}
+
+// checkRecipients — pratinjau pembersih nomor SEBELUM blast dikirim (Fitur 4).
+// POST /api/messages/check-recipients — body: {deviceId, numbers[]} (maks 1000).
+// Mengembalikan nomor valid vs nomor yang akan dicoret (tidak terdaftar di WA)
+// agar UI bisa menampilkan konfirmasi "N nomor valid, M nomor dicoret. Lanjutkan?"
+func checkRecipients(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+
+		var req struct {
+			DeviceID uint     `json:"deviceId" binding:"required"`
+			Numbers  []string `json:"numbers" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid (deviceId & numbers wajib)", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if len(req.Numbers) == 0 || len(req.Numbers) > 1000 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "numbers butuh 1-1000 nomor", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+			return
+		}
+
+		valid, excluded, dupCount, err := wm.FilterRegisteredNumbers(req.DeviceID, req.Numbers)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal validasi nomor: " + err.Error(), "code": "WA_ERROR"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"total":           len(req.Numbers),
+			"valid":           valid,
+			"validCount":      len(valid),
+			"excluded":        excluded,
+			"excludedCount":   len(excluded),
+			"duplicates":      dupCount,
+			"excludedNumbers": excluded,
+		})
+	}
+}
+
+// listBulkJobs — riwayat campaign blast untuk audit (Fitur 4).
+// GET /api/messages/bulk-jobs?limit=20 — menampilkan jumlah nomor yang dicoret
+// (skippedCount) + daftarnya (skippedNumbers) per campaign.
+func listBulkJobs(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		limit := 20
+		if l, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+
+		var jobs []models.BulkJob
+		db.Where("user_id = ?", userID).Order("id DESC").Limit(limit).Find(&jobs)
+
+		out := make([]gin.H, 0, len(jobs))
+		for _, j := range jobs {
+			var skipped []string
+			if j.SkippedNumbers != "" {
+				_ = json.Unmarshal([]byte(j.SkippedNumbers), &skipped)
+			}
+			content := j.Content
+			if len([]rune(content)) > 80 {
+				content = string([]rune(content)[:80]) + "…"
+			}
+			out = append(out, gin.H{
+				"id":              j.ID,
+				"status":          j.Status,
+				"totalCount":      j.TotalCount,
+				"sentCount":       j.SentCount,
+				"failedCount":     j.FailedCount,
+				"autoClean":       j.AutoClean,
+				"skippedCount":    j.SkippedCount,
+				"skippedNumbers":  skipped,
+				"contentPreview":  content,
+				"createdAt":       j.CreatedAt,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"jobs": out})
 	}
 }

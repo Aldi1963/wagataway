@@ -23,6 +23,13 @@ type BulkJob struct {
 	TotalCount  int            `gorm:"default:0" json:"totalCount"`
 	SentCount   int            `gorm:"default:0" json:"sentCount"`
 	FailedCount int            `gorm:"default:0" json:"failedCount"`
+	// Fitur 4 — pembersih nomor otomatis sebelum blast:
+	// AutoClean: toggle user saat membuat job. SkippedCount: jumlah nomor yang
+	// dicoret (tidak terdaftar di WA). SkippedNumbers: JSON array nomor yang
+	// dicoret, untuk audit user.
+	AutoClean      bool   `gorm:"default:false" json:"autoClean"`
+	SkippedCount   int    `gorm:"default:0" json:"skippedCount"`
+	SkippedNumbers string `gorm:"type:text" json:"-"`
 	MinDelay    int            `gorm:"default:3" json:"minDelay"` // seconds between messages
 	MaxDelay    int            `gorm:"default:8" json:"maxDelay"`
 	StartedAt   *time.Time     `json:"startedAt"`
