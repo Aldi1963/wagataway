@@ -595,8 +595,8 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Empat kartu statistik */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* Empat kartu statistik — lebih lebar di HP mengikuti kotak merah */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 -mx-2 md:mx-0">
         <StatCard label="Total Devices" icon={Smartphone} tile={NAVY} loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {devices.length}
