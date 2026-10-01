@@ -42,6 +42,20 @@ interface Tx extends InvoiceTx {
   externalId?: string;
 }
 
+// Fitur 4: rincian ganti paket prorata (dari GET /billing/prorate).
+interface ProrateQuote {
+  prorate: boolean;
+  oldPlanId?: number;
+  oldPlanName?: string;
+  newPlanId: number;
+  newPlanName: string;
+  newPrice: number;
+  remainingDays: number;
+  creditAmount: number;
+  payableAmount: number;
+  isTrial?: boolean;
+}
+
 const txStatusMeta: Record<string, { label: string; className: string }> = {
   paid: { label: "Lunas", className: "bg-green-500/15 text-green-600 border-green-500/30" },
   pending: { label: "Menunggu", className: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
@@ -97,6 +111,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
   const [qrUrl, setQrUrl] = useState("");
   const [txStatus, setTxStatus] = useState("");
   const pollRef = useRef<number | null>(null);
+
+  // Fitur 4: quote prorata saat ganti paket
+  const [quote, setQuote] = useState<ProrateQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -161,6 +179,34 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
     setPaymentUrl("");
     setQrUrl("");
     setTxStatus("");
+    setQuote(null);
+    setQuoteLoading(false);
+  };
+
+  // Fitur 4: buka modal pembayaran. Bila user punya langganan aktif dan
+  // memilih paket BERBEDA → ambil dulu rincian prorata untuk ditampilkan
+  // sebagai konfirmasi sebelum bayar.
+  const openPay = async (plan: Plan) => {
+    setPayError("");
+    setPaymentUrl("");
+    setQrUrl("");
+    setTxStatus("");
+    setQuote(null);
+    const isSwitch = !!sub && sub.planId !== plan.id;
+    setPayPlan(plan);
+    if (isSwitch) {
+      setQuoteLoading(true);
+      try {
+        const r = await apiGet<{ quote: ProrateQuote }>(
+          `/billing/prorate?planId=${plan.id}`
+        );
+        setQuote(r.quote);
+      } catch {
+        setPayError("Gagal menghitung prorata. Coba lagi.");
+      } finally {
+        setQuoteLoading(false);
+      }
+    }
   };
 
   const startPolling = (id: number) => {
@@ -190,8 +236,16 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
       const r = await apiPost<{
         paymentUrl: string;
         qrUrl: string;
+        quote?: ProrateQuote;
+        activated?: boolean;
         transaction: { id: number };
       }>("/billing/subscribe", { planId: payPlan.id });
+      // Fitur 4: payable 0 → langsung aktif, tanpa pembayaran
+      if (r.activated) {
+        setTxStatus("paid");
+        load();
+        return;
+      }
       setPaymentUrl(r.paymentUrl);
       setQrUrl(r.qrUrl);
       setTxStatus("pending");
@@ -242,6 +296,8 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {plans.map((plan, i) => {
             const isCurrent = sub?.planId === plan.id || (!sub && plan.price === 0);
+            // Fitur 4: langganan aktif memilih paket lain = ganti paket (prorata)
+            const isSwitch = !!sub && sub.planId !== plan.id;
             const features = parseFeatures(plan.features);
             return (
               <Card key={plan.id} className={i === 1 && plans.length > 2 ? "border-foreground" : ""}>
@@ -275,9 +331,9 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     className="w-full"
                     size="sm"
                     disabled={isCurrent}
-                    onClick={() => setPayPlan(plan)}
+                    onClick={() => openPay(plan)}
                   >
-                    {isCurrent ? "Paket Saat Ini" : "Pilih Paket"}
+                    {isCurrent ? "Paket Saat Ini" : isSwitch ? "Ganti Paket" : "Pilih Paket"}
                   </Button>
                 </CardContent>
               </Card>
@@ -371,7 +427,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!paymentUrl ? (
+              {!paymentUrl && !paid && !dead ? (
                 <>
                   <div className="rounded-lg border border-border p-3">
                     <div className="flex items-baseline justify-between">
@@ -382,6 +438,45 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                       {payPlan.duration} hari &middot; pembayaran via QRIS / VA / e-wallet melalui Clipku Pay
                     </p>
                   </div>
+                  {/* Fitur 4: rincian prorata sebelum bayar */}
+                  {quoteLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Menghitung prorata&hellip;
+                    </div>
+                  ) : quote?.prorate ? (
+                    <div className="rounded-lg border border-[#243370]/30 bg-[#243370]/5 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-foreground">
+                        Rincian Ganti Paket (prorata)
+                      </p>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Harga {quote.newPlanName}
+                        </span>
+                        <span className="font-medium text-foreground">{rupiah(quote.newPrice)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Sisa nilai {quote.oldPlanName}
+                          <span className="block text-[11px]">
+                            {quote.remainingDays} hari tersisa{quote.isTrial ? " (trial)" : ""}
+                          </span>
+                        </span>
+                        <span className="font-medium text-foreground">− {rupiah(quote.creditAmount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-border pt-2">
+                        <span className="text-sm font-semibold text-foreground">Total bayar</span>
+                        <span className="text-base font-bold text-foreground">
+                          {quote.payableAmount === 0 ? "Gratis" : rupiah(quote.payableAmount)}
+                        </span>
+                      </div>
+                      {quote.payableAmount === 0 && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Sisa nilai paket lama menutupi penuh — paket baru langsung aktif tanpa pembayaran.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                   {payError && (
                     <p className="text-sm text-destructive">{payError}</p>
                   )}
@@ -389,10 +484,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     <Button
                       className="flex-1 bg-[#243370] hover:bg-[#1c2a5c] text-white"
                       onClick={bayar}
-                      disabled={paying}
+                      disabled={paying || quoteLoading}
                     >
                       {paying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      Bayar Sekarang
+                      {quote?.prorate && quote.payableAmount === 0 ? "Aktifkan Sekarang" : "Bayar Sekarang"}
                     </Button>
                     <Button variant="outline" onClick={closePay}>
                       Batal
