@@ -649,41 +649,43 @@ export default function Dashboard() {
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {subEndLabel}
-            {quota &&
-              (quota.isUnlimited ? (
-                <>
-                  {" "}· <span className="font-semibold text-foreground">Unlimited</span>
-                </>
-              ) : (
-                <>
-                  {" "}·{" "}
-                  <span className={cn(quota.warning && "text-amber-600 font-semibold")}>
-                    {quota.usedThisMonth.toLocaleString("id-ID")}/
-                    {quota.limit.toLocaleString("id-ID")} pesan ({quota.percentUsed}%)
-                  </span>
-                </>
-              ))}
+            {quota?.isUnlimited && (
+              <>
+                {" "}· <span className="font-semibold text-foreground">Unlimited</span>
+              </>
+            )}
           </p>
-          {/* Meter kuota pesan bulanan (Fitur 3) — ramping, selaras kartu lain */}
+          {/* Meter kuota pesan bulanan (Fitur 3) — ramping sebaris, selaras kartu lain */}
           {quota && !quota.isUnlimited && (
-            <div
-              className="mt-1.5 h-1 rounded-full bg-border"
-              role="progressbar"
-              aria-valuenow={quota.percentUsed}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
+            <div className="mt-1.5 flex items-center gap-2">
               <div
+                className="h-1 flex-1 rounded-full bg-border"
+                role="progressbar"
+                aria-valuenow={quota.percentUsed}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    quota.quotaExceeded
+                      ? "bg-destructive"
+                      : quota.warning
+                        ? "bg-amber-500"
+                        : "bg-[#243370]"
+                  )}
+                  style={{ width: `${quota.percentUsed}%` }}
+                />
+              </div>
+              <span
                 className={cn(
-                  "h-full rounded-full transition-all",
-                  quota.quotaExceeded
-                    ? "bg-destructive"
-                    : quota.warning
-                      ? "bg-amber-500"
-                      : "bg-[#243370]"
+                  "text-[11px] text-muted-foreground shrink-0",
+                  quota.warning && "text-amber-600 font-semibold"
                 )}
-                style={{ width: `${quota.percentUsed}%` }}
-              />
+              >
+                {quota.usedThisMonth.toLocaleString("id-ID")}/
+                {quota.limit.toLocaleString("id-ID")} ({quota.percentUsed}%)
+              </span>
             </div>
           )}
           {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar;
