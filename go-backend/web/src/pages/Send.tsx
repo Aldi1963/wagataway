@@ -5,6 +5,7 @@ import Followups from "./Followups";
 import TemplateHub from "./TemplateHub";
 import Polls from "./Polls";
 import { PageTabs } from "@/components/ui/tabs";
+import GraceBanner from "@/components/GraceBanner";
 
 const TABS = [
   { id: "kirim", label: "Kirim", href: "/send" },
@@ -37,6 +38,8 @@ export default function Send() {
         </p>
       </div>
       <PageTabs tabs={TABS} active={active} onSelect={(tab) => navigate(tab.href)} />
+      {/* Banner grace period / expired langganan (Fitur 5): tampil sebelum user kirim */}
+      <GraceBanner />
       {active === "blast" ? (
         <BulkMessages embedded />
       ) : active === "polling" ? (

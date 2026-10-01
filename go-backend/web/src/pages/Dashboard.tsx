@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
+import GraceBanner from "@/components/GraceBanner";
 
 const NAVY = "#243370";
 
@@ -65,6 +66,11 @@ interface QuotaInfo {
   warning: boolean;
   isTrial: boolean;
   quotaExceeded: boolean;
+  // Status langganan terpusat (Fitur 5): active | grace | expired.
+  subState?: string;
+  graceDaysLeft?: number;
+  graceUsedToday?: number;
+  graceDailyLimit?: number;
 }
 
 type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator";
@@ -538,6 +544,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Banner grace period / expired langganan (Fitur 5) */}
+      {!loading && <GraceBanner />}
       {/* Banner peringatan kuota pesan (Fitur 3): >=80% atau habis */}
       {!loading && quota?.quotaExceeded && (
         <Card className="border-destructive/50 bg-destructive/5">

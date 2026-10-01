@@ -98,7 +98,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
   return [
     {
       title: "Pesan",
-      desc: "Kirim pesan teks, media, dan blast ke banyak nomor. Semua endpoint kirim tunduk pada kuota pesan bulanan paket: bila kuota habis, respons 429 dengan code QUOTA_EXCEEDED (lihat GET /api/quota).",
+      desc: "Kirim pesan teks, media, dan blast ke banyak nomor. Semua endpoint kirim tunduk pada kuota pesan bulanan paket dan status langganan: bila kuota habis, respons 429 dengan code QUOTA_EXCEEDED; bila langganan expired ≥ 3 hari, respons 403 code SUBSCRIPTION_EXPIRED; bila batas 20 pesan/hari masa tenggang tercapai, respons 429 code SUBSCRIPTION_GRACE_LIMIT (lihat GET /api/quota).",
       endpoints: [
         {
           method: "POST",
@@ -720,7 +720,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           path: "/api/quota",
           title: "Info kuota pesan bulanan",
           curl: curl("GET", "/api/quota"),
-          note: "Mengembalikan pemakaian & limit paket aktif: planName, limit (0 = unlimited), usedThisMonth, remaining, percentUsed, warning (true bila pemakaian >= 80%), isUnlimited, isTrial, quotaExceeded. Hanya pesan outgoing berstatus sent/delivered/read di bulan kalender berjalan yang dihitung; pesan gagal (failed) tidak menghabiskan kuota. Batas per paket: Free 3000, Lite 15000, Regular 100000, Pro 300000, Master unlimited, trial 15000.",
+          note: "Mengembalikan pemakaian & limit paket aktif: planName, limit (0 = unlimited), usedThisMonth, remaining, percentUsed, warning (true bila pemakaian >= 80%), isUnlimited, isTrial, quotaExceeded. Status langganan terpusat (Fitur 5): subState (active | grace | expired), graceDaysLeft, graceUsedToday, graceDailyLimit (20). Hanya pesan outgoing berstatus sent/delivered/read di bulan kalender berjalan yang dihitung; pesan gagal (failed) tidak menghabiskan kuota. Grace: expired < 3 hari masih boleh kirim maks 20 pesan/hari; expired >= 3 hari diblokir total. Trial yang expired ikut aturan grace yang sama. Batas per paket: Free 3000, Lite 15000, Regular 100000, Pro 300000, Master unlimited, trial 15000. Dikecualikan dari blokir: balasan bot PPOB (JSON {\"text\"}), reminder langganan, admin broadcast.",
         },
       ],
     },
@@ -730,9 +730,10 @@ function buildGroups(baseUrl: string): GroupDoc[] {
 const errorCodes = [
   { code: "400", desc: "Permintaan tidak valid — periksa parameter body/query." },
   { code: "401", desc: "Tidak terautentikasi — API key salah, kedaluwarsa, atau tidak dikirim." },
+  { code: "403", desc: "Akses ditolak — termasuk bila body memuat code SUBSCRIPTION_EXPIRED: langganan expired ≥ 3 hari, pengiriman diblokir total. Perpanjang di https://wa.clipku.com/billing." },
   { code: "404", desc: "Resource tidak ditemukan atau bukan milik akun Anda." },
   { code: "422", desc: "Validasi gagal — lihat pesan error untuk detail field." },
-  { code: "429", desc: "Terlalu banyak permintaan — tunggu sebentar lalu coba lagi. Bila body memuat code QUOTA_EXCEEDED, artinya kuota pesan bulanan paket habis: perpanjang/upgrade paket untuk menambah kuota." },
+  { code: "429", desc: "Terlalu banyak permintaan — tunggu sebentar lalu coba lagi. Bila body memuat code QUOTA_EXCEEDED, artinya kuota pesan bulanan paket habis: perpanjang/upgrade paket untuk menambah kuota. Bila body memuat code SUBSCRIPTION_GRACE_LIMIT, artinya batas 20 pesan/hari masa tenggang tercapai: perpanjang paket agar tidak terblokir." },
   { code: "500", desc: "Kesalahan server — hubungi dukungan bila berulang." },
 ];
 
