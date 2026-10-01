@@ -1099,12 +1099,13 @@ func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, secret, event
 			return
 		}
 		// Balas via JID asli pengirim bila ada (aman untuk pengirim LID),
-		// fallback ke nomor `from`.
+		// fallback ke nomor `from`. DIKECUALIKAN dari kuota pesan (Fitur 3):
+		// balasan bot PPOB tidak boleh mati karena kuota user habis.
 		replyTo, _ := payload["senderJID"].(string)
 		if replyTo == "" {
 			replyTo = from
 		}
-		if err := m.SendMessage(deviceID, replyTo, "text", replyText, ""); err != nil {
+		if err := m.SendMessageNoQuota(deviceID, replyTo, "text", replyText, ""); err != nil {
 			log.Warn().Err(err).Uint("deviceID", deviceID).Str("to", from).Msg("WAMP bot reply failed")
 			return
 		}

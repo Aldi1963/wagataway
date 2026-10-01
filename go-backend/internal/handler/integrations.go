@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
@@ -556,6 +557,12 @@ func integrationInbox(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 		if wm.GetStatus(device.ID) != "connected" {
 			fail(http.StatusServiceUnavailable, "Perangkat pengirim sedang tidak terhubung, coba lagi nanti", "DEVICE_OFFLINE", "device tidak connected")
+			return
+		}
+
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if qr, qerr := quota.Check(db, in.UserID); qerr == nil && !qr.Allowed {
+			fail(http.StatusTooManyRequests, quota.ExceededMessage(qr), "QUOTA_EXCEEDED", "kuota pesan habis")
 			return
 		}
 

@@ -562,7 +562,8 @@ func adminBroadcastWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			if i > 0 {
 				time.Sleep(time.Second) // jeda agar tidak membanjiri WhatsApp
 			}
-			if err := wm.SendMessage(d.ID, d.Phone, "text", req.Message, ""); err != nil {
+			// DIKECUALIKAN dari kuota pesan (Fitur 3): pengumuman sistem oleh admin.
+		if err := wm.SendMessageNoQuota(d.ID, d.Phone, "text", req.Message, ""); err != nil {
 				failed++
 			} else {
 				sent++

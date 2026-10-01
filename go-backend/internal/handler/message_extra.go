@@ -131,6 +131,11 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
+
 		msg := &models.Message{
 			UserID:   userID,
 			DeviceID: req.DeviceID,
@@ -201,6 +206,11 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 			return
 		}
 
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
+
 		buttons := make([]whatsapp.Button, 0, len(req.Buttons))
 		for _, b := range req.Buttons {
 			buttons = append(buttons, whatsapp.Button{ID: b.ID, Title: b.Title})
@@ -245,6 +255,11 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 			return
 		}
 
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
+
 		msg := &models.Message{
 			UserID:   userID,
 			DeviceID: req.DeviceID,
@@ -276,6 +291,11 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 			return
 		}
 		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+			return
+		}
+
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
 			return
 		}
 
@@ -318,6 +338,11 @@ func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFu
 			return
 		}
 		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+			return
+		}
+
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
 			return
 		}
 

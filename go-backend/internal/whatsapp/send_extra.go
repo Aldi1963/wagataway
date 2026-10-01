@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
 	waBinary "go.mau.fi/whatsmeow/binary"
@@ -43,6 +44,14 @@ type SendOptions struct {
 	LocName      string
 	LocAddress   string
 	LiveLocation bool
+
+	// Kuota pesan (Fitur 3): bila QuotaBypass=false (default), pengiriman
+	// diperiksa terhadap kuota bulanan pemilik device. QuotaUserID opsional:
+	// bila 0, diambil dari sess.UserID. QuotaBypass=true HANYA untuk jalur
+	// sistem yang dikecualikan: balasan bot PPOB, subscription reminder,
+	// admin broadcast WA (lihat paket quota untuk keputusan desain).
+	QuotaUserID  uint
+	QuotaBypass  bool
 }
 
 // replyContext membangun ContextInfo untuk membalas pesan tertentu.
@@ -58,7 +67,21 @@ func replyContext(jid types.JID, replyTo string) *waE2E.ContextInfo {
 	}
 }
 
+// SendMessageNoQuota mengirim tanpa pemeriksaan kuota — HANYA untuk jalur
+// sistem yang dikecualikan (balasan bot PPOB, subscription reminder, admin
+// broadcast). JANGAN dipakai untuk kirim yang dipicu user/API.
+func (m *Manager) SendMessageNoQuota(deviceID uint, to, msgType, content, mediaURL string) error {
+	_, err := m.SendMessageWithOptions(deviceID, to, SendOptions{
+		Type:        msgType,
+		Content:     content,
+		MediaURL:    mediaURL,
+		QuotaBypass: true,
+	})
+	return err
+}
+
 // SendMessage adalah wrapper kompatibel mundur dari SendMessageWithOptions.
+// Kuota pesan pemilik device tetap diperiksa (lihat SendOptions.QuotaBypass).
 func (m *Manager) SendMessage(deviceID uint, to, msgType, content, mediaURL string) error {
 	_, err := m.SendMessageWithOptions(deviceID, to, SendOptions{
 		Type:     msgType,
@@ -81,6 +104,27 @@ func (m *Manager) SendMessageWithOptions(deviceID uint, to string, opts SendOpti
 	}
 	if sess.Client == nil {
 		return "", fmt.Errorf("device %d client not initialized", deviceID)
+	}
+
+	// Kuota pesan bulanan (Fitur 3): blokir sebelum ada efek samping
+	// (typing indicator, dsb). Jalur sistem memakai QuotaBypass=true.
+	if !opts.QuotaBypass && m.db != nil {
+		quotaUserID := opts.QuotaUserID
+		if quotaUserID == 0 {
+			quotaUserID = sess.UserID
+		}
+		if quotaUserID != 0 {
+			qr, qerr := quota.Check(m.db, quotaUserID)
+			if qerr != nil {
+				log.Warn().Err(qerr).Uint("deviceID", deviceID).Uint("userID", quotaUserID).
+					Msg("Gagal memeriksa kuota pesan, pengiriman dilanjutkan")
+			} else if !qr.Allowed {
+				log.Warn().Uint("deviceID", deviceID).Uint("userID", quotaUserID).
+					Int64("used", qr.Used).Int("limit", qr.Limit).
+					Msg("Pengiriman diblokir: kuota pesan habis")
+				return "", &quota.ExceededError{Info: qr}
+			}
+		}
 	}
 
 	// Parse recipient JID

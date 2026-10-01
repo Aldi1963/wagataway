@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/rs/zerolog/log"
 )
@@ -128,6 +129,19 @@ func (s *Scheduler) processRecurringSchedules() {
 		}
 		campaignID := fmt.Sprintf("recurring-%d", sch.ID)
 
+		// Kuota pesan (Fitur 3): bila habis, lewati jadwal kali ini (lanjut ke
+		// jadwal berikutnya) dan catat di report agar user tahu alasannya.
+		if qr, qerr := quota.Check(s.db, sch.UserID); qerr == nil && !qr.Allowed {
+			s.recordReport(sch.UserID, sch.DeviceID, campaignID, sch.Target, "", "failed", quota.ExceededMessage(qr))
+			next := nextRun(sch.Frequency, sch.Time, sch.DayOfWeek, sch.DayOfMonth, now)
+			s.db.Model(&sch).Updates(map[string]interface{}{
+				"last_run_at": &now,
+				"next_run_at": &next,
+			})
+			log.Warn().Uint("scheduleID", sch.ID).Msg("Recurring dilewati: kuota pesan habis")
+			continue
+		}
+
 		waMsgID, err := s.waManager.SendMessageWithOptions(sch.DeviceID, sch.Target, whatsapp.SendOptions{
 			Type:     msgType,
 			Content:  sch.Message,
@@ -179,6 +193,16 @@ func (s *Scheduler) processFollowups() {
 		}
 
 		campaignID := fmt.Sprintf("followup-%d", fu.ID)
+
+		// Kuota pesan (Fitur 3): bila habis, tunda ke siklus berikutnya
+		// (update last_sent_at) agar tidak spam tiap 5 menit.
+		if qr, qerr := quota.Check(s.db, fu.UserID); qerr == nil && !qr.Allowed {
+			s.recordReport(fu.UserID, fu.DeviceID, campaignID, fu.TargetPhone, "", "failed", quota.ExceededMessage(qr))
+			s.db.Model(&fu).Update("last_sent_at", &now)
+			log.Warn().Uint("followupID", fu.ID).Msg("Followup ditunda: kuota pesan habis")
+			continue
+		}
+
 		waMsgID, err := s.waManager.SendMessageWithOptions(fu.DeviceID, fu.TargetPhone, whatsapp.SendOptions{
 			Type:    "text",
 			Content: fu.Message,

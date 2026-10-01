@@ -193,6 +193,11 @@ func sendPollRecap(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
+
 		result := buildPollResult(db, poll)
 		counts := make([]int, len(result.Options))
 		options := make([]string, len(result.Options))

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
@@ -111,6 +112,14 @@ func (s *Scheduler) processDripSteps() {
 		// Send the step message
 		sendErr := s.waManager.SendMessage(campaign.DeviceID, enrollment.Phone, step.Type, step.Content, step.MediaURL)
 		if sendErr != nil {
+			// Kuota habis (Fitur 3): tunda 6 jam agar tidak spam log tiap menit;
+			// enrollment tetap aktif dan lanjut otomatis setelah user upgrade.
+			if quota.IsExceeded(sendErr) {
+				nextRetry := time.Now().Add(6 * time.Hour)
+				s.db.Model(&enrollment).Update("next_send_at", &nextRetry)
+				log.Warn().Uint("enrollmentID", enrollment.ID).Msg("Drip ditunda 6 jam: kuota pesan habis")
+				continue
+			}
 			log.Error().Err(sendErr).Uint("enrollmentID", enrollment.ID).Msg("Failed to send drip step")
 			continue
 		}

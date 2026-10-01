@@ -10,11 +10,15 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+	// GET /api/quota — info kuota pesan bulanan (Fitur 3), alias ringan dari
+	// /api/billing/usage untuk dipakai dashboard & integrasi.
+	rg.GET("/quota", getBillingUsage(db))
 	b := rg.Group("/billing")
 	{
 		b.GET("/plans", listPlans(db))
@@ -49,37 +53,30 @@ func getSubscription(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GET /api/billing/usage — kuota paket & pemakaian pesan bulan ini
+// GET /api/billing/usage — kuota paket & pemakaian pesan bulan ini (Fitur 3).
+// Memakai quota.Check terpusat: limit dari plan.monthly_message_limit
+// (0 = unlimited), pemakaian = pesan outgoing bulan berjalan berstatus
+// sent/delivered/read. Field lama (planName, quota, usedThisMonth, remaining)
+// dipertahankan untuk kompatibilitas.
 func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-
-		planName := "Free"
-		quota := 1000
-		var sub models.Subscription
-		if err := db.Where("user_id = ? AND status = ?", userID, "active").
-			Preload("Plan").First(&sub).Error; err == nil {
-			planName = sub.Plan.Name
-			quota = sub.Plan.MaxMessages
+		qr, err := quota.Check(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca kuota", "code": "DB_ERROR"})
+			return
 		}
-
-		now := time.Now()
-		startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		var used int64
-		db.Model(&models.Message{}).
-			Where("user_id = ? AND direction = ? AND created_at >= ?", userID, "outgoing", startOfMonth).
-			Count(&used)
-
-		remaining := quota - int(used)
-		if remaining < 0 {
-			remaining = 0
-		}
-
 		c.JSON(http.StatusOK, gin.H{
-			"planName":      planName,
-			"quota":         quota,
-			"usedThisMonth": int(used),
-			"remaining":     remaining,
+			"planName":      qr.PlanName,
+			"quota":         qr.Limit,
+			"usedThisMonth": qr.Used,
+			"remaining":     qr.Remaining(),
+			"limit":         qr.Limit,
+			"isUnlimited":   qr.Unlimited,
+			"percentUsed":   qr.Percent(),
+			"warning":       qr.Warning, // true bila pemakaian >= 80%
+			"isTrial":       qr.IsTrial,
+			"quotaExceeded": !qr.Allowed,
 		})
 	}
 }

@@ -128,7 +128,9 @@ func (s *Scheduler) processSubscriptionReminders() {
 		}
 
 		msg := buildReminderMessage(sub.Plan.Name, sub.EndDate, daysLeft)
-		if err := s.waManager.SendMessage(dev.ID, notifyWA, "text", msg, ""); err != nil {
+		// DIKECUALIKAN dari kuota pesan (Fitur 3): reminder langganan adalah
+		// pesan sistem, tidak menghabiskan & tidak diblokir kuota user.
+		if err := s.waManager.SendMessageNoQuota(dev.ID, notifyWA, "text", msg, ""); err != nil {
 			// Jangan tandai sebagai terkirim — coba lagi pada jadwal berikutnya.
 			log.Error().Err(err).Uint("subID", sub.ID).Uint("deviceID", dev.ID).
 				Msg("Reminder langganan gagal dikirim")

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -93,6 +94,16 @@ func wampSend(db *gorm.DB, wm *whatsapp.Manager, isMedia bool) gin.HandlerFunc {
 		device, err := resolveWampSender(db, ak.UserID, req.Sender)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"status": false, "message": err.Error()})
+			return
+		}
+
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if qr, qerr := quota.Check(db, ak.UserID); qerr == nil && !qr.Allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"status":  false,
+				"message": quota.ExceededMessage(qr),
+				"code":    "QUOTA_EXCEEDED",
+			})
 			return
 		}
 

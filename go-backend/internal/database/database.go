@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/rs/zerolog/log"
 	"gorm.io/driver/postgres"
@@ -101,6 +102,9 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := migrateDeviceWebhookSecrets(db); err != nil {
 		return err
 	}
+	if err := migratePlanQuotaDefaults(db); err != nil {
+		return err
+	}
 	return migrateAPIKeyHashes(db)
 }
 
@@ -156,5 +160,16 @@ func migrateAPIKeyHashes(db *gorm.DB) error {
 	if len(keys) > 0 {
 		log.Info().Int("count", len(keys)).Msg("Migrated plaintext API keys to key_hash")
 	}
+	return nil
+}
+
+// migratePlanQuotaDefaults mengisi monthly_message_limit (Fitur 3) untuk
+// paket bawaan yang masih 0 setelah kolom ditambahkan via AutoMigrate.
+// Idempoten; tidak menimpa nilai kustom. Master memang 0 (= unlimited).
+func migratePlanQuotaDefaults(db *gorm.DB) error {
+	if err := quota.BackfillDefaults(db); err != nil {
+		return err
+	}
+	log.Info().Msg("Plan monthly message limits backfilled")
 	return nil
 }

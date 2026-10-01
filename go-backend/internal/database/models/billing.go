@@ -13,6 +13,9 @@ type Plan struct {
 	Duration     int       `gorm:"default:30" json:"duration"` // days
 	MaxDevices   int       `gorm:"default:1" json:"maxDevices"`
 	MaxMessages  int       `gorm:"default:1000" json:"maxMessages"` // per day
+	// Kuota pesan bulanan (Fitur 3): jumlah pesan outgoing yang boleh dikirim
+	// user dalam satu bulan kalender. 0 = unlimited.
+	MonthlyMessageLimit int       `gorm:"default:0" json:"monthlyMessageLimit"`
 	MaxContacts  int       `gorm:"default:500" json:"maxContacts"`
 	MaxAutoReply int       `gorm:"default:5" json:"maxAutoReply"`
 	MaxBulk      int       `gorm:"default:100" json:"maxBulk"` // recipients per bulk
@@ -35,6 +38,9 @@ type Subscription struct {
 	// guard anti-duplikat oleh worker subscription reminder.
 	RemindedH3At *time.Time `json:"remindedH3At,omitempty"`
 	RemindedH1At *time.Time `json:"remindedH1At,omitempty"`
+	// Trial (Fitur 3): true bila langganan ini adalah masa trial. Kuota pesan
+	// memakai TrialMonthlyLimit (paket/quota), bukan limit paket acuan.
+	IsTrial      bool      `gorm:"default:false" json:"isTrial"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 

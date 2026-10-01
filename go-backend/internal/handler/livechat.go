@@ -109,6 +109,10 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Send via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
 		to := resolveSenderJID(db, userID, req.DeviceID, req.Phone)
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
 		err := wm.SendMessage(req.DeviceID, to, req.Type, req.Content, "")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengirim: " + err.Error()})
@@ -264,6 +268,10 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Send AI response via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
 		to := resolveSenderJID(db, userID, req.DeviceID, req.Phone)
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
 		sendErr := wm.SendMessage(req.DeviceID, to, "text", aiResp.Content, "")
 		if sendErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{

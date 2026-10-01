@@ -110,6 +110,11 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
+		if !requireMessageQuota(c, db, userID, 1) {
+			return
+		}
+
 		// File dari File Manager menggantikan mediaUrl (dibaca langsung dari disk).
 		mediaURL := req.MediaURL
 		if req.FileID != nil {
@@ -307,6 +312,12 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				"duplicates":      dupCount,
 				"excludedNumbers": excluded,
 			}
+		}
+
+		// Kuota pesan bulanan (Fitur 3): hitung per pesan di muka.
+		// Ditolak 429 bila used + jumlah penerima > limit.
+		if !requireMessageQuota(c, db, userID, int64(len(recipients))) {
+			return
 		}
 
 		// Create bulk job
