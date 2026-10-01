@@ -659,7 +659,7 @@ export default function Dashboard() {
           {quota && !quota.isUnlimited && (
             <div className="mt-1.5 flex items-center gap-2">
               <div
-                className="h-1 flex-1 rounded-full bg-border"
+                className="h-1 w-28 rounded-full bg-border"
                 role="progressbar"
                 aria-valuenow={quota.percentUsed}
                 aria-valuemin={0}
