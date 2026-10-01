@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from "@/lib/api";
+import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface AIReplyConfig {
   id: number;
@@ -17,11 +17,6 @@ interface AIReplyConfig {
   triggerKeywords: string;
   ignoreGroups: boolean;
   createdAt: string;
-}
-
-interface Device {
-  id: number;
-  name: string;
 }
 
 interface AIStatus {
@@ -50,13 +45,12 @@ const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function AIReply({ embedded = false }: { embedded?: boolean }) {
+  const { activeDeviceId, activeDevice } = useActiveDevice();
   const [items, setItems] = useState<AIReplyConfig[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<AIReplyConfig | null>(null);
-  const [deviceId, setDeviceId] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [triggerKeywords, setTriggerKeywords] = useState("");
   const [ignoreGroups, setIgnoreGroups] = useState(true);
@@ -66,13 +60,11 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
   const load = async () => {
     setLoading(true);
     try {
-      const [r, d, s] = await Promise.all([
+      const [r, s] = await Promise.all([
         apiGet<{ configs: AIReplyConfig[] }>("/ai-reply"),
-        apiGet<{ devices: Device[] }>("/devices"),
         apiGet<AIStatus>("/ai-reply/status").catch(() => null),
       ]);
       setItems(r.configs ?? []);
-      setDevices(d.devices ?? []);
       if (s) setStatus(s);
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat config AI");
@@ -83,11 +75,16 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => { load(); }, []);
 
-  const deviceName = (id: number) => devices.find((x) => x.id === id)?.name ?? `#${id}`;
+  // Config hanya untuk perangkat aktif (konsisten dengan tab Otomatisasi lain)
+  const visibleItems =
+    activeDeviceId == null ? [] : items.filter((c) => c.deviceId === activeDeviceId);
 
   const openModal = (c?: AIReplyConfig) => {
+    if (activeDeviceId == null && !c) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setEditing(c ?? null);
-    setDeviceId(c ? String(c.deviceId) : devices.length === 1 ? String(devices[0].id) : "");
     setSystemPrompt(c?.systemPrompt ?? "");
     setTriggerKeywords(c?.triggerKeywords ?? "");
     setIgnoreGroups(c?.ignoreGroups ?? true);
@@ -96,10 +93,11 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
   };
 
   const save = async () => {
-    if (!deviceId) { toast.error("Pilih device"); return; }
+    const targetDeviceId = editing ? editing.deviceId : activeDeviceId;
+    if (targetDeviceId == null) { toast.error("Pilih perangkat aktif di sidebar dulu"); return; }
     try {
       const payload = {
-        deviceId: Number(deviceId),
+        deviceId: targetDeviceId,
         systemPrompt: systemPrompt.trim(),
         triggerKeywords: triggerKeywords.trim(),
         ignoreGroups,
@@ -158,14 +156,21 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
 
       {loading ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+      ) : activeDeviceId == null ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Bot className="w-8 h-8 mx-auto text-muted-foreground" />
+            <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
+            <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola AI reply</p>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Device</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">System Prompt</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Trigger</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup</th>
@@ -174,14 +179,11 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Belum ada config AI.</td></tr>
+                  {visibleItems.length === 0 && (
+                    <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Belum ada config AI untuk perangkat {activeDevice?.name || `#${activeDeviceId}`}.</td></tr>
                   )}
-                  {items.map((c) => (
+                  {visibleItems.map((c) => (
                     <tr key={c.id} className="border-b border-border last:border-0">
-                      <td className="py-3 px-4 whitespace-nowrap font-medium text-xs">
-                        <span className="inline-flex items-center gap-1.5"><Bot className="w-3.5 h-3.5 text-muted-foreground" />{deviceName(c.deviceId)}</span>
-                      </td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[220px] truncate" title={c.systemPrompt}>
                         {c.systemPrompt || <span className="italic">Default</span>}
                       </td>
@@ -190,7 +192,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap text-xs">{c.ignoreGroups ? "Abaikan" : "Ikut"}</td>
                       <td className="py-3 px-4">
-                        <Toggle checked={c.isEnabled} label={`Aktif ${deviceName(c.deviceId)}`} onToggle={() => toggleActive(c)} />
+                        <Toggle checked={c.isEnabled} label={`Aktif ${activeDevice?.name || `#${activeDeviceId}`}`} onToggle={() => toggleActive(c)} />
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(c)} aria-label="Ubah">
@@ -212,19 +214,12 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
       {showModal && (
         <Modal title={editing ? "Ubah Config AI" : "Tambah Config AI"} onClose={() => setShowModal(false)}>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Device</label>
-              <Dropdown
-                value={deviceId}
-                onChange={setDeviceId}
-                ariaLabel="Device AI"
-                className="mt-1.5"
-                options={[
-                  { value: "", label: "Pilih device" },
-                  ...devices.map((d) => ({ value: String(d.id), label: d.name })),
-                ]}
-              />
-            </div>
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Config berlaku untuk perangkat{" "}
+              <span className="font-medium text-foreground">
+                {activeDevice?.name || (editing ? `#${editing.deviceId}` : "")}
+              </span>
+            </p>
             <div>
               <label className="text-sm font-medium">System Prompt</label>
               <textarea

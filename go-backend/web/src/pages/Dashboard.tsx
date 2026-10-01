@@ -177,7 +177,7 @@ function StatCard({
   children: ReactNode;
 }) {
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardContent className="p-5">
         <div className="flex items-center gap-4">
           <div
@@ -633,11 +633,11 @@ export default function Dashboard() {
                 </p>
               ) : (
                 <>
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span className="min-w-0 truncate">
                       {quota.usedThisMonth.toLocaleString("id-ID")} / {quota.limit.toLocaleString("id-ID")} pesan
                     </span>
-                    <span className={cn(quota.warning && "text-amber-600 font-semibold")}>
+                    <span className={cn("shrink-0", quota.warning && "text-amber-600 font-semibold")}>
                       {quota.percentUsed}%
                     </span>
                   </div>

@@ -834,8 +834,16 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 
 	// AI auto-reply hook — non-blocking, gagal diam-diam (hanya log).
 	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
+	// Di chat pribadi, auto-reply (rule eksplisit) menang atas AI reply agar pengirim
+	// tidak menerima dua balasan sekaligus; AI menjadi fallback bila tak ada rule yang cocok.
 	if !menuHandled {
-		go m.checkAIReply(sess, senderJID, text, msg.Info.IsGroup)
+		if msg.Info.IsGroup {
+			go m.checkAIReply(sess, senderJID, text, true)
+		} else if m.findAutoReplyRule(sess, text) != nil {
+			go m.checkAutoReply(sess, senderJID, text)
+		} else {
+			go m.checkAIReply(sess, senderJID, text, false)
+		}
 	}
 
 	// Aturan grup (anti-link, anti-spam) — non-blocking, gagal diam-diam.
@@ -880,12 +888,6 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		"type":      getMessageType(msg),
 		"timestamp": msg.Info.Timestamp,
 	})
-
-	// Check auto-reply rules — dilewati bila menu bot sudah menangani pesan
-	// (pengirim sedang dalam sesi menu) agar keduanya tidak bentrok.
-	if !menuHandled {
-		go m.checkAutoReply(sess, senderJID, text)
-	}
 
 	// Fire message handler callback
 	if m.onMessage != nil {
@@ -937,10 +939,12 @@ func (m *Manager) handleReceipt(sess *SessionState, receipt *events.Receipt) {
 	}
 }
 
-// checkAutoReply checks if an incoming message matches any auto-reply rules
-func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
+// findAutoReplyRule mengembalikan rule auto-reply pertama yang cocok untuk pesan
+// (prioritas tertinggi), atau nil bila tidak ada. Dipakai untuk menentukan apakah
+// AI reply perlu dilewati agar pengirim tidak menerima dua balasan sekaligus.
+func (m *Manager) findAutoReplyRule(sess *SessionState, text string) *models.AutoReply {
 	if text == "" {
-		return
+		return nil
 	}
 
 	var rules []models.AutoReply
@@ -949,23 +953,29 @@ func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
 		Order("priority DESC").
 		Find(&rules)
 
-	for _, rule := range rules {
-		if matchKeyword(text, rule.Keyword, rule.MatchType) {
-			// Check schedule
-			if !isScheduleActive(rule.ScheduleFrom, rule.ScheduleTo) {
-				continue
-			}
-
-			// Send auto-reply — senderJID bisa berupa "user@lid", parseJID menanganinya
-			// tanpa lookup PN→LID.
-			err := m.SendMessage(sess.DeviceID, senderJID, rule.ReplyType, rule.ReplyContent, rule.MediaURL)
-			if err != nil {
-				log.Error().Err(err).Uint("ruleID", rule.ID).Msg("Auto-reply failed")
-			} else {
-				log.Info().Uint("ruleID", rule.ID).Str("to", senderJID).Msg("Auto-reply sent")
-			}
-			return // Only first matching rule fires
+	for i := range rules {
+		rule := &rules[i]
+		if matchKeyword(text, rule.Keyword, rule.MatchType) && isScheduleActive(rule.ScheduleFrom, rule.ScheduleTo) {
+			return rule
 		}
+	}
+	return nil
+}
+
+// checkAutoReply checks if an incoming message matches any auto-reply rules
+func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
+	rule := m.findAutoReplyRule(sess, text)
+	if rule == nil {
+		return
+	}
+
+	// Send auto-reply — senderJID bisa berupa "user@lid", parseJID menanganinya
+	// tanpa lookup PN→LID.
+	err := m.SendMessage(sess.DeviceID, senderJID, rule.ReplyType, rule.ReplyContent, rule.MediaURL)
+	if err != nil {
+		log.Error().Err(err).Uint("ruleID", rule.ID).Msg("Auto-reply failed")
+	} else {
+		log.Info().Uint("ruleID", rule.ID).Str("to", senderJID).Msg("Auto-reply sent")
 	}
 }
 

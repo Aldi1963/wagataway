@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface GroupRule {
   id: number;
@@ -18,9 +19,10 @@ interface GroupRule {
   isActive: boolean;
 }
 
-interface Device {
+interface SyncedGroup {
   id: number;
   name: string;
+  waJid: string;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -44,13 +46,14 @@ const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function GroupRules({ embedded = false }: { embedded?: boolean }) {
+  const { activeDeviceId, activeDevice } = useActiveDevice();
   const [items, setItems] = useState<GroupRule[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
+  const [syncedGroups, setSyncedGroups] = useState<SyncedGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<GroupRule | null>(null);
-  const [deviceId, setDeviceId] = useState("");
   const [groupJid, setGroupJid] = useState("");
+  const [pickedGroup, setPickedGroup] = useState("");
   const [welcome, setWelcome] = useState("");
   const [antiLink, setAntiLink] = useState(true);
   const [antiSpam, setAntiSpam] = useState(true);
@@ -59,12 +62,12 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
   const load = async () => {
     setLoading(true);
     try {
-      const [r, d] = await Promise.all([
+      const [r, g] = await Promise.all([
         apiGet<{ rules: GroupRule[] } | GroupRule[]>("/group-rules"),
-        apiGet<{ devices: Device[] }>("/devices"),
+        apiGet<{ groups: SyncedGroup[] }>("/contact-groups").catch(() => ({ groups: [] })),
       ]);
       setItems(Array.isArray(r) ? r : r.rules ?? []);
-      setDevices(d.devices ?? []);
+      setSyncedGroups((g.groups ?? []).filter((x) => x.waJid));
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat aturan grup");
     } finally {
@@ -74,12 +77,21 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
 
   useEffect(() => { load(); }, []);
 
-  const deviceName = (id: number) => devices.find((x) => x.id === id)?.name ?? `#${id}`;
+  // Aturan hanya untuk perangkat aktif (konsisten dengan tab Otomatisasi lain)
+  const visibleItems =
+    activeDeviceId == null ? [] : items.filter((x) => x.deviceId === activeDeviceId);
+
+  const groupName = (jid: string) =>
+    syncedGroups.find((x) => x.waJid === jid)?.name;
 
   const openModal = (g?: GroupRule) => {
+    if (activeDeviceId == null && !g) {
+      toast.error("Pilih perangkat aktif di sidebar dulu");
+      return;
+    }
     setEditing(g ?? null);
-    setDeviceId(g ? String(g.deviceId) : devices.length === 1 ? String(devices[0].id) : "");
     setGroupJid(g?.groupJid ?? "");
+    setPickedGroup(g ? (syncedGroups.find((x) => x.waJid === g.groupJid)?.waJid ?? "") : "");
     setWelcome(g?.welcomeMsg ?? "");
     setAntiLink(g?.antiLink ?? true);
     setAntiSpam(g?.antiSpam ?? true);
@@ -87,11 +99,12 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
   };
 
   const save = async () => {
-    if (!deviceId) { toast.error("Pilih device"); return; }
-    if (!groupJid.trim()) { toast.error("JID grup wajib diisi"); return; }
+    const targetDeviceId = editing ? editing.deviceId : activeDeviceId;
+    if (targetDeviceId == null) { toast.error("Pilih perangkat aktif di sidebar dulu"); return; }
+    if (!groupJid.trim()) { toast.error("Pilih grup atau isi JID grup"); return; }
     try {
       const payload = {
-        deviceId: Number(deviceId),
+        deviceId: targetDeviceId,
         groupJid: groupJid.trim(),
         welcomeMsg: welcome.trim(),
         antiLink,
@@ -154,15 +167,22 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
 
       {loading ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+      ) : activeDeviceId == null ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <ShieldCheck className="w-8 h-8 mx-auto text-muted-foreground" />
+            <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
+            <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola aturan grup</p>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup (JID)</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Device</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Welcome</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anti-Link</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anti-Spam</th>
@@ -171,15 +191,22 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
                   </tr>
                 </thead>
                 <tbody>
-                  {items.length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Belum ada aturan grup.</td></tr>
+                  {visibleItems.length === 0 && (
+                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Belum ada aturan grup untuk perangkat {activeDevice?.name || `#${activeDeviceId}`}.</td></tr>
                   )}
-                  {items.map((g) => (
+                  {visibleItems.map((g) => (
                     <tr key={g.id} className="border-b border-border last:border-0">
                       <td className="py-3 px-4">
-                        <span className="inline-flex items-center gap-1.5 font-mono text-[12px]"><ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />{g.groupJid}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium">
+                          <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="min-w-0">
+                            {groupName(g.groupJid) || <span className="font-mono">{g.groupJid}</span>}
+                            {groupName(g.groupJid) && (
+                              <span className="block font-mono text-[10px] font-normal text-muted-foreground truncate max-w-[180px]" title={g.groupJid}>{g.groupJid}</span>
+                            )}
+                          </span>
+                        </span>
                       </td>
-                      <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{deviceName(g.deviceId)}</td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate" title={g.welcomeMsg}>{g.welcomeMsg || "-"}</td>
                       <td className="py-3 px-4"><Toggle checked={g.antiLink} label={`Anti-link ${g.groupJid}`} onToggle={(v) => toggleField(g, "antiLink", v)} /></td>
                       <td className="py-3 px-4"><Toggle checked={g.antiSpam} label={`Anti-spam ${g.groupJid}`} onToggle={(v) => toggleField(g, "antiSpam", v)} /></td>
@@ -206,22 +233,38 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
       {showModal && (
         <Modal title={editing ? "Ubah Aturan Grup" : "Tambah Aturan Grup"} onClose={() => setShowModal(false)}>
           <div className="space-y-4">
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Aturan berlaku untuk perangkat{" "}
+              <span className="font-medium text-foreground">
+                {activeDevice?.name || (editing ? `#${editing.deviceId}` : "")}
+              </span>
+            </p>
+            {syncedGroups.length > 0 && (
+              <div>
+                <label className="text-sm font-medium">Pilih grup</label>
+                <Dropdown
+                  value={pickedGroup}
+                  onChange={(v) => {
+                    setPickedGroup(v);
+                    if (v) setGroupJid(v);
+                  }}
+                  ariaLabel="Pilih grup WhatsApp"
+                  className="mt-1.5"
+                  options={[
+                    { value: "", label: "— Pilih dari grup tersinkron —" },
+                    ...syncedGroups.map((x) => ({ value: x.waJid, label: x.name })),
+                  ]}
+                />
+              </div>
+            )}
             <div>
-              <label className="text-sm font-medium">Device</label>
-              <Dropdown
-                value={deviceId}
-                onChange={setDeviceId}
-                ariaLabel="Device"
-                className="mt-1.5"
-                options={[
-                  { value: "", label: "Pilih device" },
-                  ...devices.map((d) => ({ value: String(d.id), label: d.name })),
-                ]}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">JID Grup</label>
-              <Input className="mt-1.5 font-mono" placeholder="120363xxxx@g.us" value={groupJid} onChange={(e) => setGroupJid(e.target.value)} />
+              <label className="text-sm font-medium">JID Grup {syncedGroups.length > 0 && <span className="text-muted-foreground font-normal">(atau isi manual)</span>}</label>
+              <Input className="mt-1.5 font-mono" placeholder="120363xxxx@g.us" value={groupJid} onChange={(e) => { setGroupJid(e.target.value); setPickedGroup(""); }} />
+              {syncedGroups.length === 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Tip: sinkronkan grup WA dulu di halaman Kontak → Grup agar bisa pilih dari daftar.
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Pesan Welcome <span className="text-muted-foreground font-normal">(opsional)</span></label>
