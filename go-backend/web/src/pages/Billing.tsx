@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, Loader2, QrCode, X } from "lucide-react";
+import { Check, ExternalLink, Loader2, QrCode, Receipt, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiGet, apiPost } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
+import InvoiceModal, {
+  tglID,
+  metodeLabel,
+  type InvoiceTx,
+} from "./InvoiceModal";
 
 interface Plan {
   id: number;
@@ -31,6 +37,34 @@ interface TxStatus {
   paymentRef?: string;
 }
 
+// Fitur 2: riwayat transaksi milik user (dari GET /billing/transactions).
+interface Tx extends InvoiceTx {
+  externalId?: string;
+}
+
+const txStatusMeta: Record<string, { label: string; className: string }> = {
+  paid: { label: "Lunas", className: "bg-green-500/15 text-green-600 border-green-500/30" },
+  pending: { label: "Menunggu", className: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
+  failed: { label: "Gagal", className: "bg-red-500/15 text-red-600 border-red-500/30" },
+  expired: { label: "Kadaluarsa", className: "bg-muted text-muted-foreground border-border" },
+  cancelled: { label: "Dibatalkan", className: "bg-muted text-muted-foreground border-border" },
+  refunded: { label: "Refund", className: "bg-blue-500/15 text-blue-600 border-blue-500/30" },
+};
+
+function txStatusBadge(status: string) {
+  const meta = txStatusMeta[status?.toLowerCase()] || {
+    label: status || "-",
+    className: "bg-muted text-muted-foreground border-border",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${meta.className}`}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 function parseFeatures(raw: string): string[] {
   try {
     const arr = JSON.parse(raw || "[]");
@@ -45,9 +79,15 @@ function rupiah(n: number) {
 }
 
 export default function Billing({ embedded = false }: { embedded?: boolean }) {
+  const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Fitur 2: riwayat transaksi + kwitansi
+  const [txs, setTxs] = useState<Tx[]>([]);
+  const [txLoading, setTxLoading] = useState(true);
+  const [invoiceTx, setInvoiceTx] = useState<Tx | null>(null);
 
   // Payment modal state
   const [payPlan, setPayPlan] = useState<Plan | null>(null);
@@ -87,6 +127,15 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
       /* abaikan, tampilkan kosong */
     } finally {
       setLoading(false);
+    }
+    // Fitur 2: riwayat transaksi milik user yang login
+    try {
+      const t = await apiGet<{ transactions: Tx[] }>("/billing/transactions");
+      setTxs(t.transactions || []);
+    } catch {
+      /* abaikan */
+    } finally {
+      setTxLoading(false);
     }
   }, []);
 
@@ -237,6 +286,77 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
+      {/* Fitur 2: Riwayat Transaksi */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Riwayat Transaksi</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {txLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : txs.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-4 pb-4">
+              Belum ada riwayat transaksi.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-sm">
+                <thead>
+                  <tr className="border-y border-border text-left text-xs text-muted-foreground">
+                    <th className="font-medium px-4 py-2.5">Tanggal</th>
+                    <th className="font-medium px-4 py-2.5">Invoice</th>
+                    <th className="font-medium px-4 py-2.5">Paket</th>
+                    <th className="font-medium px-4 py-2.5 text-right">Nominal</th>
+                    <th className="font-medium px-4 py-2.5">Metode</th>
+                    <th className="font-medium px-4 py-2.5">Status</th>
+                    <th className="font-medium px-4 py-2.5 w-28" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {txs.map((tx) => (
+                    <tr key={tx.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {tglID(tx.paidAt || tx.createdAt)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap font-mono text-xs">
+                        {tx.invoiceNumber || "-"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap font-medium text-foreground">
+                        {tx.Plan?.name || "-"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-foreground">
+                        {rupiah(tx.amount)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {metodeLabel(tx.paymentMethod)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {txStatusBadge(tx.status)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        {tx.status === "paid" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setInvoiceTx(tx)}
+                          >
+                            <Receipt className="w-3.5 h-3.5 mr-1" />
+                            Kwitansi
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Payment modal */}
       {payPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -341,6 +461,15 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
             </CardContent>
           </Card>
         </div>
+      )}
+      {/* Fitur 2: modal kwitansi untuk transaksi lunas */}
+      {invoiceTx && (
+        <InvoiceModal
+          tx={invoiceTx}
+          userName={user?.name || ""}
+          userEmail={user?.email || ""}
+          onClose={() => setInvoiceTx(null)}
+        />
       )}
     </div>
   );
