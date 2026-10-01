@@ -341,8 +341,11 @@ func verifyClipkuSignature(rawBody []byte, headerSig, apiKey string) bool {
 
 // activateSubscription menandai transaksi lunas + mengaktifkan langganan.
 // Idempoten: bila transaksi sudah paid, tidak melakukan apa-apa.
-func activateSubscription(db *gorm.DB, txID uint) error {
-	return db.Transaction(func(tdb *gorm.DB) error {
+// Mengembalikan activated=true TEPAT pada momen transisi status → paid
+// (dipakai Fitur 6 untuk memicu notifikasi WA pembayaran); false bila tidak
+// ada perubahan status (mis. webhook dipanggil ulang).
+func activateSubscription(db *gorm.DB, txID uint) (activated bool, err error) {
+	err = db.Transaction(func(tdb *gorm.DB) error {
 		var tx models.Transaction
 		if err := tdb.First(&tx, txID).Error; err != nil {
 			return err
@@ -380,12 +383,14 @@ func activateSubscription(db *gorm.DB, txID uint) error {
 		}
 		// Sinkronkan kolom plan di user
 		tdb.Model(&models.User{}).Where("id = ?", tx.UserID).Update("plan", plan.Slug)
+		activated = true
 		return nil
 	})
+	return activated, err
 }
 
 // POST /api/billing/clipkupay/webhook — publik, diverifikasi via X-Signature.
-func clipkuPayWebhook(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+func clipkuPayWebhook(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
 	kp := newClipkuPay(cfg, db)
 	return func(c *gin.Context) {
 		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
@@ -450,10 +455,16 @@ func clipkuPayWebhook(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 				c.JSON(http.StatusOK, gin.H{"message": "OK"})
 				return
 			}
-			if err := activateSubscription(db, tx.ID); err != nil {
+			activated, err := activateSubscription(db, tx.ID)
+			if err != nil {
 				db.Model(&log).Update("status", "activate_failed")
 				c.JSON(http.StatusOK, gin.H{"message": "OK"})
 				return
+			}
+			if activated {
+				// Fitur 6: tepat di momen transisi → paid. Error notifikasi
+				// tidak menggagalkan webhook (sudah dicatat di log).
+				_ = notifyPaymentSuccess(db, wm, tx.ID)
 			}
 			db.Model(&log).Update("status", "activated")
 		} else {

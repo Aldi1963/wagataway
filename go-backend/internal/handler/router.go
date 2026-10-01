@@ -64,7 +64,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		registerIntegrationInboxRoute(api, db, waManager)
 
 		// Webhook Clipku Pay — publik, diverifikasi via X-Signature
-		api.POST("/billing/clipkupay/webhook", clipkuPayWebhook(cfg, db))
+		api.POST("/billing/clipkupay/webhook", clipkuPayWebhook(cfg, db, waManager))
 
 		// ── Public API (stricter rate limit) ───────────────────────────────
 		publicAPI := api.Group("")
@@ -86,7 +86,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerMenuBotRoutes(protected, db)
 			registerIntegrationRoutes(protected, db, waManager)
 			registerApiKeyRoutes(protected, db)
-			registerBillingRoutes(protected, cfg, db)
+			registerBillingRoutes(protected, cfg, db, waManager)
 			registerScheduleRoutes(protected, db)
 			registerScheduleAliasRoutes(protected, db)
 			registerWebhookRoutes(protected, db)

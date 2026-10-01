@@ -60,6 +60,12 @@ type Transaction struct {
 	ExpiredAt     *time.Time `json:"expiredAt"`
 	PaidAt        *time.Time `json:"paidAt"`
 	Metadata      string     `gorm:"type:text" json:"metadata"` // JSON
+	// Notifikasi WA pembayaran berhasil (Fitur 6): timestamp kapan notifikasi
+	// dikirim ke nomor notifikasi WA user. NULL = belum dikirim — dipakai
+	// sebagai guard atomik anti-duplikat (klaim via UPDATE ... WHERE
+	// notify_wa_sent_at IS NULL) bila webhook & sinkronisasi status berlomba
+	// memicu aktivasi yang sama.
+	NotifyWASentAt *time.Time `json:"notifyWaSentAt,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 

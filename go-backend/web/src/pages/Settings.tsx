@@ -213,8 +213,8 @@ export default function Settings() {
                 inputMode="tel"
               />
               <p className="text-xs text-muted-foreground">
-                Pengingat expired langganan (H-3 &amp; H-1) dikirim ke nomor ini
-                via WhatsApp. Kosongkan bila tidak ingin menerima.
+                Notifikasi pembayaran &amp; pengingat expired dikirim ke nomor
+                ini via WhatsApp. Kosongkan bila tidak ingin menerima.
               </p>
             </div>
 

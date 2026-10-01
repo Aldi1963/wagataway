@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, wm waSender) {
 	// GET /api/quota — info kuota pesan bulanan (Fitur 3), alias ringan dari
 	// /api/billing/usage untuk dipakai dashboard & integrasi.
 	rg.GET("/quota", getBillingUsage(db))
@@ -24,11 +24,11 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 		b.GET("/plans", listPlans(db))
 		b.GET("/subscription", getSubscription(db))
 		b.GET("/usage", getBillingUsage(db))
-		b.POST("/subscribe", createSubscription(cfg, db))
+		b.POST("/subscribe", createSubscription(cfg, db, wm))
 		// Fitur 4: kalkulasi ganti paket prorata (tanpa efek samping)
 		b.GET("/prorate", getProrateQuote(db))
 		b.GET("/transactions", listTransactions(db))
-		b.GET("/transactions/:id", getBillingTransaction(cfg, db))
+		b.GET("/transactions/:id", getBillingTransaction(cfg, db, wm))
 		b.GET("/transactions/:id/invoice.pdf", getInvoicePDF(db))
 		b.POST("/voucher/redeem", redeemVoucher(db))
 	}
@@ -89,7 +89,7 @@ func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		var req struct {
@@ -138,9 +138,13 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
 				return
 			}
-			if err := activateSubscription(db, tx.ID); err != nil {
+			if activated, err := activateSubscription(db, tx.ID); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengaktifkan paket"})
 				return
+			} else if activated {
+				// Fitur 6: tepat di momen transisi → paid (prorata bayar-0).
+				// Error notifikasi tidak menggagalkan aktivasi.
+				_ = notifyPaymentSuccess(db, wm, tx.ID)
 			}
 			c.JSON(http.StatusCreated, gin.H{
 				"transaction": tx,
@@ -208,7 +212,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 }
 
 // GET /api/billing/transactions/:id — cek status + sinkron dari Clipku Pay bila pending.
-func getBillingTransaction(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
 	kp := newClipkuPay(cfg, db)
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -223,7 +227,11 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		if tx.Status == "pending" && tx.ExternalID != "" && kp.enabled() {
 			if remote, err := kp.getTransaction(tx.ExternalID); err == nil {
 				if clipkuIsPaid(remote.Status) {
-					_ = activateSubscription(db, tx.ID)
+					// Fitur 6: tepat di momen transisi → paid. Error
+					// notifikasi tidak menggagalkan sinkronisasi.
+					if activated, _ := activateSubscription(db, tx.ID); activated {
+						_ = notifyPaymentSuccess(db, wm, tx.ID)
+					}
 					db.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
 				} else {
 					st := strings.ToLower(strings.TrimSpace(remote.Status))
