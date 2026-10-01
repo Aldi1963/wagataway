@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { useAuth } from "@/hooks/use-auth";
-import { useTheme } from "@/hooks/use-theme";
 import { useLocation } from "wouter";
-import { Sun, Moon, Check, UserRound, KeyRound, Users, CreditCard, ChevronRight } from "lucide-react";
+import { Check, UserRound, KeyRound, Users, CreditCard, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/api";
@@ -57,10 +56,9 @@ function initialTab(): string {
   }
 }
 
-/** Halaman gabungan "Akun": Profil, Keamanan, API Key, Tampilan, Tim, Afiliasi, Langganan. */
+/** Halaman "Setting" ala profil: Profil, Pengaturan API, Tim, Langganan. */
 export default function Settings() {
   const { user, updateUser } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
 
   const [active, setActive] = useState<string>(initialTab);
@@ -267,38 +265,6 @@ export default function Settings() {
             </Button>
           </div>
         </div>
-
-          <div>
-          <SectionHeader title="Tampilan" desc="Sesuaikan tampilan aplikasi" />
-          <div className="grid grid-cols-2 gap-3">
-            {(
-              [
-                { value: "light", label: "Terang", icon: Sun },
-                { value: "dark", label: "Gelap", icon: Moon },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => {
-                  if (theme !== opt.value) toggleTheme();
-                }}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                  theme === opt.value
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:bg-secondary/40"
-                )}
-              >
-                <opt.icon className="w-5 h-5" />
-                <span className="text-sm font-medium flex-1">{opt.label}</span>
-                {theme === opt.value && <Check className="w-4 h-4 text-primary" />}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Pilihan tema tersimpan di browser ini.
-          </p>
-          </div>
         </div>
       )}
 
