@@ -275,7 +275,6 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
 
 export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
-  const { user } = useAuth();
   const search = useSearch();
   const [openSections, setOpenSections] = useState<string[]>(loadOpenSections);
   const [badges, setBadges] = useState<Record<string, number>>({});
