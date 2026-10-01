@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPatch, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
 
@@ -33,6 +33,77 @@ interface ChatMsg {
   direction: "in" | "out";
   isRead: boolean;
   createdAt: string;
+}
+
+// Avatar kontak: coba foto profil WA asli, fallback ke inisial nama.
+function ChatAvatar({
+  deviceId,
+  phone,
+  name,
+  size = "w-8 h-8",
+  textSize = "text-xs",
+}: {
+  deviceId: number | null;
+  phone: string;
+  name: string;
+  size?: string;
+  textSize?: string;
+}) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (deviceId == null || !phone) {
+      setPhotoUrl(null);
+      return;
+    }
+    let alive = true;
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const res = await apiFetch(
+          `/chat/profile-pic?deviceId=${deviceId}&phone=${encodeURIComponent(phone)}`,
+          { signal: ctrl.signal }
+        );
+        if (!res.ok) return;
+        const blob = await res.blob();
+        if (alive && blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          setPhotoUrl(url);
+        }
+      } catch {
+        /* abaikan: pakai inisial */
+      }
+    })();
+    return () => {
+      alive = false;
+      ctrl.abort();
+    };
+  }, [deviceId, phone]);
+  useEffect(() => {
+    return () => {
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+    };
+  }, [photoUrl]);
+
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        className={cn(size, "rounded-full object-cover shrink-0")}
+      />
+    );
+  }
+  return (
+    <div
+      className={cn(
+        size,
+        "rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center font-semibold shrink-0",
+        textSize
+      )}
+    >
+      {(name || phone).charAt(0).toUpperCase()}
+    </div>
+  );
 }
 
 export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
@@ -313,8 +384,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
         {activePhone ? (
           <>
             {/* Chat Header */}
-            <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-card">
-              <div className="flex items-center gap-2">
+            <div className="min-h-12 flex items-center justify-between gap-2 px-4 py-1.5 border-b border-border bg-card">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -324,19 +395,21 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
-                <div className="w-7 h-7 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center text-xs font-semibold">
-                  {(activeConvo?.contactName || activePhone).charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-foreground">
+                <ChatAvatar
+                  deviceId={activeDeviceId}
+                  phone={activePhone}
+                  name={activeConvo?.contactName || activePhone}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground truncate leading-tight">
                     {activeConvo?.contactName || activePhone}
                   </p>
-                  <p className="text-[10px] text-muted-foreground font-mono">
+                  <p className="text-[11px] text-muted-foreground font-mono truncate">
                     {activePhone}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {/* AI Toggle */}
                 <Button
                   variant={aiMode ? "default" : "outline"}

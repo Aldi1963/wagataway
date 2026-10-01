@@ -1,18 +1,24 @@
 package handler
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/realtime"
+	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/service"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
 	"gorm.io/gorm"
 )
 
@@ -47,6 +53,7 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 		chat.POST("/ai-reply", aiReplyMessage(db, wm))
 		chat.PATCH("/conversations/:phone/mode", setChatMode(db))
 		chat.PATCH("/conversations/:phone/read", markConversationRead(db))
+		chat.GET("/profile-pic", getProfilePic(db, wm))
 	}
 }
 
@@ -352,6 +359,93 @@ func markConversationRead(db *gorm.DB) gin.HandlerFunc {
 			Update("unread_count", 0)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Ditandai dibaca"})
+	}
+}
+
+// getProfilePic mem-proxy foto profil WhatsApp kontak (preview kecil).
+// 404 bila kontak tidak punya foto / device offline — frontend pakai inisial sebagai fallback.
+func getProfilePic(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		deviceID, _ := strconv.Atoi(c.Query("deviceId"))
+		phone := c.Query("phone")
+		if deviceID == 0 || phone == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "deviceId & phone wajib diisi"})
+			return
+		}
+
+		var dev models.Device
+		if err := db.Where("id = ? AND user_id = ?", deviceID, userID).First(&dev).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan"})
+			return
+		}
+		client := wm.GetClient(uint(deviceID))
+		if client == nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat offline"})
+			return
+		}
+
+		digits := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, phone)
+		if digits == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Nomor tidak valid"})
+			return
+		}
+		jid := types.NewJID(digits, types.DefaultUserServer)
+		// Untuk pengirim LID, pakai SenderJID asli (…@lid) bila tersimpan.
+		var conv models.ChatConversation
+		if err := db.Where("user_id = ? AND device_id = ? AND phone = ?", userID, deviceID, phone).
+			First(&conv).Error; err == nil && conv.SenderJID != "" {
+			if pj, perr := types.ParseJID(conv.SenderJID); perr == nil && pj.Server != "" {
+				jid = pj
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+		// Coba sebagai nomor biasa, lalu sebagai LID bila gagal.
+		candidates := []types.JID{jid}
+		if jid.Server == types.DefaultUserServer {
+			candidates = append(candidates, types.NewJID(digits, types.HiddenUserServer))
+		}
+		var picURL string
+		for _, cj := range candidates {
+			info, err := client.GetProfilePictureInfo(ctx, cj, &whatsmeow.GetProfilePictureParams{Preview: true})
+			if err == nil && info != nil && info.URL != "" {
+				picURL = info.URL
+				break
+			}
+		}
+		if picURL == "" {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Tidak ada foto profil"})
+			return
+		}
+
+		resp, err := security.NewSafeClient(15 * time.Second).Get(picURL)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"message": "Gagal mengunduh foto profil"})
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Tidak ada foto profil"})
+			return
+		}
+		img, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"message": "Gagal membaca foto profil"})
+			return
+		}
+		ct := resp.Header.Get("Content-Type")
+		if ct == "" {
+			ct = "image/jpeg"
+		}
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.Data(http.StatusOK, ct, img)
 	}
 }
 
