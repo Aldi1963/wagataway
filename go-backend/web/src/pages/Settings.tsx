@@ -180,6 +180,7 @@ export default function Settings() {
         <div>
           <SectionHeader title="Informasi Personal" desc="Kelola informasi akun Anda" />
           <div className="space-y-4">
+            <div className="space-y-2">
               <label className="text-xs font-medium">Nama</label>
               <Input
                 value={name}
