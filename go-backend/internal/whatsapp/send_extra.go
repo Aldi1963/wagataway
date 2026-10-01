@@ -326,7 +326,8 @@ func (m *Manager) sendInteractiveMessage(ctx context.Context, client *whatsmeow.
 	interactive := &waE2E.InteractiveMessage{
 		InteractiveMessage: &waE2E.InteractiveMessage_NativeFlowMessage_{
 			NativeFlowMessage: &waE2E.InteractiveMessage_NativeFlowMessage{
-				Buttons: buttons,
+				Buttons:        buttons,
+				MessageVersion: proto.Int32(3),
 			},
 		},
 		Body: &waE2E.InteractiveMessage_Body{
