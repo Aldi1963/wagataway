@@ -1,10 +1,13 @@
 package whatsapp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -940,11 +943,32 @@ func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload
 			return
 		}
 		var err error
-		raw, err = json.Marshal(map[string]interface{}{"from": from, "message": text})
+		botBody := map[string]interface{}{"from": from, "message": text}
+		if s := os.Getenv("WAMP_BOT_SECRET"); s != "" {
+			botBody["secret"] = s
+		}
+		raw, err = json.Marshal(botBody)
 		if err != nil {
 			log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to marshal WAMP bot payload")
 			return
 		}
+		// POST ke endpoint bot PPOB, baca JSON balasan {"text": ...},
+		// lalu kirim teks balasan itu ke pengirim via device ini.
+		replyText, statusCode, err := postWampBot(url, raw)
+		if err != nil {
+			log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Str("error", err.Error()).Msg("WAMP bot webhook failed")
+			return
+		}
+		log.Info().Uint("deviceID", deviceID).Int("status", statusCode).Msg("WAMP bot webhook delivered")
+		if replyText == "" {
+			return
+		}
+		if err := m.SendMessage(deviceID, from, "text", replyText, ""); err != nil {
+			log.Warn().Err(err).Uint("deviceID", deviceID).Str("to", from).Msg("WAMP bot reply failed")
+			return
+		}
+		log.Info().Uint("deviceID", deviceID).Str("to", from).Msg("WAMP bot reply sent")
+		return
 	} else {
 		body := map[string]interface{}{
 			"event":     event,
@@ -966,6 +990,44 @@ func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload
 	} else {
 		log.Info().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Msg("Device webhook delivered")
 	}
+}
+
+// postWampBot: POST payload ke endpoint bot PPOB (/whatsapp/bot) dan kembalikan
+// teks balasan dari JSON respons {"text": "..."}.
+// Pakai HTTP client yang sadar proxy (ProxyFromEnvironment): client aman generik
+// (SafeClient, dial langsung) tidak bisa keluar dari sandbox ini karena semua
+// TCP diintersep ke egress proxy. URL webhook diset admin sendiri, jadi aman.
+func postWampBot(url string, raw []byte) (string, int, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
+	if err != nil {
+		return "", 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Webhook-Event", "message.received")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var parsed struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", resp.StatusCode, fmt.Errorf("respon bukan JSON: %w", err)
+	}
+	return strings.TrimSpace(parsed.Text), resp.StatusCode, nil
 }
 
 // isWampBotURL: true bila path URL berakhiran /whatsapp/bot (endpoint bot PPOB).
