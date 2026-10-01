@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
+	waBinary "go.mau.fi/whatsmeow/binary"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
@@ -210,12 +211,35 @@ func (m *Manager) SendMessageWithOptions(deviceID uint, to string, opts SendOpti
 }
 
 // sendProto mengirim satu proto Message dan mengembalikan WA message ID.
-func (m *Manager) sendProto(ctx context.Context, client *whatsmeow.Client, jid types.JID, msg *waE2E.Message) (string, error) {
-	resp, err := client.SendMessage(ctx, jid, msg)
+func (m *Manager) sendProto(ctx context.Context, client *whatsmeow.Client, jid types.JID, msg *waE2E.Message, extra ...whatsmeow.SendRequestExtra) (string, error) {
+	resp, err := client.SendMessage(ctx, jid, msg, extra...)
 	if err != nil {
 		return "", err
 	}
 	return string(resp.ID), nil
+}
+
+// interactiveBizNodes adalah additionalNodes wajib agar server WA meneruskan
+// pesan interactive (native flow) ke perangkat penerima. Tanpa node biz ini
+// server hanya ACK pengiriman tapi pesan tidak pernah sampai (tidak ada receipt delivered).
+func interactiveBizNodes() []waBinary.Node {
+	return []waBinary.Node{
+		{
+			Tag: "biz",
+			Content: []waBinary.Node{
+				{
+					Tag:   "interactive",
+					Attrs: waBinary.Attrs{"type": "native_flow", "v": "1"},
+					Content: []waBinary.Node{
+						{
+							Tag:   "native_flow",
+							Attrs: waBinary.Attrs{"v": "9", "name": "mixed"},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 // sendImageMessage mengupload dan mengirim gambar; mengembalikan WA message ID.
@@ -340,7 +364,9 @@ func (m *Manager) sendInteractiveMessage(ctx context.Context, client *whatsmeow.
 		}
 	}
 
-	return m.sendProto(ctx, client, jid, &waE2E.Message{InteractiveMessage: interactive})
+	nodes := interactiveBizNodes()
+	return m.sendProto(ctx, client, jid, &waE2E.Message{InteractiveMessage: interactive},
+		whatsmeow.SendRequestExtra{AdditionalNodes: &nodes})
 }
 
 // sendStickerMessage mengupload dan mengirim stiker (wajib webp).
