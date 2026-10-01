@@ -655,38 +655,17 @@ export default function Dashboard() {
               </>
             )}
           </p>
-          {/* Meter kuota pesan bulanan (Fitur 3) — ramping sebaris, selaras kartu lain */}
+          {/* Kuota pesan bulanan (Fitur 3) — teks pendek selebar kartu lain */}
           {quota && !quota.isUnlimited && (
-            <div className="mt-1.5 flex items-center gap-2">
-              <div
-                className="h-1 w-28 rounded-full bg-border"
-                role="progressbar"
-                aria-valuenow={quota.percentUsed}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all",
-                    quota.quotaExceeded
-                      ? "bg-destructive"
-                      : quota.warning
-                        ? "bg-amber-500"
-                        : "bg-[#243370]"
-                  )}
-                  style={{ width: `${quota.percentUsed}%` }}
-                />
-              </div>
-              <span
-                className={cn(
-                  "text-[11px] text-muted-foreground shrink-0",
-                  quota.warning && "text-amber-600 font-semibold"
-                )}
-              >
-                {quota.usedThisMonth.toLocaleString("id-ID")}/
-                {quota.limit.toLocaleString("id-ID")} ({quota.percentUsed}%)
-              </span>
-            </div>
+            <p
+              className={cn(
+                "text-[11px] text-muted-foreground mt-1",
+                quota.warning && "text-amber-600 font-semibold"
+              )}
+            >
+              {quota.usedThisMonth.toLocaleString("id-ID")}/
+              {quota.limit.toLocaleString("id-ID")} pesan ({quota.percentUsed}%)
+            </p>
           )}
           {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar;
               BONUS: tombol Pilih Paket bila belum ada langganan aktif */}
