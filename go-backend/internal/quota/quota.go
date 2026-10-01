@@ -21,7 +21,12 @@
 //     stiker/voicenote/lokasi), /send-message & /send-media (WAMP/PPOB),
 //     integrations inbox, livechat (manual & AI), jadwal/drip/recurring/
 //     followup, menu-bot, auto-reply, AI reply, welcome DM, group rules.
-//   - DIKECUALIKAN DARI BLOKIR (tetap jalan walau kuota habis):
+//   - GATE LANGGANAN (Fitur 5) terintegrasi di Check/CheckN: status active |
+//     grace | expired dari paket subscription. Expired >= 3 hari → blokir
+//     total; grace (expired < 3 hari) → dibatasi 20 pesan/hari kalender
+//     (dihitung dari tabel messages, outgoing, hari berjalan) bersama kuota
+//     bulanan. Trial yang expired ikut aturan grace yang sama.
+//   - DIKECUALIKAN DARI BLOKIR (tetap jalan walau kuota habis / expired):
 //     a) Balasan bot PPOB (webhook /whatsapp/bot -> JSON {"text"}): JANGAN
 //        sampai bot PPOB user mati karena kuota. Tidak dicatat ke messages,
 //        jadi juga tidak dihitung.
@@ -39,6 +44,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/subscription"
 	"gorm.io/gorm"
 )
 
@@ -79,13 +85,21 @@ func IsExceeded(err error) bool { return errors.Is(err, ErrExceeded) }
 
 // Result adalah hasil pemeriksaan kuota satu user.
 type Result struct {
-	Allowed   bool   // false bila kuota habis
+	Allowed   bool   // false bila kuota habis / langganan expired / batas grace harian tercapai
 	Used      int64  // pesan terhitung bulan berjalan
 	Limit     int    // 0 = unlimited
 	PlanName  string // nama paket efektif
 	IsTrial   bool   // langganan trial
 	Unlimited bool   // Limit == 0
 	Warning   bool   // pemakaian >= 80% (dan bukan unlimited)
+	// Status langganan terpusat (Fitur 5, grace period):
+	// "active" | "grace" | "expired" (lihat paket subscription).
+	SubState         string
+	SubGraceDaysLeft int   // sisa hari tenggang (bermakna saat SubState == "grace")
+	SubGraceUsed     int64 // pesan terkirim hari ini selama grace
+	SubGraceLimit    int   // 20 (batas harian selama grace)
+	SubGraceBlocked  bool  // true bila penolakan disebabkan batas harian grace
+	SubExpired       bool  // true bila penolakan disebabkan langganan expired >= 3 hari
 }
 
 // Percent mengembalikan 0-100 (0 bila unlimited).
@@ -112,10 +126,33 @@ func (r *Result) Remaining() int64 {
 	return rem
 }
 
-// ExceededMessage: pesan penolakan standar saat kuota habis.
+// Code mengembalikan kode penolakan terpusat untuk respons API:
+// SUBSCRIPTION_EXPIRED | SUBSCRIPTION_GRACE_LIMIT | QUOTA_EXCEEDED.
+func (r *Result) Code() string {
+	if r == nil {
+		return "QUOTA_EXCEEDED"
+	}
+	if r.SubExpired {
+		return "SUBSCRIPTION_EXPIRED"
+	}
+	if r.SubGraceBlocked {
+		return "SUBSCRIPTION_GRACE_LIMIT"
+	}
+	return "QUOTA_EXCEEDED"
+}
+
+// ExceededMessage: pesan penolakan standar saat kuota habis ATAU
+// langganan expired / batas harian grace tercapai (Fitur 5).
 func ExceededMessage(r *Result) string {
 	if r == nil {
 		return "Kuota pesan habis. Perpanjang/upgrade paket untuk menambah kuota."
+	}
+	if r.SubExpired {
+		return "Langganan berakhir. Perpanjang di https://wa.clipku.com/billing"
+	}
+	if r.SubGraceBlocked {
+		return fmt.Sprintf("Masa tenggang langganan: batas %d pesan/hari tercapai (%d/%d hari ini). Perpanjang di https://wa.clipku.com/billing agar tidak terblokir.",
+			r.SubGraceLimit, r.SubGraceUsed, r.SubGraceLimit)
 	}
 	return fmt.Sprintf("Kuota pesan paket %s habis (%d/%d). Perpanjang/upgrade paket untuk menambah kuota.",
 		r.PlanName, r.Used, r.Limit)
@@ -128,6 +165,11 @@ func Check(db *gorm.DB, userID uint) (*Result, error) {
 
 // CheckN memeriksa apakah user masih boleh mengirim n pesan
 // (dipakai bulk: hitung per pesan di muka).
+//
+// Gate terpusat (Fitur 3 + Fitur 5): kuota pesan bulanan DAN status
+// langganan (active | grace | expired). Selama grace, batas 20 pesan/hari
+// berlaku BERSAMA kuota bulanan (yang paling ketat yang menang).
+// Expired >= 3 hari memblokir total.
 func CheckN(db *gorm.DB, userID uint, n int64) (*Result, error) {
 	limit, planName, isTrial, err := effectiveLimit(db, userID)
 	if err != nil {
@@ -146,10 +188,33 @@ func CheckN(db *gorm.DB, userID uint, n int64) (*Result, error) {
 	}
 	if r.Unlimited {
 		r.Allowed = true
+	} else {
+		r.Allowed = used+n <= int64(limit)
+		r.Warning = float64(used)/float64(limit) >= WarnThreshold
+	}
+
+	// Gate langganan (Fitur 5): gagal baca DB bukan alasan memblokir —
+	// biarkan jalan dengan status active (caller sudah melakukan hal yang
+	// sama untuk kegagalan kuota).
+	sub, serr := subscription.Check(db, userID)
+	if serr != nil {
+		r.SubState = string(subscription.StateActive)
 		return r, nil
 	}
-	r.Allowed = used+n <= int64(limit)
-	r.Warning = float64(used)/float64(limit) >= WarnThreshold
+	r.SubState = string(sub.State)
+	r.SubGraceDaysLeft = sub.GraceDaysLeft
+	r.SubGraceUsed = sub.GraceUsed
+	r.SubGraceLimit = sub.GraceLimit
+	switch sub.State {
+	case subscription.StateExpired:
+		r.Allowed = false
+		r.SubExpired = true
+	case subscription.StateGrace:
+		if sub.GraceUsed+n > int64(sub.GraceLimit) {
+			r.Allowed = false
+			r.SubGraceBlocked = true
+		}
+	}
 	return r, nil
 }
 

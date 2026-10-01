@@ -80,6 +80,11 @@ func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 			"warning":       qr.Warning, // true bila pemakaian >= 80%
 			"isTrial":       qr.IsTrial,
 			"quotaExceeded": !qr.Allowed,
+			// Status langganan terpusat (Fitur 5): active | grace | expired.
+			"subState":        qr.SubState,
+			"graceDaysLeft":   qr.SubGraceDaysLeft,
+			"graceUsedToday":  qr.SubGraceUsed,
+			"graceDailyLimit": qr.SubGraceLimit,
 		})
 	}
 }

@@ -329,3 +329,124 @@ func TestBackfillDefaults(t *testing.T) {
 		t.Errorf("custom kustom tertimpa: %d, want 777", custom.MonthlyMessageLimit)
 	}
 }
+
+// ── Fitur 5: grace period 3 hari terintegrasi di gate kuota ────────────────
+
+// mkGraceUser membuat user dengan langganan Lite yang berakhir endOffset
+// dari sekarang (negatif = sudah expired).
+func mkGraceUser(t *testing.T, db *gorm.DB, endOffset time.Duration) uint {
+	t.Helper()
+	u := models.User{Name: "Grace Gate", Email: "grace-gate-" + randomSuffix() + "@t.local"}
+	if err := db.Create(&u).Error; err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	var lite models.Plan
+	if err := db.Where("slug = ?", "lite").First(&lite).Error; err != nil {
+		t.Fatalf("plan lite: %v", err)
+	}
+	now := time.Now()
+	sub := models.Subscription{UserID: u.ID, PlanID: lite.ID, Status: "active",
+		StartDate: now.Add(-60 * 24 * time.Hour), EndDate: now.Add(endOffset)}
+	if err := db.Create(&sub).Error; err != nil {
+		t.Fatalf("seed sub: %v", err)
+	}
+	d := models.Device{UserID: u.ID, Name: "Test Device", Phone: "6280000000000", Status: "disconnected"}
+	if err := db.Create(&d).Error; err != nil {
+		t.Fatalf("seed device: %v", err)
+	}
+	return u.ID
+}
+
+// addTodayMessages menyisipkan n pesan outgoing HARI INI (untuk hitungan grace).
+func addTodayMessages(t *testing.T, db *gorm.DB, uid uint, n int, status string) {
+	t.Helper()
+	var dev models.Device
+	if err := db.Where("user_id = ?", uid).First(&dev).Error; err != nil {
+		t.Fatalf("device fixture: %v", err)
+	}
+	now := time.Now()
+	msgs := make([]models.Message, 0, n)
+	for i := 0; i < n; i++ {
+		msgs = append(msgs, models.Message{UserID: uid, DeviceID: dev.ID, To: "6280000000000",
+			Type: "text", Content: "x", Direction: "outgoing", Status: status,
+			CreatedAt: now.Add(time.Duration(i) * time.Second)})
+	}
+	if err := db.CreateInBatches(msgs, 500).Error; err != nil {
+		t.Fatalf("seed message: %v", err)
+	}
+}
+
+func TestCheckGraceDailyLimit(t *testing.T) {
+	db := testDB(t)
+	_, _, _, _, _, _ = seedQuotaFixtures(t, db)
+	uid := mkGraceUser(t, db, -24*time.Hour) // expired kemarin → grace
+	addTodayMessages(t, db, uid, 19, "sent")
+
+	qr, err := CheckN(db, uid, 1)
+	if err != nil {
+		t.Fatalf("CheckN: %v", err)
+	}
+	if !qr.Allowed {
+		t.Error("19+1=20 dalam grace seharusnya Allowed")
+	}
+	if qr.SubState != "grace" {
+		t.Errorf("SubState = %q, want grace", qr.SubState)
+	}
+	if qr.SubGraceDaysLeft != 2 {
+		t.Errorf("SubGraceDaysLeft = %d, want 2", qr.SubGraceDaysLeft)
+	}
+
+	// 19+2=21 > 20 → ditolak dengan code SUBSCRIPTION_GRACE_LIMIT.
+	qr, err = CheckN(db, uid, 2)
+	if err != nil {
+		t.Fatalf("CheckN: %v", err)
+	}
+	if qr.Allowed {
+		t.Error("19+2=21 dalam grace seharusnya ditolak")
+	}
+	if !qr.SubGraceBlocked || qr.Code() != "SUBSCRIPTION_GRACE_LIMIT" {
+		t.Errorf("SubGraceBlocked=%v Code=%q, want true/SUBSCRIPTION_GRACE_LIMIT", qr.SubGraceBlocked, qr.Code())
+	}
+	msg := ExceededMessage(qr)
+	if want := "Masa tenggang"; !strings.Contains(msg, want) {
+		t.Errorf("pesan %q tidak mengandung %q", msg, want)
+	}
+}
+
+func TestCheckExpiredBlocked(t *testing.T) {
+	db := testDB(t)
+	_, _, _, _, _, _ = seedQuotaFixtures(t, db)
+	uid := mkGraceUser(t, db, -5*24*time.Hour) // expired 5 hari lalu
+
+	qr, err := CheckN(db, uid, 1)
+	if err != nil {
+		t.Fatalf("CheckN: %v", err)
+	}
+	if qr.Allowed {
+		t.Error("expired >= 3 hari seharusnya diblokir")
+	}
+	if !qr.SubExpired || qr.SubState != "expired" || qr.Code() != "SUBSCRIPTION_EXPIRED" {
+		t.Errorf("SubExpired=%v SubState=%q Code=%q, want true/expired/SUBSCRIPTION_EXPIRED",
+			qr.SubExpired, qr.SubState, qr.Code())
+	}
+	want := "Langganan berakhir. Perpanjang di https://wa.clipku.com/billing"
+	if msg := ExceededMessage(qr); msg != want {
+		t.Errorf("pesan = %q, want %q", msg, want)
+	}
+}
+
+func TestCheckActiveSubscriptionUnaffected(t *testing.T) {
+	db := testDB(t)
+	_, userLite, _, _, _, _ := seedQuotaFixtures(t, db)
+	// Langganan aktif, 0 pesan → tidak terblokir, SubState active.
+	qr, err := CheckN(db, userLite, 1)
+	if err != nil {
+		t.Fatalf("CheckN: %v", err)
+	}
+	if !qr.Allowed || qr.SubState != "active" {
+		t.Errorf("Allowed=%v SubState=%q, want true/active", qr.Allowed, qr.SubState)
+	}
+	if qr.SubExpired || qr.SubGraceBlocked {
+		t.Error("user aktif tidak boleh kena flag expired/grace")
+	}
+}

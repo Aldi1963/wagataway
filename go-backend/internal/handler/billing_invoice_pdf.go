@@ -13,9 +13,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// (Font tanda tangan di-embed dari internal/handler/assets/fonts via assets_embed.go.)
+
 // GET /api/billing/transactions/:id/invoice.pdf — unduh kwitansi sebagai file
-// PDF asli yang dibuat server (bukan print browser). Hanya untuk transaksi
-// milik user yang berstatus paid.
+// PDF resmi yang dibuat server (kop, tabel rincian, terbilang, stempel LUNAS,
+// blok tanda tangan). Hanya untuk transaksi milik user yang berstatus paid.
 func getInvoicePDF(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -56,11 +58,11 @@ func rupiahPDF(n int64) string {
 		neg, s = "-", s[1:]
 	}
 	var out []byte
-	for i, ch := range s {
+	for i := range s {
 		if i > 0 && (len(s)-i)%3 == 0 {
 			out = append(out, '.')
 		}
-		out = append(out, byte(ch))
+		out = append(out, s[i])
 	}
 	return "Rp " + neg + string(out)
 }
@@ -79,71 +81,87 @@ func metodeLabelPDF(m string) string {
 	}
 }
 
-// buildInvoicePDF menyusun dokumen kwitansi A4: kop, status LUNAS, meta,
-// rincian paket, total, dan catatan kaki. Memakai font inti Helvetica
-// (tanpa file font eksternal).
+var idNumWords = []string{"", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"}
+
+// terbilangID mengubah angka menjadi kata Bahasa Indonesia,
+// mis. 175000 -> "Seratus Tujuh Puluh Lima Ribu".
+func terbilangID(n int64) string {
+	switch {
+	case n < 0:
+		return "Minus " + terbilangID(-n)
+	case n < 12:
+		return idNumWords[n]
+	case n < 20:
+		return terbilangID(n-10) + " Belas"
+	case n < 100:
+		s := terbilangID(n/10) + " Puluh"
+		if n%10 > 0 {
+			s += " " + terbilangID(n%10)
+		}
+		return s
+	case n < 200:
+		s := "Seratus"
+		if n%100 > 0 {
+			s += " " + terbilangID(n%100)
+		}
+		return s
+	case n < 1000:
+		s := terbilangID(n/100) + " Ratus"
+		if n%100 > 0 {
+			s += " " + terbilangID(n%100)
+		}
+		return s
+	case n < 2000:
+		s := "Seribu"
+		if n%1000 > 0 {
+			s += " " + terbilangID(n%1000)
+		}
+		return s
+	case n < 1000000:
+		s := terbilangID(n/1000) + " Ribu"
+		if n%1000 > 0 {
+			s += " " + terbilangID(n%1000)
+		}
+		return s
+	case n < 1000000000:
+		s := terbilangID(n/1000000) + " Juta"
+		if n%1000000 > 0 {
+			s += " " + terbilangID(n%1000000)
+		}
+		return s
+	case n < 1000000000000:
+		s := terbilangID(n/1000000000) + " Miliar"
+		if n%1000000000 > 0 {
+			s += " " + terbilangID(n%1000000000)
+		}
+		return s
+	default:
+		s := terbilangID(n/1000000000000) + " Triliun"
+		if n%1000000000000 > 0 {
+			s += " " + terbilangID(n%1000000000000)
+		}
+		return s
+	}
+}
+
+// buildInvoicePDF menyusun invoice resmi A4: kop perusahaan, info tagihan,
+// tabel rincian + terbilang + total, stempel LUNAS, dan blok tanda tangan
+// (font script GreatVibes, lisensi OFL, di-embed dari assets/fonts).
 func buildInvoicePDF(tx models.Transaction) *gofpdf.Fpdf {
 	const navyR, navyG, navyB = 36, 51, 112
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(18, 16, 18)
-	pdf.SetAutoPageBreak(true, 20)
+	pdf.AddUTF8FontFromBytes("GreatVibes", "", signatureFont)
+	pdf.SetMargins(15, 14, 15)
+	pdf.SetAutoPageBreak(true, 18)
 	pdf.AddPage()
 	pw, _ := pdf.GetPageSize()
-	cw := pw - 36 // lebar konten
+	cw := pw - 30 // lebar konten
+	L, R := 15.0, pw-15
 
-	// ── Kop ──
-	pdf.SetFont("Helvetica", "B", 22)
-	pdf.SetTextColor(navyR, navyG, navyB)
-	pdf.Cell(cw-40, 10, "WaGataway")
-	// Badge LUNAS di kanan
-	pdf.SetFillColor(220, 252, 231)
-	pdf.SetDrawColor(34, 197, 94)
-	pdf.SetFont("Helvetica", "B", 12)
-	pdf.SetTextColor(21, 128, 61)
-	x := pdf.GetX()
-	pdf.SetX(x + (cw - 40) - 34)
-	pdf.CellFormat(34, 9, "LUNAS", "1", 1, "C", true, 0, "")
-	pdf.SetFont("Helvetica", "", 11)
-	pdf.SetTextColor(100, 116, 139)
-	pdf.Cell(cw, 6, "Kwitansi Pembayaran")
-	pdf.Ln(10)
-
-	// Garis navy
-	pdf.SetDrawColor(navyR, navyG, navyB)
-	pdf.SetLineWidth(0.8)
-	pdf.Line(18, pdf.GetY(), pw-18, pdf.GetY())
-	pdf.Ln(7)
-
-	// ── Meta ──
-	nomor := invoiceNumber(tx.ID, tx.CreatedAt)
 	paidAt := tx.CreatedAt
 	if tx.PaidAt != nil && !tx.PaidAt.IsZero() {
 		paidAt = *tx.PaidAt
 	}
-	metaRow := func(label, value string, bold bool) {
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(100, 116, 139)
-		pdf.Cell(52, 6.5, label)
-		pdf.SetTextColor(30, 41, 59)
-		if bold {
-			pdf.SetFont("Helvetica", "B", 11)
-		} else {
-			pdf.SetFont("Helvetica", "", 11)
-		}
-		pdf.Cell(cw-52, 6.5, value)
-		pdf.Ln(6.5)
-	}
-	metaRow("No. Invoice", nomor, true)
-	metaRow("Tanggal Bayar", tglIDpdf(paidAt), false)
-	metaRow("Ditagihkan Kepada", tx.User.Name, true)
-	if tx.User.Email != "" {
-		metaRow("", tx.User.Email, false)
-	}
-	pdf.Ln(4)
-
-	// ── Rincian ──
-	pdf.SetDrawColor(226, 232, 240)
-	pdf.SetLineWidth(0.3)
 	planName := "Paket WaGataway"
 	durasi := 30
 	if tx.Plan != nil {
@@ -155,40 +173,175 @@ func buildInvoicePDF(tx models.Transaction) *gofpdf.Fpdf {
 		}
 	}
 	end := paidAt.AddDate(0, 0, durasi)
-	itemRow := func(label, value string) {
-		y := pdf.GetY()
+	nomor := invoiceNumber(tx.ID, tx.CreatedAt)
+
+	// ── Kop: kiri identitas usaha, kanan judul + nomor ──
+	pdf.SetXY(L, 14)
+	pdf.SetFont("Helvetica", "B", 22)
+	pdf.SetTextColor(navyR, navyG, navyB)
+	pdf.Cell(95, 9, "WaGataway")
+	pdf.SetXY(L, 23.5)
+	pdf.SetFont("Helvetica", "", 9)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.Cell(95, 5, "Jakarta, Indonesia")
+	pdf.SetXY(L, 28.5)
+	pdf.Cell(95, 5, "wa.clipku.com")
+
+	pdf.SetXY(R-95, 13)
+	pdf.SetFont("Helvetica", "B", 26)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.CellFormat(95, 11, "INVOICE", "", 0, "R", false, 0, "")
+	pdf.SetXY(R-95, 25)
+	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.CellFormat(95, 5.5, "No. "+nomor, "", 0, "R", false, 0, "")
+	pdf.SetXY(R-95, 30.5)
+	pdf.CellFormat(95, 5.5, "Tanggal: "+tglIDpdf(paidAt), "", 0, "R", false, 0, "")
+
+	y := 39.0
+	pdf.SetDrawColor(navyR, navyG, navyB)
+	pdf.SetLineWidth(0.9)
+	pdf.Line(L, y, R, y)
+	y += 7
+
+	// ── Ditagihkan kepada | Metode pembayaran ──
+	pdf.SetXY(L, y)
+	pdf.SetFont("Helvetica", "B", 8)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.Cell(90, 5, "DITAGIHKAN KEPADA")
+	pdf.SetXY(R-90, y)
+	pdf.Cell(90, 5, "METODE PEMBAYARAN")
+	y += 5
+	pdf.SetXY(L, y)
+	pdf.SetFont("Helvetica", "B", 12)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.Cell(90, 6.5, tx.User.Name)
+	pdf.SetXY(R-90, y)
+	pdf.SetFont("Helvetica", "", 10)
+	pdf.Cell(90, 6.5, metodeLabelPDF(tx.PaymentMethod))
+	y += 6.5
+	if tx.User.Email != "" {
+		pdf.SetXY(L, y)
 		pdf.SetFont("Helvetica", "", 10)
 		pdf.SetTextColor(100, 116, 139)
-		pdf.Cell(52, 8, label)
-		pdf.SetFont("Helvetica", "", 11)
-		pdf.SetTextColor(30, 41, 59)
-		pdf.Cell(cw-52, 8, value)
-		pdf.Ln(8)
-		pdf.Line(18, y+8, pw-18, y+8)
+		pdf.Cell(90, 5.5, tx.User.Email)
+		y += 5.5
 	}
-	itemRow("Paket", planName)
-	itemRow("Periode Aktif", tglIDpdf(paidAt)+" - "+tglIDpdf(end))
-	itemRow("Metode Pembayaran", metodeLabelPDF(tx.PaymentMethod))
-	pdf.Ln(5)
+	y += 6
 
-	// ── Total ──
-	pdf.SetFillColor(240, 243, 255)
-	pdf.SetDrawColor(navyR, navyG, navyB)
-	pdf.SetLineWidth(0.4)
-	y := pdf.GetY()
-	pdf.Rect(18, y, cw, 16, "DF")
-	pdf.SetXY(24, y+2)
-	pdf.SetFont("Helvetica", "B", 12)
-	pdf.SetTextColor(navyR, navyG, navyB)
-	pdf.Cell(60, 12, "Total Dibayar")
-	pdf.SetFont("Helvetica", "B", 18)
-	pdf.CellFormat(cw-72, 12, rupiahPDF(tx.Amount), "", 0, "R", false, 0, "")
-	pdf.SetY(y + 22)
+	// ── Tabel rincian ──
+	colW := []float64{cw - 20 - 38 - 38, 20, 38, 38}
+	headers := []string{"DESKRIPSI", "QTY", "HARGA", "JUMLAH"}
+	pdf.SetFillColor(navyR, navyG, navyB)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Helvetica", "B", 10)
+	x := L
+	for i, h := range headers {
+		align := "L"
+		if i == 1 {
+			align = "C"
+		} else if i > 1 {
+			align = "R"
+		}
+		pdf.SetXY(x, y)
+		pdf.CellFormat(colW[i], 9, h, "", 0, align, true, 0, "")
+		x += colW[i]
+	}
+	y += 9
 
-	// ── Catatan ──
+	rowH := 17.0
+	pdf.SetDrawColor(226, 232, 240)
+	pdf.SetLineWidth(0.3)
+	pdf.Rect(L, y, cw, rowH, "D")
+	x = L
+	for i := 0; i < 3; i++ {
+		x += colW[i]
+		pdf.Line(x, y, x, y+rowH)
+	}
+	pdf.SetXY(L+3, y+2.5)
+	pdf.SetFont("Helvetica", "B", 10)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.Cell(colW[0]-6, 6, fmt.Sprintf("Langganan Paket %s (%d hari)", planName, durasi))
+	pdf.SetXY(L+3, y+9)
 	pdf.SetFont("Helvetica", "", 9)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.Cell(colW[0]-6, 5, fmt.Sprintf("Periode %s - %s", tglIDpdf(paidAt), tglIDpdf(end)))
+	pdf.SetXY(L+colW[0], y)
+	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.CellFormat(colW[1], rowH, "1", "", 0, "C", false, 0, "")
+	pdf.SetXY(L+colW[0]+colW[1], y)
+	pdf.CellFormat(colW[2], rowH, rupiahPDF(tx.Amount), "", 0, "R", false, 0, "")
+	pdf.SetXY(L+colW[0]+colW[1]+colW[2], y)
+	pdf.SetFont("Helvetica", "B", 10)
+	pdf.CellFormat(colW[3], rowH, rupiahPDF(tx.Amount), "", 0, "R", false, 0, "")
+	y += rowH
+
+	// Terbilang
+	pdf.SetXY(L, y)
+	pdf.SetFont("Helvetica", "I", 9)
+	pdf.SetTextColor(71, 85, 105)
+	pdf.CellFormat(cw, 8.5, fmt.Sprintf("Terbilang: \"%s Rupiah\"", terbilangID(tx.Amount)), "1", 1, "L", false, 0, "")
+	y += 8.5
+
+	// Total
+	pdf.SetFillColor(238, 242, 255)
+	pdf.SetXY(L, y)
+	pdf.SetFont("Helvetica", "B", 11)
+	pdf.SetTextColor(navyR, navyG, navyB)
+	pdf.CellFormat(cw-48, 11, "TOTAL", "1", 0, "R", true, 0, "")
+	pdf.SetFont("Helvetica", "B", 14)
+	pdf.CellFormat(48, 11, rupiahPDF(tx.Amount), "1", 1, "R", true, 0, "")
+	y += 11 + 12
+
+	// ── Stempel LUNAS (kiri) + blok tanda tangan (kanan) ──
+	sx, sy := L+26.0, y+15
+	pdf.SetDrawColor(22, 163, 74)
+	pdf.SetTextColor(22, 163, 74)
+	pdf.TransformBegin()
+	pdf.TransformRotate(-12, sx, sy)
+	pdf.SetLineWidth(1.1)
+	pdf.Circle(sx, sy, 18, "D")
+	pdf.SetLineWidth(0.5)
+	pdf.Circle(sx, sy, 15, "D")
+	pdf.SetFont("Helvetica", "B", 16)
+	pdf.SetXY(sx-18, sy-6)
+	pdf.CellFormat(36, 9, "LUNAS", "", 0, "C", false, 0, "")
+	pdf.SetFont("Helvetica", "B", 7)
+	pdf.SetXY(sx-18, sy+3)
+	pdf.CellFormat(36, 6, "WAGATAWAY", "", 0, "C", false, 0, "")
+	pdf.TransformEnd()
+
+	bx := R - 72
+	pdf.SetXY(bx, y)
+	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.Cell(72, 6, "Jakarta, "+tglIDpdf(paidAt))
+	pdf.SetXY(bx, y+7)
+	pdf.Cell(72, 6, "Hormat kami,")
+	pdf.SetXY(bx, y+13)
+	pdf.SetFont("GreatVibes", "", 36)
+	pdf.SetTextColor(navyR, navyG, navyB)
+	pdf.Cell(72, 17, "WaGataway")
+	pdf.SetXY(bx, y+33)
+	pdf.SetFont("Helvetica", "B", 10)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.Cell(72, 6, "( Tim Finance )")
+	pdf.SetXY(bx, y+39)
+	pdf.SetFont("Helvetica", "", 9)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.Cell(72, 5, "Finance - WaGataway")
+	y += 52
+
+	// ── Catatan kaki ──
+	pdf.SetDrawColor(226, 232, 240)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(L, y, R, y)
+	y += 4
+	pdf.SetXY(L, y)
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(148, 163, 184)
-	pdf.MultiCell(cw, 5, "Kwitansi ini dibuat otomatis oleh sistem WaGataway dan sah tanpa tanda tangan basah. Simpan nomor invoice untuk keperluan administrasi.", "", "L", false)
+	pdf.MultiCell(cw, 4.5, "Dokumen ini dibuat otomatis oleh sistem WaGataway. Simpan nomor invoice untuk keperluan administrasi.", "", "L", false)
 
 	return pdf
 }

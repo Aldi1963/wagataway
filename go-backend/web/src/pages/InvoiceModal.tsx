@@ -39,12 +39,29 @@ export function metodeLabel(m?: string): string {
   return map[m.toLowerCase()] || m.charAt(0).toUpperCase() + m.slice(1);
 }
 
+const _kata = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+/** Angka -> kata Bahasa Indonesia, mis. 175000 -> "Seratus Tujuh Puluh Lima Ribu". */
+export function terbilang(n: number): string {
+  n = Math.floor(Math.abs(n));
+  if (n < 12) return _kata[n];
+  if (n < 20) return terbilang(n - 10) + " Belas";
+  if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh" + (n % 10 ? " " + terbilang(n % 10) : "");
+  if (n < 200) return "Seratus" + (n % 100 ? " " + terbilang(n % 100) : "");
+  if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus" + (n % 100 ? " " + terbilang(n % 100) : "");
+  if (n < 2000) return "Seribu" + (n % 1000 ? " " + terbilang(n % 1000) : "");
+  if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu" + (n % 1000 ? " " + terbilang(n % 1000) : "");
+  if (n < 1000000000) return terbilang(Math.floor(n / 1000000)) + " Juta" + (n % 1000000 ? " " + terbilang(n % 1000000) : "");
+  if (n < 1000000000000) return terbilang(Math.floor(n / 1000000000)) + " Miliar" + (n % 1000000000 ? " " + terbilang(n % 1000000000) : "");
+  return terbilang(Math.floor(n / 1000000000000)) + " Triliun" + (n % 1000000000000 ? " " + terbilang(n % 1000000000000) : "");
+}
+
 // Print CSS: invoice dirender via portal langsung di bawah <body>, sehingga
 // saat print cukup sembunyikan semua anak body kecuali portal invoice.
-// Pola lama (visibility:hidden + position:fixed) bikin Chrome Android mengulang
-// elemen fixed di tiap halaman dan sisa layout tak terlihat menambah halaman
-// kosong -> hasilnya 2 halaman.
 const printCss = `
+@font-face {
+  font-family: 'GreatVibes';
+  src: url('/fonts/GreatVibes-Regular.ttf') format('truetype');
+}
 @media print {
   @page { size: A4; margin: 12mm; }
   body > *:not(#invoice-print-root) { display: none !important; }
@@ -68,6 +85,13 @@ const printCss = `
 }
 `;
 
+const screenFontCss = `
+@font-face {
+  font-family: 'GreatVibes';
+  src: url('/fonts/GreatVibes-Regular.ttf') format('truetype');
+}
+`;
+
 interface Props {
   tx: InvoiceTx;
   userName: string;
@@ -75,7 +99,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** Kwitansi/invoice rapi untuk transaksi berstatus paid. */
+/** Invoice resmi: kop, tabel rincian, terbilang, stempel LUNAS, blok tanda tangan. */
 export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props) {
   const [downloading, setDownloading] = useState(false);
   const planName = tx.Plan?.name || "Paket WaGataway";
@@ -108,66 +132,102 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
     }
   };
 
-  const row = (label: string, value: React.ReactNode) => (
-    <div className="flex items-start justify-between gap-4 py-2.5 border-b border-slate-100 last:border-0">
-      <span className="text-xs text-slate-500 shrink-0 pt-0.5">{label}</span>
-      <span className="text-sm font-medium text-slate-800 text-right">{value}</span>
-    </div>
-  );
-
   return createPortal(
     <div id="invoice-print-root" className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <style>{printCss}</style>
+      <style>{screenFontCss}</style>
       <div className="absolute inset-0 bg-black/50 invoice-no-print" onClick={onClose} />
       <div
         id="invoice-print"
-        className="relative w-full max-w-lg bg-white text-slate-900 rounded-xl shadow-2xl p-6 md:p-8 max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-2xl bg-white text-slate-900 rounded-xl shadow-2xl p-6 md:p-8 max-h-[90vh] overflow-y-auto"
       >
         {/* Kop */}
-        <div className="flex items-start justify-between pb-4 border-b-2 border-[#243370]">
+        <div className="flex items-start justify-between">
           <div>
-            <p className="text-lg font-bold text-[#243370]">WaGataway</p>
-            <p className="text-[11px] text-slate-500">Kwitansi Pembayaran</p>
+            <p className="text-2xl font-bold text-[#243370]">WaGataway</p>
+            <p className="text-[11px] text-slate-500 mt-1">Jakarta, Indonesia</p>
+            <p className="text-[11px] text-slate-500">wa.clipku.com</p>
           </div>
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
-            LUNAS
-          </span>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-slate-800 tracking-wide">INVOICE</p>
+            <p className="text-xs text-slate-500 mt-1">No. {nomor}</p>
+            <p className="text-xs text-slate-500">Tanggal: {tglID(tx.paidAt || tx.createdAt)}</p>
+          </div>
         </div>
+        <div className="h-[3px] bg-[#243370] mt-4 mb-5" />
 
-        {/* Meta invoice */}
-        <div className="grid grid-cols-2 gap-3 py-4 border-b border-slate-100">
+        {/* Ditagihkan kepada | Metode */}
+        <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <p className="text-[11px] text-slate-500">No. Invoice</p>
-            <p className="text-sm font-bold font-mono text-slate-800">{nomor}</p>
+            <p className="text-[10px] font-bold text-slate-500 tracking-wider">DITAGIHKAN KEPADA</p>
+            <p className="text-sm font-bold text-slate-800 mt-1">{userName || "-"}</p>
+            {userEmail && <p className="text-xs text-slate-500">{userEmail}</p>}
           </div>
-          <div>
-            <p className="text-[11px] text-slate-500">Tanggal Pembayaran</p>
-            <p className="text-sm font-semibold text-slate-800">{tglID(tx.paidAt || tx.createdAt)}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="text-[11px] text-slate-500">Ditagihkan Kepada</p>
-            <p className="text-sm font-semibold text-slate-800">{userName || "-"}</p>
-            <p className="text-xs text-slate-500">{userEmail || ""}</p>
+          <div className="text-right">
+            <p className="text-[10px] font-bold text-slate-500 tracking-wider">METODE PEMBAYARAN</p>
+            <p className="text-xs text-slate-700 mt-1">{metodeLabel(tx.paymentMethod)}</p>
           </div>
         </div>
 
-        {/* Rincian */}
-        <div className="py-2">
-          {row("Paket", planName)}
-          {row("Periode Aktif", `${tglID(start)} – ${tglID(end)}`)}
-          {row("Metode Pembayaran", metodeLabel(tx.paymentMethod))}
+        {/* Tabel rincian */}
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-[#243370] text-white">
+              <th className="text-left text-[11px] font-bold px-3 py-2.5">DESKRIPSI</th>
+              <th className="text-center text-[11px] font-bold px-2 py-2.5 w-12">QTY</th>
+              <th className="text-right text-[11px] font-bold px-3 py-2.5 w-28">HARGA</th>
+              <th className="text-right text-[11px] font-bold px-3 py-2.5 w-28">JUMLAH</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-200">
+              <td className="px-3 py-3">
+                <p className="font-semibold text-slate-800 text-[13px]">Langganan Paket {planName} ({durasi} hari)</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Periode {tglID(start)} – {tglID(end)}</p>
+              </td>
+              <td className="text-center text-slate-700 px-2 py-3">1</td>
+              <td className="text-right text-slate-700 px-3 py-3">{rupiah(tx.amount)}</td>
+              <td className="text-right font-semibold text-slate-800 px-3 py-3">{rupiah(tx.amount)}</td>
+            </tr>
+            <tr className="border-b border-slate-200">
+              <td colSpan={4} className="px-3 py-2.5">
+                <p className="text-[11px] italic text-slate-500">Terbilang: &ldquo;{terbilang(tx.amount)} Rupiah&rdquo;</p>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={3} className="px-3 py-3 text-right font-bold text-[#243370] bg-[#243370]/5 text-[13px]">TOTAL</td>
+              <td className="px-3 py-3 text-right font-bold text-[#243370] bg-[#243370]/5 text-lg">{rupiah(tx.amount)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Stempel + TTD */}
+        <div className="flex items-start justify-between mt-8 gap-4">
+          <div className="flex-1 flex items-center justify-center pt-2">
+            <div
+              className="w-28 h-28 rounded-full border-[3px] border-green-600 flex flex-col items-center justify-center -rotate-12 opacity-90"
+              style={{ boxShadow: "inset 0 0 0 2px #fff, inset 0 0 0 4px #16a34a" }}
+            >
+              <span className="text-green-700 font-bold text-lg tracking-widest">LUNAS</span>
+              <span className="text-green-700 text-[9px] font-bold tracking-wider mt-0.5">WAGATAWAY</span>
+            </div>
+          </div>
+          <div className="w-44 text-[13px] text-slate-800">
+            <p>Jakarta, {tglID(tx.paidAt || tx.createdAt)}</p>
+            <p className="mt-1">Hormat kami,</p>
+            <p className="text-[#243370] mt-2 mb-1 leading-none" style={{ fontFamily: "'GreatVibes', cursive", fontSize: "2.6rem" }}>
+              WaGataway
+            </p>
+            <p className="font-bold">( Tim Finance )</p>
+            <p className="text-[11px] text-slate-500">Finance – WaGataway</p>
+          </div>
         </div>
 
-        {/* Total */}
-        <div className="mt-2 rounded-lg bg-[#243370]/5 border border-[#243370]/15 px-4 py-3 flex items-center justify-between">
-          <span className="text-sm font-semibold text-[#243370]">Total Dibayar</span>
-          <span className="text-xl font-bold text-[#243370]">{rupiah(tx.amount)}</span>
+        <div className="border-t border-slate-200 mt-8 pt-3">
+          <p className="text-[10px] text-slate-400 leading-relaxed">
+            Dokumen ini dibuat otomatis oleh sistem WaGataway. Simpan nomor invoice untuk keperluan administrasi.
+          </p>
         </div>
-
-        <p className="mt-4 text-[11px] text-slate-400 leading-relaxed">
-          Kwitansi ini dibuat otomatis oleh sistem WaGataway dan sah tanpa tanda tangan basah.
-          Simpan nomor invoice untuk keperluan administrasi.
-        </p>
 
         {/* Tombol: tidak ikut tercetak */}
         <div className="invoice-no-print mt-5 flex gap-2">

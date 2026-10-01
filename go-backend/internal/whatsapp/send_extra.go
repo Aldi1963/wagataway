@@ -121,7 +121,8 @@ func (m *Manager) SendMessageWithOptions(deviceID uint, to string, opts SendOpti
 			} else if !qr.Allowed {
 				log.Warn().Uint("deviceID", deviceID).Uint("userID", quotaUserID).
 					Int64("used", qr.Used).Int("limit", qr.Limit).
-					Msg("Pengiriman diblokir: kuota pesan habis")
+					Str("code", qr.Code()).Str("subState", qr.SubState).
+					Msg("Pengiriman diblokir: kuota habis / langganan expired / batas grace harian")
 				return "", &quota.ExceededError{Info: qr}
 			}
 		}
