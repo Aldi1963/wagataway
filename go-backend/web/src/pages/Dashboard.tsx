@@ -183,7 +183,7 @@ function StatCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("min-w-0 min-h-[172px]", className)}>
+    <Card className={cn("min-w-0 relative overflow-hidden", className)}>
       <CardContent className="p-5">
         <div className="flex items-center gap-4">
           <div
@@ -546,13 +546,22 @@ export default function Dashboard() {
   const subState = subscription?.subState || "active";
   const isGraceSub = subState === "grace";
   const isExpiredSub = subState === "expired";
-  const subEndLabel = subscription
-    ? `Berakhir ${new Date(subscription.endDate).toLocaleDateString("id-ID", {
+  // Versi ringkas untuk kartu (sebaris dengan kuota).
+  const subEndShort = subscription
+    ? `s/d ${new Date(subscription.endDate).toLocaleDateString("id-ID", {
         day: "numeric",
         month: "short",
         year: "numeric",
       })}`
     : "Tidak ada langganan aktif";
+  // Aksi kartu sebagai link teks ringkas (bukan tombol, supaya kartu tetap pendek).
+  const subAction = isTrialSub
+    ? { label: "Upgrade", href: "/billing" }
+    : !subscription
+      ? { label: "Pilih Paket", href: "/billing" }
+      : canRenew
+        ? { label: "Perpanjang", href: "/billing?perpanjang=1" }
+        : null;
 
   return (
     <div className="space-y-6">
@@ -649,67 +658,39 @@ export default function Dashboard() {
               </span>
             )}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {subEndLabel}
-            {quota?.isUnlimited && (
-              <>
-                {" "}· <span className="font-semibold text-foreground">Unlimited</span>
-              </>
+          {/* Baris ringkas: kuota + tanggal + aksi teks — setinggi 3 kartu lain */}
+          <div className="mt-0.5 flex items-center gap-2">
+            <p className="text-[11px] text-muted-foreground truncate">
+              {quota && !quota.isUnlimited && (
+                <span className={cn(quota.warning && "text-amber-600 font-semibold")}>
+                  {quota.usedThisMonth.toLocaleString("id-ID")}/
+                  {quota.limit.toLocaleString("id-ID")} ({quota.percentUsed}%) ·{" "}
+                </span>
+              )}
+              {quota?.isUnlimited ? `${subEndShort} · Unlimited` : subEndShort}
+            </p>
+            {subAction && (
+              <button
+                onClick={() => navigate(subAction.href)}
+                className="text-[11px] font-semibold text-[#243370] dark:text-blue-400 hover:underline shrink-0"
+              >
+                {subAction.label}
+              </button>
             )}
-          </p>
-          {/* Kuota pesan bulanan — teks + garis statistik pemakaian */}
+          </div>
+          {/* Garis statistik pemakaian — strip tipis di tepi bawah kartu */}
           {quota && !quota.isUnlimited && (
-            <div className="mt-1.5">
-              <p
+            <div className="absolute bottom-0 inset-x-0 h-[3px] bg-black/10 dark:bg-muted">
+              <div
                 className={cn(
-                  "text-[11px] text-muted-foreground",
-                  quota.warning && "text-amber-600 font-semibold"
+                  "h-full",
+                  quota.warning ? "bg-amber-500" : "bg-[#243370] dark:bg-blue-400"
                 )}
-              >
-                {quota.usedThisMonth.toLocaleString("id-ID")}/
-                {quota.limit.toLocaleString("id-ID")} pesan ({quota.percentUsed}%)
-              </p>
-              <div className="h-1.5 mt-1 rounded-full bg-black/10 dark:bg-muted overflow-hidden">
-                <div
-                  className={cn(
-                    "h-full rounded-full",
-                    quota.warning ? "bg-amber-500" : "bg-[#243370] dark:bg-blue-400"
-                  )}
-                  style={{
-                    width: `${quota.usedThisMonth > 0 ? Math.max(2, Math.min(100, quota.percentUsed)) : 0}%`,
-                  }}
-                />
-              </div>
+                style={{
+                  width: `${quota.usedThisMonth > 0 ? Math.max(2, Math.min(100, quota.percentUsed)) : 0}%`,
+                }}
+              />
             </div>
-          )}
-          {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar;
-              BONUS: tombol Pilih Paket bila belum ada langganan aktif */}
-          {isTrialSub ? (
-            <Button
-              size="sm"
-              variant="tint"
-              onClick={() => navigate("/billing")}
-            >
-              Upgrade sekarang
-            </Button>
-          ) : !subscription ? (
-            <Button
-              size="sm"
-              variant="tint"
-              onClick={() => navigate("/billing")}
-            >
-              Pilih Paket
-            </Button>
-          ) : (
-            canRenew && (
-              <Button
-                size="sm"
-                variant="tint"
-                onClick={() => navigate("/billing?perpanjang=1")}
-              >
-                Perpanjang
-              </Button>
-            )
           )}
         </StatCard>
 
