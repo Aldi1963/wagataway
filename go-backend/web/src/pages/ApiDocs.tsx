@@ -218,6 +218,46 @@ function buildGroups(baseUrl: string): GroupDoc[] {
       ],
     },
     {
+      title: "OTP",
+      desc: "Kirim kode OTP numerik via WhatsApp dan verifikasi. Kode hanya disimpan sebagai hash SHA256 — tidak pernah muncul di response, log, maupun riwayat.",
+      endpoints: [
+        {
+          method: "POST",
+          path: "/api/otp/send",
+          title: "Kirim kode OTP via WhatsApp",
+          params: [
+            { name: "phone", type: "string", required: true, desc: "Nomor tujuan (otomatis dinormalisasi ke 62xxxxxxxxxx)" },
+            { name: "deviceId", type: "number", required: false, desc: "ID perangkat pengirim; bila kosong dipakai perangkat terhubung pertama (prioritas default)" },
+            { name: "length", type: "number", required: false, desc: "Panjang digit kode, 4–8 (default 6)" },
+            { name: "ttlMenit", type: "number", required: false, desc: "Masa berlaku menit, 1–30 (default 5)" },
+            { name: "template", type: "string", required: false, desc: "Template pesan; gunakan {code} sebagai placeholder (default: \"Kode OTP Anda: {code}\")" },
+          ],
+          bodyExample: J({ phone: "6281234567890", length: 6, ttlMenit: 5, template: "Kode OTP Anda: {code}" }),
+          curl: curl("POST", "/api/otp/send", `{\\n    "phone": "6281234567890",\\n    "length": 6,\\n    "ttlMenit": 5\\n  }`),
+          note: "Response: {success, message, phone, deviceId, expiresIn (detik)} — kode TIDAK dikembalikan. Rate limit: maksimal 5x kirim per nomor per 10 menit (HTTP 429 bila terlampaui). Mengirim kode baru otomatis menghanguskan kode aktif sebelumnya untuk nomor yang sama.",
+        },
+        {
+          method: "POST",
+          path: "/api/otp/verify",
+          title: "Verifikasi kode OTP",
+          params: [
+            { name: "phone", type: "string", required: true, desc: "Nomor tujuan yang dikirimi OTP" },
+            { name: "code", type: "string", required: true, desc: "Kode OTP yang diterima pengguna" },
+          ],
+          bodyExample: J({ phone: "6281234567890", code: "482916" }),
+          curl: curl("POST", "/api/otp/verify", `{\\n    "phone": "6281234567890",\\n    "code": "482916"\\n  }`),
+          note: "Response: {success, message, attemptsLeft?}. Kode sekali pakai (ditandai used setelah sukses), ditolak bila kedaluwarsa, dan hangus setelah 5x tebakan salah. Perbandingan hash memakai constant-time compare.",
+        },
+        {
+          method: "GET",
+          path: "/api/otp/history",
+          title: "Riwayat OTP (tanpa kode)",
+          curl: curl("GET", "/api/otp/history"),
+          note: "Mengembalikan 50 OTP terakhir milik user: phone, status (active/used/invalidated/expired), attempts, expiresAt, createdAt. Kode tidak pernah disertakan.",
+        },
+      ],
+    },
+    {
       title: "Perangkat",
       desc: "Kelola perangkat WhatsApp yang terhubung.",
       endpoints: [
