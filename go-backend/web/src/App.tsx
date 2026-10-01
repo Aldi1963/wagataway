@@ -158,6 +158,9 @@ function AppRouter() {
         <Route path="/auto-reply">
           <ProtectedRoute><AutomationHub /></ProtectedRoute>
         </Route>
+        <Route path="/menu-bot">
+          <ProtectedRoute><AutomationHub /></ProtectedRoute>
+        </Route>
         <Route path="/ai-reply">
           <ProtectedRoute><AutomationHub /></ProtectedRoute>
         </Route>

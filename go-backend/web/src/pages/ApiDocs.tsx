@@ -375,6 +375,48 @@ function buildGroups(baseUrl: string): GroupDoc[] {
       ],
     },
     {
+      title: "Menu Bot",
+      desc: "Chatbot menu bertingkat: pengirim mengetik keyword pemicu lalu memilih opsi bernomor. Menu nonaktif secara default per device.",
+      endpoints: [
+        { method: "GET", path: "/api/menu-bots", title: "Daftar menu bot (beserta opsi & jumlah sesi aktif)", curl: curl("GET", "/api/menu-bots") },
+        {
+          method: "POST",
+          path: "/api/menu-bots",
+          title: "Buat menu bot (default nonaktif)",
+          bodyExample: J({ name: "Menu Utama", deviceId: 1, triggerKeyword: "menu", introText: "Halo! Silakan pilih:", alwaysActive: false }),
+          curl: curl("POST", "/api/menu-bots"),
+        },
+        { method: "GET", path: "/api/menu-bots/:id", title: "Detail satu menu bot", curl: curl("GET", "/api/menu-bots/1") },
+        {
+          method: "PUT",
+          path: "/api/menu-bots/:id",
+          title: "Ubah menu bot",
+          bodyExample: J({ introText: "Halo kak, pilih layanan:", alwaysActive: true }),
+          curl: curl("PUT", "/api/menu-bots/1"),
+        },
+        { method: "DELETE", path: "/api/menu-bots/:id", title: "Hapus menu bot (termasuk opsi & sesi)", curl: curl("DELETE", "/api/menu-bots/1") },
+        { method: "PATCH", path: "/api/menu-bots/:id/toggle", title: "Aktif/nonaktifkan menu bot", curl: curl("PATCH", "/api/menu-bots/1/toggle") },
+        {
+          method: "POST",
+          path: "/api/menu-bots/:id/items",
+          title: "Tambah opsi menu (balas teks / sub-menu)",
+          bodyExample: J({ label: "Jam operasional", actionType: "reply", replyText: "Kami buka 08.00–21.00 WIB." }),
+          curl: curl("POST", "/api/menu-bots/1/items"),
+          note: "actionType: reply (wajib replyText) atau submenu (wajib subMenuId = id menu lain milik akun). Opsi tampil bernomor sesuai position.",
+        },
+        {
+          method: "PUT",
+          path: "/api/menu-bots/:id/items/:itemId",
+          title: "Ubah opsi menu",
+          bodyExample: J({ label: "Info harga", actionType: "submenu", subMenuId: 2 }),
+          curl: curl("PUT", "/api/menu-bots/1/items/5"),
+        },
+        { method: "DELETE", path: "/api/menu-bots/:id/items/:itemId", title: "Hapus opsi menu", curl: curl("DELETE", "/api/menu-bots/1/items/5") },
+        { method: "GET", path: "/api/menu-bots/:id/sessions", title: "Daftar sesi percakapan aktif", curl: curl("GET", "/api/menu-bots/1/sessions") },
+        { method: "DELETE", path: "/api/menu-bots/sessions/:sessionId", title: "Akhiri sesi percakapan", curl: curl("DELETE", "/api/menu-bots/sessions/9") },
+      ],
+    },
+    {
       title: "Template",
       desc: "Template pesan siap pakai untuk balasan cepat.",
       endpoints: [
