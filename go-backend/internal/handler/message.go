@@ -366,10 +366,10 @@ func bulkStats(db *gorm.DB) gin.HandlerFunc {
 		}
 		var rows []row
 		db.Model(&models.BulkJobRecipient{}).
-			Select("status, COUNT(*) as count").
+			Select("bulk_job_recipients.status, COUNT(*) as count").
 			Joins("JOIN bulk_jobs ON bulk_jobs.id = bulk_job_recipients.bulk_job_id").
 			Where("bulk_jobs.user_id = ?", userID).
-			Group("status").Scan(&rows)
+			Group("bulk_job_recipients.status").Scan(&rows)
 		stats := gin.H{"jobs": jobs, "wait": int64(0), "sent": int64(0), "failed": int64(0)}
 		for _, r := range rows {
 			switch r.Status {
