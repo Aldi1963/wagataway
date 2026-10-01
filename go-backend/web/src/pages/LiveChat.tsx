@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X } from "lucide-react";
+import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +116,9 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -257,6 +260,31 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Panel info kontak: tutup saat klik di luar & saat ganti percakapan
+  useEffect(() => {
+    setShowInfo(false);
+    setCopied(false);
+  }, [activePhone]);
+  useEffect(() => {
+    if (!showInfo) return;
+    const onDown = (e: MouseEvent) => {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) setShowInfo(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showInfo]);
+
+  const copyPhone = async () => {
+    if (!activePhone) return;
+    try {
+      await navigator.clipboard.writeText(activePhone);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Gagal menyalin nomor");
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !activePhone) return;
     if (activeDeviceId == null) {
@@ -380,7 +408,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       </div>
 
       {/* ── Chat Area ────────────────────────────────── */}
-      <div className={cn("flex-1 flex-col", activePhone ? "flex" : "hidden md:flex")}>
+      <div className={cn("flex-1 flex-col min-w-0", activePhone ? "flex" : "hidden md:flex")}>
         {activePhone ? (
           <>
             {/* Chat Header */}
@@ -420,9 +448,46 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   <Bot className="w-3 h-3" />
                   {aiMode ? "AI Aktif" : "AI Mati"}
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
+                <div className="relative" ref={infoRef}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label="Info kontak"
+                    title="Info kontak"
+                    onClick={() => setShowInfo((v) => !v)}
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </Button>
+                  {showInfo && (
+                    <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-border bg-card shadow-xl z-30 p-4">
+                      <div className="flex flex-col items-center text-center">
+                        <ChatAvatar
+                          deviceId={activeDeviceId}
+                          phone={activePhone}
+                          name={activeConvo?.contactName || activePhone}
+                          size="w-16 h-16"
+                          textSize="text-xl"
+                        />
+                        <p className="mt-2.5 text-sm font-semibold text-foreground break-words">
+                          {activeConvo?.contactName || activePhone}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground font-mono">
+                          {activePhone}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 h-7 text-[11px] gap-1.5"
+                          onClick={copyPhone}
+                        >
+                          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          {copied ? "Tersalin" : "Salin nomor"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
