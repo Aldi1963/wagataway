@@ -183,7 +183,7 @@ function StatCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("min-w-0", className)}>
+    <Card className={cn("min-w-0 min-h-[160px]", className)}>
       <CardContent className="p-5">
         <div className="flex items-center gap-4">
           <div
