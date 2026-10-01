@@ -169,6 +169,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           ],
           bodyExample: J({ deviceId: 1, to: "6281234567890", question: "Pilih jadwal meeting", options: ["Senin pagi", "Selasa siang", "Rabu sore"] }),
           curl: curl("POST", "/api/messages/send-poll", `{\n    "deviceId": 1,\n    "to": "6281234567890",\n    "question": "Pilih jadwal meeting",\n    "options": ["Senin pagi", "Selasa siang", "Rabu sore"]\n  }`),
+          note: "Sejak fitur Rekap Polling, poll yang dikirim otomatis tercatat (pertanyaan, opsi, tujuan, WA message ID) dan vote yang masuk dicatat per opsi bila berhasil didekripsi. Vote hanya tercatat bila event PollUpdateMessage diterima dan dekripsi sukses (butuh message secret poll — poll lama yang dikirim sebelum fitur ini tidak bisa didekripsi). Lihat bagian \"Polling\" untuk endpoint hasil & rekap.",
         },
         {
           method: "POST",
@@ -237,6 +238,48 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           title: "Tarik pesan (hapus untuk semua orang)",
           curl: curl("DELETE", "/api/messages/1"),
           note: "Hanya untuk pesan milik sendiri yang masih dalam jendela waktu WhatsApp.",
+        },
+      ],
+    },
+    {
+      title: "Polling",
+      desc: "Rekap hasil voting polling otomatis: hasil per opsi, tutup polling, dan kirim rekap.",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/api/polls",
+          title: "Daftar polling yang pernah dikirim",
+          params: [
+            { name: "page", type: "number", required: false, desc: "Halaman (default 1)" },
+            { name: "limit", type: "number", required: false, desc: "Batas per halaman (default 20, maks 100)" },
+          ],
+          curl: curl("GET", "/api/polls?page=1&limit=20"),
+          note: "Setiap entri sudah memuat ringkasan hasil: options[] {text, votes}, totalVotes, totalVoters, isClosed.",
+        },
+        {
+          method: "GET",
+          path: "/api/polls/:id/results",
+          title: "Hasil vote sebuah polling",
+          curl: curl("GET", "/api/polls/1/results"),
+          note: "Batasan jujur: vote hanya tercatat bila event PollUpdateMessage dari WhatsApp diterima DAN berhasil didekripsi. Dekripsi butuh message secret poll yang disimpan saat poll dikirim device ini — poll yang dikirim sebelum fitur Rekap Polling tidak punya secret sehingga vote-nya tidak tercatat. Rekap memakai data yang berhasil tercatat; bila belum ada vote, semua opsi 0.",
+        },
+        {
+          method: "POST",
+          path: "/api/polls/:id/close",
+          title: "Tutup polling",
+          curl: curl("POST", "/api/polls/1/close"),
+          note: "Menandai poll selesai (isClosed=true). Vote yang masuk setelahnya tetap dicatat, hanya status tampilannya yang berubah.",
+        },
+        {
+          method: "POST",
+          path: "/api/polls/:id/recap",
+          title: "Kirim rekap hasil polling",
+          params: [
+            { name: "to", type: "string", required: true, desc: "Nomor tujuan atau JID grup (<id>@g.us)" },
+          ],
+          bodyExample: J({ to: "6281234567890" }),
+          curl: curl("POST", "/api/polls/1/recap", `{\n    "to": "6281234567890"\n  }`),
+          note: "Mengirim pesan teks berisi pertanyaan + tiap opsi dengan jumlah vote & persentase + total suara/pemilih, via device yang sama dengan pengirim poll.",
         },
       ],
     },

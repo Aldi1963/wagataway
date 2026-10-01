@@ -134,6 +134,9 @@ function AppRouter() {
         <Route path="/bulk">
           <ProtectedRoute><Send /></ProtectedRoute>
         </Route>
+        <Route path="/polls">
+          <ProtectedRoute><Send /></ProtectedRoute>
+        </Route>
         <Route path="/followups">
           <ProtectedRoute><Send /></ProtectedRoute>
         </Route>
