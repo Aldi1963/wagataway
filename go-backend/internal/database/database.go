@@ -86,6 +86,9 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.TeamMember{},
 		&models.Affiliate{},
 		&models.AffiliateEarning{},
+		&models.MenuBot{},
+		&models.MenuBotItem{},
+		&models.MenuBotSession{},
 	); err != nil {
 		return err
 	}

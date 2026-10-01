@@ -815,9 +815,16 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		senderPhone = msg.Info.SenderAlt.User
 	}
 
+	// Chatbot menu bertingkat — dievaluasi DULU sebelum AI reply & auto-reply.
+	// Bila ia menangani pesan (sesi menu aktif / keyword cocok / selalu-aktif),
+	// keduanya dilewati agar tidak bentrok. Default nonaktif per device.
+	menuHandled := m.checkMenuBot(sess, senderJID, senderPhone, text, msg.Info.IsGroup)
+
 	// AI auto-reply hook — non-blocking, gagal diam-diam (hanya log).
 	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
-	go m.checkAIReply(sess, senderJID, text, msg.Info.IsGroup)
+	if !menuHandled {
+		go m.checkAIReply(sess, senderJID, text, msg.Info.IsGroup)
+	}
 
 	// Aturan grup (anti-link, anti-spam) — non-blocking, gagal diam-diam.
 	if msg.Info.IsGroup {
@@ -862,8 +869,11 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		"timestamp": msg.Info.Timestamp,
 	})
 
-	// Check auto-reply rules
-	go m.checkAutoReply(sess, senderJID, text)
+	// Check auto-reply rules — dilewati bila menu bot sudah menangani pesan
+	// (pengirim sedang dalam sesi menu) agar keduanya tidak bentrok.
+	if !menuHandled {
+		go m.checkAutoReply(sess, senderJID, text)
+	}
 
 	// Fire message handler callback
 	if m.onMessage != nil {
