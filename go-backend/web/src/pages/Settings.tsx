@@ -1,56 +1,39 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useLocation } from "wouter";
-import { Sun, Moon, Check, UserRound, LockKeyhole, Palette } from "lucide-react";
+import { Sun, Moon, Check, UserRound, LockKeyhole, KeyRound, Palette, Users, Share2, CreditCard, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/api";
 import { KeyManager } from "@/components/KeyManager";
-import { PageTabs } from "@/components/ui/tabs";
 import Team from "./Team";
 import Affiliate from "./Affiliate";
 import Billing from "./Billing";
 
-function SettingCard({
-  icon: Icon,
-  title,
-  desc,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  desc: string;
-  children: React.ReactNode;
-}) {
+/** Judul seksi ala halaman profil: tebal + garis pembatas. */
+function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start gap-3 space-y-0 pb-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <CardTitle className="text-base">{title}</CardTitle>
-          <p className="mt-0.5 text-sm text-muted-foreground">{desc}</p>
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <div>
+      <h3 className="text-xl font-bold text-foreground">{title}</h3>
+      {desc && <p className="text-sm text-muted-foreground mt-1">{desc}</p>}
+      <div className="border-b border-border mt-3 mb-5" />
+    </div>
   );
 }
 
 const TABS = [
-  { id: "profil", label: "Profil", href: "/settings" },
-  { id: "keamanan", label: "Keamanan", href: "/settings?tab=keamanan" },
-  { id: "api-key", label: "API Key", href: "/settings?tab=api-key" },
-  { id: "tampilan", label: "Tampilan", href: "/settings?tab=tampilan" },
-  { id: "tim", label: "Tim", href: "/settings?tab=tim" },
-  { id: "afiliasi", label: "Afiliasi", href: "/settings?tab=afiliasi" },
-  { id: "langganan", label: "Langganan", href: "/settings?tab=langganan" },
+  { id: "profil", label: "Pengaturan Akun", icon: UserRound },
+  { id: "keamanan", label: "Keamanan", icon: LockKeyhole },
+  { id: "api-key", label: "Pengaturan API", icon: KeyRound },
+  { id: "tampilan", label: "Tampilan", icon: Palette },
+  { id: "tim", label: "Tim", icon: Users },
+  { id: "afiliasi", label: "Afiliasi", icon: Share2 },
+  { id: "langganan", label: "Langganan", icon: CreditCard },
 ];
 
 const VALID_TABS = new Set(TABS.map((t) => t.id));
@@ -137,27 +120,66 @@ export default function Settings() {
 
   return (
     <div className={cn("space-y-6", WIDE_TABS.has(active) ? "max-w-5xl" : "max-w-2xl")}>
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Akun</h2>
-        <p className="text-sm text-muted-foreground">Kelola akun, tim, afiliasi, dan langganan</p>
+      {/* ── Kepala profil ─────────────────────────────── */}
+      <div className="flex items-center gap-4">
+        <div className="w-14 h-14 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center text-xl font-bold shrink-0">
+          {user?.name?.charAt(0).toUpperCase() || "U"}
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground truncate">{user?.name}</p>
+          <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+        </div>
       </div>
 
-      <PageTabs tabs={TABS} active={active} onSelect={(t) => select(t.id)} />
+      {/* ── Menu vertikal ala profil PPOB ─────────────── */}
+      <Card className="p-0 overflow-hidden">
+        {TABS.map((t, i) => {
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => select(t.id)}
+              className={cn(
+                "w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors",
+                i > 0 && "border-t border-border",
+                isActive ? "bg-primary/5" : "hover:bg-secondary/50"
+              )}
+            >
+              <span
+                className={cn(
+                  "w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                  isActive
+                    ? "bg-[#243370] dark:bg-[#4c63d2] text-white"
+                    : "bg-secondary text-muted-foreground"
+                )}
+              >
+                <t.icon className="w-5 h-5" />
+              </span>
+              <span
+                className={cn(
+                  "flex-1 text-sm",
+                  isActive ? "font-semibold text-foreground" : "font-medium text-foreground"
+                )}
+              >
+                {t.label}
+              </span>
+              <ChevronRight
+                className={cn(
+                  "w-4 h-4 shrink-0",
+                  isActive ? "text-primary" : "text-muted-foreground"
+                )}
+              />
+            </button>
+          );
+        })}
+      </Card>
 
+      {/* ── Isi seksi aktif ───────────────────────────── */}
+      <div>
       {active === "profil" && (
-        <SettingCard icon={UserRound} title="Informasi Akun" desc="Kelola informasi akun Anda">
+        <div>
+          <SectionHeader title="Informasi Personal" desc="Kelola informasi akun Anda" />
           <div className="space-y-4">
-            <div className="flex items-center gap-4 pb-4 border-b border-border">
-              <div className="w-14 h-14 rounded-full bg-foreground text-background flex items-center justify-center text-xl font-bold">
-                {user?.name?.charAt(0).toUpperCase() || "U"}
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">{user?.name}</p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
               <label className="text-xs font-medium">Nama</label>
               <Input
                 value={name}
@@ -178,11 +200,12 @@ export default function Settings() {
               {savingName ? "Menyimpan…" : "Simpan Perubahan"}
             </Button>
           </div>
-        </SettingCard>
+        </div>
       )}
 
       {active === "keamanan" && (
-        <SettingCard icon={LockKeyhole} title="Ubah Password" desc="Perbarui password akun Anda">
+        <div>
+          <SectionHeader title="Keamanan" desc="Perbarui password akun Anda" />
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-medium">Password Saat Ini</label>
@@ -235,7 +258,7 @@ export default function Settings() {
               {changingPw ? "Mengubah…" : "Ubah Password"}
             </Button>
           </div>
-        </SettingCard>
+        </div>
       )}
 
       {active === "api-key" && (
@@ -253,7 +276,8 @@ export default function Settings() {
       )}
 
       {active === "tampilan" && (
-        <SettingCard icon={Palette} title="Tampilan" desc="Sesuaikan tampilan aplikasi">
+        <div>
+          <SectionHeader title="Tampilan" desc="Sesuaikan tampilan aplikasi" />
           <div className="grid grid-cols-2 gap-3">
             {(
               [
@@ -282,12 +306,13 @@ export default function Settings() {
           <p className="text-xs text-muted-foreground mt-3">
             Pilihan tema tersimpan di browser ini.
           </p>
-        </SettingCard>
+        </div>
       )}
 
       {active === "tim" && <Team embedded />}
       {active === "afiliasi" && <Affiliate embedded />}
       {active === "langganan" && <Billing embedded />}
+      </div>
     </div>
   );
 }
