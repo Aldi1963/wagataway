@@ -27,6 +27,7 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 		b.POST("/subscribe", createSubscription(cfg, db))
 		b.GET("/transactions", listTransactions(db))
 		b.GET("/transactions/:id", getBillingTransaction(cfg, db))
+		b.GET("/transactions/:id/invoice.pdf", getInvoicePDF(db))
 		b.POST("/voucher/redeem", redeemVoucher(db))
 	}
 }

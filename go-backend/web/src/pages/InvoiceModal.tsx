@@ -1,4 +1,5 @@
-import { Printer, X } from "lucide-react";
+import { useState } from "react";
+import { Printer, X, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface InvoiceTx {
@@ -68,11 +69,36 @@ interface Props {
 
 /** Kwitansi/invoice rapi untuk transaksi berstatus paid. */
 export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props) {
+  const [downloading, setDownloading] = useState(false);
   const planName = tx.Plan?.name || "Paket WaGataway";
   const durasi = tx.Plan?.duration || 30;
   const start = new Date(tx.paidAt || tx.createdAt);
   const end = new Date(start.getTime() + durasi * 24 * 60 * 60 * 1000);
   const nomor = tx.invoiceNumber || `INV/-/${String(tx.id).padStart(6, "0")}`;
+
+  const downloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/billing/transactions/${tx.id}/invoice.pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("gagal");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Kwitansi-${nomor.split("/").join("-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Gagal mengunduh PDF. Coba lagi.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const row = (label: string, value: React.ReactNode) => (
     <div className="flex items-start justify-between gap-4 py-2.5 border-b border-slate-100 last:border-0">
@@ -139,10 +165,14 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
         <div className="invoice-no-print mt-5 flex gap-2">
           <Button
             className="flex-1 bg-[#243370] hover:bg-[#1c2a5c] text-white"
-            onClick={() => window.print()}
+            onClick={downloadPdf}
+            disabled={downloading}
           >
-            <Printer className="w-4 h-4 mr-2" />
-            Cetak / Simpan PDF
+            {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            Unduh PDF
+          </Button>
+          <Button variant="outline" onClick={() => window.print()} aria-label="Cetak">
+            <Printer className="w-4 h-4" />
           </Button>
           <Button variant="outline" onClick={onClose} aria-label="Tutup">
             <X className="w-4 h-4" />
