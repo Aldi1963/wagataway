@@ -151,3 +151,55 @@ func cancelSchedule(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "Jadwal dibatalkan"})
 	}
 }
+
+// registerScheduleAliasRoutes mendaftarkan alias jamak /api/schedules
+// (memakai handler yang sama dengan /api/schedule) + pause/resume.
+func registerScheduleAliasRoutes(rg *gin.RouterGroup, db *gorm.DB) {
+	s := rg.Group("/schedules")
+	{
+		s.GET("", listSchedules(db))
+		s.DELETE("/:id", deleteSchedule(db))
+		s.PATCH("/:id", patchScheduleState(db))
+		s.PATCH("/:id/cancel", cancelSchedule(db))
+	}
+}
+
+// patchScheduleState: PATCH /api/schedules/:id — body {action: pause|resume|cancel}.
+// Scheduler hanya mengeksekusi status "pending", jadi pause/cancel
+// benar-benar menghentikan eksekusi terjadwal.
+func patchScheduleState(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+		var req struct {
+			Action string `json:"action" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "action wajib diisi (pause|resume|cancel)", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		var from, to string
+		switch req.Action {
+		case "pause":
+			from, to = "pending", "paused"
+		case "resume":
+			from, to = "paused", "pending"
+		case "cancel":
+			from, to = "pending", "cancelled"
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"message": "action harus pause, resume, atau cancel", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		result := db.Model(&models.ScheduledMessage{}).
+			Where("id = ? AND user_id = ? AND status = ?", id, userID, from).
+			Update("status", to)
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan atau status tidak sesuai", "code": "NOT_FOUND"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Jadwal " + req.Action, "status": to})
+	}
+}

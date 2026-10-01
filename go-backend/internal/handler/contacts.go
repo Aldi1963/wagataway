@@ -21,6 +21,7 @@ func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 		contacts.DELETE("/bulk", bulkDeleteContacts(db))
 		contacts.DELETE("/:id", deleteContact(db))
 		contacts.POST("/import", importContacts(db))
+		contacts.POST("/validate", validateNumbers(db, wm))
 	}
 }
 
@@ -196,5 +197,47 @@ func importContacts(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Import selesai", "imported": imported})
+	}
+}
+
+// validateNumbers mengecek banyak nomor sekaligus: terdaftar di WA atau tidak.
+// POST /api/contacts/validate — body: {deviceId, numbers[]} (maks 100).
+func validateNumbers(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+
+		var req struct {
+			DeviceID uint     `json:"deviceId" binding:"required"`
+			Numbers  []string `json:"numbers" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid (deviceId & numbers wajib)", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if len(req.Numbers) == 0 || len(req.Numbers) > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "numbers butuh 1-100 nomor", "code": "VALIDATION_ERROR"})
+			return
+		}
+		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+			return
+		}
+
+		results, err := wm.CheckNumbersRegistered(req.DeviceID, req.Numbers)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal validasi nomor: " + err.Error(), "code": "WA_ERROR"})
+			return
+		}
+
+		registered := 0
+		for _, r := range results {
+			if r.Registered {
+				registered++
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"results":    results,
+			"total":      len(results),
+			"registered": registered,
+		})
 	}
 }

@@ -95,14 +95,6 @@ func registerBotOrderRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	}
 }
 
-func registerGroupRoutes(rg *gin.RouterGroup, _ *gorm.DB, _ *whatsapp.Manager) {
-	groups := rg.Group("/groups")
-	{
-		groups.GET("", stubHandler("list-wa-groups"))
-		groups.POST("/send", stubHandler("send-to-group"))
-	}
-}
-
 func registerTwoFARoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
 	twofa := rg.Group("/2fa")
 	{

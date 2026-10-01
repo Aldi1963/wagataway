@@ -289,6 +289,86 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           bodyExample: J({ contacts: [{ name: "Budi", phone: "6281234567890" }, { name: "Sari", phone: "6289876543210" }] }),
           curl: curl("POST", "/api/contacts/import", `{\n    "contacts": [\n      { "name": "Budi", "phone": "6281234567890" },\n      { "name": "Sari", "phone": "6289876543210" }\n    ]\n  }`),
         },
+        {
+          method: "POST",
+          path: "/api/contacts/validate",
+          title: "Validasi massal: cek nomor terdaftar di WA",
+          params: [
+            { name: "deviceId", type: "number", required: true, desc: "ID perangkat (harus connected)" },
+            { name: "numbers", type: "string[]", required: true, desc: "Daftar nomor, maks 100 per request" },
+          ],
+          bodyExample: J({ deviceId: 1, numbers: ["6281234567890", "6280000000000"] }),
+          curl: curl("POST", "/api/contacts/validate", `{\n    "deviceId": 1,\n    "numbers": ["6281234567890", "6280000000000"]\n  }`),
+          note: "Cocok untuk membersihkan daftar blast sebelum dikirim. Response: array {number, registered, jid}.",
+        },
+      ],
+    },
+    {
+      title: "Grup WhatsApp",
+      desc: "Buat dan kelola grup WhatsApp lewat API.",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/api/groups",
+          title: "Daftar grup yang diikuti perangkat",
+          params: [{ name: "deviceId", type: "number", required: true, desc: "ID perangkat (query param)" }],
+          curl: curl("GET", "/api/groups?deviceId=1"),
+        },
+        {
+          method: "POST",
+          path: "/api/groups",
+          title: "Buat grup baru",
+          params: [
+            { name: "deviceId", type: "number", required: true, desc: "ID perangkat (harus connected)" },
+            { name: "name", type: "string", required: true, desc: "Nama grup (maks 25 karakter, batasan WA)" },
+            { name: "participants", type: "string[]", required: false, desc: "Nomor peserta awal" },
+          ],
+          bodyExample: J({ deviceId: 1, name: "Tim CS Toko", participants: ["6281234567890"] }),
+          curl: curl("POST", "/api/groups", `{\n    "deviceId": 1,\n    "name": "Tim CS Toko",\n    "participants": ["6281234567890"]\n  }`),
+        },
+        {
+          method: "POST",
+          path: "/api/groups/:jid/participants",
+          title: "Tambah/kurangi peserta grup",
+          params: [
+            { name: "deviceId", type: "number", required: true, desc: "ID perangkat" },
+            { name: "action", type: "string", required: true, desc: "add | remove" },
+            { name: "participants", type: "string[]", required: true, desc: "Nomor peserta (maks 100)" },
+          ],
+          bodyExample: J({ deviceId: 1, action: "add", participants: ["6289876543210"] }),
+          curl: curl("POST", "/api/groups/120363123456@g.us/participants", `{\n    "deviceId": 1,\n    "action": "add",\n    "participants": ["6289876543210"]\n  }`),
+        },
+        {
+          method: "PATCH",
+          path: "/api/groups/:jid",
+          title: "Ubah nama/deskripsi grup",
+          params: [
+            { name: "deviceId", type: "number", required: true, desc: "ID perangkat" },
+            { name: "name", type: "string", required: false, desc: "Nama baru (maks 25 karakter)" },
+            { name: "topic", type: "string", required: false, desc: "Deskripsi grup baru" },
+          ],
+          bodyExample: J({ deviceId: 1, name: "Tim CS Toko (baru)" }),
+          curl: curl("PATCH", "/api/groups/120363123456@g.us", `{\n    "deviceId": 1,\n    "name": "Tim CS Toko (baru)"\n  }`),
+        },
+      ],
+    },
+    {
+      title: "Chat",
+      desc: "Riwayat percakapan per kontak.",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/api/chat/history",
+          title: "Riwayat chat gabungan (inbox + pesan API)",
+          params: [
+            { name: "deviceId", type: "number", required: true, desc: "ID perangkat (query param)" },
+            { name: "phone", type: "string", required: true, desc: "Nomor lawan bicara (query param)" },
+            { name: "limit", type: "number", required: false, desc: "Maks entri, default 50, maks 200" },
+            { name: "before", type: "string", required: false, desc: "Cursor paginasi, format ISO 8601" },
+          ],
+          curl: curl("GET", "/api/chat/history?deviceId=1&phone=6281234567890&limit=50"),
+          note: "Response kronologis (terlama dulu). Setiap entri: {source: chat|api, direction: in|out, type, content, timestamp}.",
+        },
       ],
     },
     {
@@ -319,9 +399,10 @@ function buildGroups(baseUrl: string): GroupDoc[] {
     },
     {
       title: "Jadwal",
-      desc: "Jadwalkan pesan untuk dikirim di waktu tertentu.",
+      desc: "Jadwalkan pesan untuk dikirim di waktu tertentu. Tersedia juga alias jamak /api/schedules dengan fungsi yang sama.",
       endpoints: [
         { method: "GET", path: "/api/schedule", title: "Daftar pesan terjadwal", curl: curl("GET", "/api/schedule") },
+        { method: "GET", path: "/api/schedules", title: "Daftar pesan terjadwal (alias)", curl: curl("GET", "/api/schedules?status=pending") },
         {
           method: "POST",
           path: "/api/schedule",
@@ -336,6 +417,16 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           curl: curl("POST", "/api/schedule", `{\n    "deviceId": 1,\n    "to": "6281234567890",\n    "content": "Jangan lupa meeting jam 9!",\n    "sendAt": "2026-10-01T09:00:00+07:00"\n  }`),
         },
         { method: "PATCH", path: "/api/schedule/:id/cancel", title: "Batalkan jadwal", curl: curl("PATCH", "/api/schedule/1/cancel") },
+        {
+          method: "PATCH",
+          path: "/api/schedules/:id",
+          title: "Pause / resume / cancel jadwal",
+          params: [{ name: "action", type: "string", required: true, desc: "pause | resume | cancel" }],
+          bodyExample: J({ action: "pause" }),
+          curl: curl("PATCH", "/api/schedules/1", `{\n    "action": "pause"\n  }`),
+          note: "Scheduler hanya mengeksekusi jadwal berstatus pending — pause/cancel benar-benar menghentikan pengiriman.",
+        },
+        { method: "DELETE", path: "/api/schedules/:id", title: "Hapus jadwal (alias)", curl: curl("DELETE", "/api/schedules/1") },
         { method: "DELETE", path: "/api/schedule/:id", title: "Hapus jadwal", curl: curl("DELETE", "/api/schedule/1") },
       ],
     },

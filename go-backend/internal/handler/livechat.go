@@ -41,6 +41,7 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 	chat := rg.Group("/chat")
 	{
 		chat.GET("/conversations", listConversations(db))
+		chat.GET("/history", getChatHistory(db))
 		chat.GET("/messages/:phone", getChatMessages(db))
 		chat.POST("/send", sendChatMessage(db, wm))
 		chat.POST("/ai-reply", aiReplyMessage(db, wm))
