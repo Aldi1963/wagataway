@@ -1,10 +1,11 @@
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, X, Users, UserPlus, RefreshCw, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Users, UserPlus, RefreshCw, ChevronRight, MessageCircleHeart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
+import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import SyncWAButton from "@/components/contacts/SyncWAButton";
 
@@ -15,6 +16,9 @@ interface Group {
   color: string;
   memberCount: number;
   createdAt: string;
+  waJid?: string;
+  welcomeDmEnabled?: boolean;
+  welcomeDmTemplate?: string;
 }
 
 interface Member {
@@ -85,6 +89,49 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
   const [contactMap, setContactMap] = useState<Record<number, Contact>>({});
   const [membersLoading, setMembersLoading] = useState(false);
   const [pickContact, setPickContact] = useState("");
+
+  // Welcome DM dialog (Fitur 5)
+  const [welcomeGroup, setWelcomeGroup] = useState<Group | null>(null);
+  const [welcomeEnabled, setWelcomeEnabled] = useState(false);
+  const [welcomeTemplate, setWelcomeTemplate] = useState("");
+  const [welcomeSaving, setWelcomeSaving] = useState(false);
+
+  const openWelcomeDM = async (g: Group) => {
+    setWelcomeGroup(g);
+    try {
+      const res = await apiGet<{ enabled: boolean; template: string }>("/contact-groups/" + g.id + "/welcome-dm");
+      setWelcomeEnabled(res.enabled ?? false);
+      setWelcomeTemplate(res.template ?? "");
+    } catch {
+      setWelcomeEnabled(g.welcomeDmEnabled ?? false);
+      setWelcomeTemplate(g.welcomeDmTemplate ?? "");
+    }
+  };
+
+  const renderPreview = (tpl: string, groupName: string) =>
+    tpl.replace(/\{nama\}/g, "Budi").replace(/\{grup\}/g, groupName || "Grup Contoh");
+
+  const saveWelcomeDM = async () => {
+    if (!welcomeGroup) return;
+    if (welcomeEnabled && !welcomeTemplate.trim()) {
+      toast.error("Template wajib diisi bila welcome DM diaktifkan");
+      return;
+    }
+    setWelcomeSaving(true);
+    try {
+      await apiPut(`/contact-groups/${welcomeGroup.id}/welcome-dm`, {
+        enabled: welcomeEnabled,
+        template: welcomeTemplate,
+      });
+      toast.success("Pengaturan welcome DM disimpan");
+      setWelcomeGroup(null);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
+    } finally {
+      setWelcomeSaving(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -300,7 +347,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                   <CardDescription className="line-clamp-2">{g.description}</CardDescription>
                 )}
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 space-y-2">
                 <button
                   onClick={() => openMembers(g)}
                   className="w-full flex items-center justify-between text-sm px-3 py-2.5 rounded-lg bg-secondary/60 hover:bg-secondary transition-colors"
@@ -314,6 +361,20 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                     <ChevronRight className="w-4 h-4" />
                   </span>
                 </button>
+                {g.waJid && (
+                  <button
+                    onClick={() => openWelcomeDM(g)}
+                    className="w-full flex items-center justify-between text-sm px-3 py-2.5 rounded-lg border border-border hover:bg-secondary/60 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <MessageCircleHeart className="w-4 h-4" />
+                      Welcome DM
+                    </span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${g.welcomeDmEnabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
+                      {g.welcomeDmEnabled ? "Aktif" : "Mati"}
+                    </span>
+                  </button>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -438,6 +499,55 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
               })}
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* Welcome DM dialog (Fitur 5) */}
+      {welcomeGroup && (
+        <Modal
+          title={`Welcome DM — ${welcomeGroup.name}`}
+          onClose={() => setWelcomeGroup(null)}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Kirim DM sambutan otomatis</p>
+                <p className="text-xs text-muted-foreground">
+                  Kirim chat pribadi ke anggota baru yang join grup ini (bukan ke grup). Dibatasi 1 DM per nomor per 24 jam, dengan jeda 4 detik antar DM.
+                </p>
+              </div>
+              <Toggle checked={welcomeEnabled} label="Welcome DM" onToggle={setWelcomeEnabled} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Template pesan</label>
+              <textarea
+                value={welcomeTemplate}
+                onChange={(e) => setWelcomeTemplate(e.target.value)}
+                rows={4}
+                placeholder="Halo {nama}, selamat datang di {grup}! 🙏"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Variabel: <code className="font-mono bg-secondary px-1 rounded">{"{nama}"}</code> = nama anggota baru, <code className="font-mono bg-secondary px-1 rounded">{"{grup}"}</code> = nama grup.
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Pratinjau</label>
+              <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm whitespace-pre-wrap">
+                {welcomeTemplate.trim() ? renderPreview(welcomeTemplate, welcomeGroup.name) : (
+                  <span className="text-muted-foreground">Isi template untuk melihat pratinjau…</span>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setWelcomeGroup(null)}>
+                Batal
+              </Button>
+              <Button onClick={saveWelcomeDM} disabled={welcomeSaving}>
+                {welcomeSaving ? "Menyimpan..." : "Simpan"}
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
 

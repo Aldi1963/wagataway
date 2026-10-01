@@ -440,6 +440,30 @@ function buildGroups(baseUrl: string): GroupDoc[] {
       ],
     },
     {
+      title: "Welcome DM Grup",
+      desc: "DM pribadi otomatis ke anggota baru yang join grup WA hasil sync. Template mendukung variabel {nama} (nama anggota baru) dan {grup} (nama grup). Dibatasi 1 DM per nomor per 24 jam per grup; pengiriman diantre dengan jeda 4 detik antar DM agar tidak kena rate limit. DM tidak dikirim ke nomor device sendiri, bot, atau peserta yang join lalu langsung leave.",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/api/contact-groups/:id/welcome-dm",
+          title: "Lihat pengaturan welcome DM satu grup",
+          curl: curl("GET", "/api/contact-groups/1/welcome-dm"),
+          note: "Response: {enabled, template, waJid}. Hanya untuk grup kontak hasil sync WA.",
+        },
+        {
+          method: "PUT",
+          path: "/api/contact-groups/:id/welcome-dm",
+          title: "Atur welcome DM grup",
+          params: [
+            { name: "enabled", type: "boolean", required: true, desc: "Aktif/nonaktif welcome DM" },
+            { name: "template", type: "string", required: false, desc: "Template pesan, wajib bila enabled=true. Variabel: {nama}, {grup}" },
+          ],
+          bodyExample: J({ enabled: true, template: "Halo {nama}, selamat datang di {grup}! 🙏" }),
+          curl: curl("PUT", "/api/contact-groups/1/welcome-dm", `{\\n    "enabled": true,\\n    "template": "Halo {nama}, selamat datang di {grup}! 🙏"\\n  }`),
+        },
+      ],
+    },
+    {
       title: "Template",
       desc: "Template pesan siap pakai untuk balasan cepat.",
       endpoints: [
