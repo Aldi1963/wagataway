@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useLocation } from "wouter";
-import { Sun, Moon, Check, UserRound, LockKeyhole, KeyRound, Palette, Users, Share2, CreditCard, ChevronRight } from "lucide-react";
+import { Sun, Moon, Check, UserRound, KeyRound, Users, CreditCard, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/api";
@@ -27,22 +26,32 @@ function SectionHeader({ title, desc }: { title: string; desc?: string }) {
 }
 
 const TABS = [
-  { id: "profil", label: "Pengaturan Akun", icon: UserRound },
-  { id: "keamanan", label: "Keamanan", icon: LockKeyhole },
-  { id: "api-key", label: "Pengaturan API", icon: KeyRound },
-  { id: "tampilan", label: "Tampilan", icon: Palette },
+  { id: "profil", label: "Profil", icon: UserRound },
+  { id: "api", label: "Pengaturan API", icon: KeyRound },
   { id: "tim", label: "Tim", icon: Users },
-  { id: "afiliasi", label: "Afiliasi", icon: Share2 },
   { id: "langganan", label: "Langganan", icon: CreditCard },
 ];
 
+/** Alias tab lama (?tab=keamanan dsb.) ke halaman baru yang digabung. */
+const TAB_ALIAS: Record<string, string> = {
+  profil: "profil",
+  keamanan: "profil",
+  tampilan: "profil",
+  "api-key": "api",
+  api: "api",
+  tim: "tim",
+  afiliasi: "langganan",
+  langganan: "langganan",
+};
+
 const VALID_TABS = new Set(TABS.map((t) => t.id));
-const WIDE_TABS = new Set(["tim", "afiliasi", "langganan"]);
+const WIDE_TABS = new Set(["tim", "langganan"]);
 
 function initialTab(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("tab");
-    return q && VALID_TABS.has(q) ? q : "profil";
+    const mapped = q ? TAB_ALIAS[q] : undefined;
+    return mapped && VALID_TABS.has(mapped) ? mapped : "profil";
   } catch {
     return "profil";
   }
@@ -131,18 +140,17 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── Menu vertikal ala profil PPOB ─────────────── */}
-      <Card className="p-0 overflow-hidden">
-        {TABS.map((t, i) => {
+      {/* ── Menu vertikal polos ala profil PPOB (tanpa card) ── */}
+      <div className="border-y border-border divide-y divide-border -mx-4 px-4 sm:mx-0 sm:px-0">
+        {TABS.map((t) => {
           const isActive = active === t.id;
           return (
             <button
               key={t.id}
               onClick={() => select(t.id)}
               className={cn(
-                "w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors",
-                i > 0 && "border-t border-border",
-                isActive ? "bg-primary/5" : "hover:bg-secondary/50"
+                "w-full flex items-center gap-4 py-3.5 text-left transition-colors",
+                !isActive && "hover:bg-secondary/30"
               )}
             >
               <span
@@ -172,12 +180,13 @@ export default function Settings() {
             </button>
           );
         })}
-      </Card>
+      </div>
 
-      {/* ── Isi seksi aktif ───────────────────────────── */}
+      {/* ── Isi halaman aktif ─────────────────────────── */}
       <div>
       {active === "profil" && (
-        <div>
+        <div className="space-y-10">
+          <div>
           <SectionHeader title="Informasi Personal" desc="Kelola informasi akun Anda" />
           <div className="space-y-4">
             <div className="space-y-2">
@@ -201,11 +210,9 @@ export default function Settings() {
               {savingName ? "Menyimpan…" : "Simpan Perubahan"}
             </Button>
           </div>
-        </div>
-      )}
+          </div>
 
-      {active === "keamanan" && (
-        <div>
+          <div>
           <SectionHeader title="Keamanan" desc="Perbarui password akun Anda" />
           <div className="space-y-4">
             <div className="space-y-2">
@@ -260,24 +267,8 @@ export default function Settings() {
             </Button>
           </div>
         </div>
-      )}
 
-      {active === "api-key" && (
-        <KeyManager
-          onUseKey={(key) => {
-            try {
-              localStorage.setItem("wag_try_apikey", key);
-            } catch {
-              /* abaikan */
-            }
-            toast.success("Key siap dipakai di panel Coba langsung");
-            navigate("/developer");
-          }}
-        />
-      )}
-
-      {active === "tampilan" && (
-        <div>
+          <div>
           <SectionHeader title="Tampilan" desc="Sesuaikan tampilan aplikasi" />
           <div className="grid grid-cols-2 gap-3">
             {(
@@ -307,12 +298,38 @@ export default function Settings() {
           <p className="text-xs text-muted-foreground mt-3">
             Pilihan tema tersimpan di browser ini.
           </p>
+          </div>
+        </div>
+      )}
+
+      {active === "api" && (
+        <div>
+          <SectionHeader title="Pengaturan API" desc="Kelola API key untuk integrasi" />
+          <KeyManager
+            onUseKey={(key) => {
+              try {
+                localStorage.setItem("wag_try_apikey", key);
+              } catch {
+                /* abaikan */
+              }
+              toast.success("Key siap dipakai di panel Coba langsung");
+              navigate("/developer");
+            }}
+          />
         </div>
       )}
 
       {active === "tim" && <Team embedded />}
-      {active === "afiliasi" && <Affiliate embedded />}
-      {active === "langganan" && <Billing embedded />}
+
+      {active === "langganan" && (
+        <div className="space-y-10">
+          <Billing embedded />
+          <div>
+            <SectionHeader title="Afiliasi" desc="Undang teman dan dapatkan komisi" />
+            <Affiliate embedded />
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
