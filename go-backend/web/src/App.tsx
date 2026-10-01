@@ -46,9 +46,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageLoader />
     );
   }
 
@@ -62,9 +60,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageLoader />
     );
   }
 
@@ -78,9 +74,7 @@ function HomeRoute() {
   const { user, isLoading } = useAuth();
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageLoader />
     );
   }
   if (!user) return <Landing />;
