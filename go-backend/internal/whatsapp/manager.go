@@ -916,32 +916,69 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 		go m.deliverWebhook(hook, deviceID, event, payload)
 	}
 
-	// Webhook URL per-device (diisi dari modal Tambah/Edit Perangkat):
-	// kirim envelope payload yang sama ke URL tersebut.
+	// Webhook URL per-device (diisi dari modal Tambah/Edit Perangkat).
 	var dev models.Device
 	if err := m.db.Select("webhook_url").Where("id = ?", deviceID).First(&dev).Error; err == nil {
 		if url := strings.TrimSpace(dev.WebhookURL); url != "" {
-			go func() {
-				body := map[string]interface{}{
-					"event":     event,
-					"device_id": deviceID,
-					"payload":   payload,
-					"sent_at":   time.Now().UTC().Format(time.RFC3339),
-				}
-				raw, err := json.Marshal(body)
-				if err != nil {
-					log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to marshal device webhook payload")
-					return
-				}
-				statusCode, success, errMsg, _ := DeliverWebhookPayload(url, "", event, raw)
-				if !success {
-					log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Str("error", errMsg).Msg("Device webhook delivery failed")
-				} else {
-					log.Info().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Msg("Device webhook delivered")
-				}
-			}()
+			go m.deliverDeviceWebhook(deviceID, url, event, payload)
 		}
 	}
+}
+
+// deliverDeviceWebhook mengirim webhook per-device. Bila URL mengarah ke bot
+// PPOB (path berakhiran /whatsapp/bot), kirim format WAMP {from, message}
+// yang dimengerti WhatsappBotController; selain itu kirim envelope standar.
+func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload map[string]interface{}) {
+	var raw []byte
+	if isWampBotURL(url) {
+		if event != "message.received" {
+			return
+		}
+		from, _ := payload["from"].(string)
+		text, _ := payload["text"].(string)
+		if from == "" {
+			return
+		}
+		var err error
+		raw, err = json.Marshal(map[string]interface{}{"from": from, "message": text})
+		if err != nil {
+			log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to marshal WAMP bot payload")
+			return
+		}
+	} else {
+		body := map[string]interface{}{
+			"event":     event,
+			"device_id": deviceID,
+			"payload":   payload,
+			"sent_at":   time.Now().UTC().Format(time.RFC3339),
+		}
+		var err error
+		raw, err = json.Marshal(body)
+		if err != nil {
+			log.Error().Err(err).Uint("deviceID", deviceID).Msg("Failed to marshal device webhook payload")
+			return
+		}
+	}
+
+	statusCode, success, errMsg, _ := DeliverWebhookPayload(url, "", event, raw)
+	if !success {
+		log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Str("error", errMsg).Msg("Device webhook delivery failed")
+	} else {
+		log.Info().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Msg("Device webhook delivered")
+	}
+}
+
+// isWampBotURL: true bila path URL berakhiran /whatsapp/bot (endpoint bot PPOB).
+func isWampBotURL(rawURL string) bool {
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	if i := strings.Index(lower, "?"); i >= 0 {
+		lower = lower[:i]
+	}
+	if i := strings.Index(lower, "#"); i >= 0 {
+		lower = lower[:i]
+	}
+	lower = strings.TrimSuffix(lower, "/")
+	return strings.HasSuffix(lower, "/whatsapp/bot")
 }
 
 // webhookWantsEvent: true jika event ada di JSON array events milik hook,
