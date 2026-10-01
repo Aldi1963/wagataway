@@ -50,7 +50,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <TopBar onMenu={() => setMobileOpen(true)} />
-        <main className="relative flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="relative flex-1 overflow-y-auto overflow-x-clip p-4 sm:p-6">
           {children}
           {/* Overlay animasi transisi halaman */}
           <div

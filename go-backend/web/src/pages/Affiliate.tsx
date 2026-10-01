@@ -104,7 +104,7 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Gift className="w-4 h-4" /> Kode Referral Kamu
@@ -112,7 +112,7 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 rounded-lg bg-muted px-4 py-3 font-mono text-lg font-bold text-center tracking-widest">
+                  <code className="flex-1 min-w-0 rounded-lg bg-muted px-4 py-3 font-mono text-lg font-bold text-center tracking-widest truncate">
                     {info.code}
                   </code>
                   <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => copy(info.code, "Kode referral")} aria-label="Salin kode">

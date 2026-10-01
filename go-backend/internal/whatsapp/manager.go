@@ -903,7 +903,7 @@ func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushN
 			"last_activity": now,
 		}
 		if senderJID != "" {
-			updates["sender_jid"] = senderJID
+			updates["sender_j_id"] = senderJID
 		}
 		m.db.Model(&conv).Updates(updates)
 	}
