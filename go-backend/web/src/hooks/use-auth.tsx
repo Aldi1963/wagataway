@@ -15,6 +15,7 @@ interface User {
   plan: string;
   avatar?: string;
   twoFaEnabled?: boolean;
+  notifyWa?: string;
 }
 
 interface AuthContextType {

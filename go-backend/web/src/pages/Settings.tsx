@@ -69,6 +69,7 @@ export default function Settings() {
   const [active, setActive] = useState<string>(initialTab);
 
   const [name, setName] = useState(user?.name ?? "");
+  const [notifyWa, setNotifyWa] = useState(user?.notifyWa ?? "");
   const [savingName, setSavingName] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -77,7 +78,10 @@ export default function Settings() {
   const [changingPw, setChangingPw] = useState(false);
 
   useEffect(() => {
-    if (user) setName(user.name);
+    if (user) {
+      setName(user.name);
+      setNotifyWa(user.notifyWa ?? "");
+    }
     // sinkron hanya saat identitas user berubah (bukan saat mengetik)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -93,17 +97,24 @@ export default function Settings() {
 
   const handleSaveName = async () => {
     const trimmed = name.trim();
+    const waTrimmed = notifyWa.trim();
     if (trimmed.length < 2 || savingName) return;
+    // Validasi ringan nomor WA: digit saja, boleh diawali 08/62/+62; boleh kosong.
+    const waDigits = waTrimmed.replace(/\D/g, "");
+    if (waDigits && (waDigits.length < 9 || waDigits.length > 16)) {
+      toast.error("Nomor notifikasi WA tidak valid (9-16 digit)");
+      return;
+    }
     setSavingName(true);
     try {
-      const data = await apiPatch<{ message: string; name: string }>(
+      const data = await apiPatch<{ message: string }>(
         "/auth/me",
-        { name: trimmed }
+        { name: trimmed, notifyWa: waTrimmed }
       );
-      if (user) updateUser({ ...user, name: data.name });
-      toast.success(data.message || "Nama berhasil diperbarui");
+      if (user) updateUser({ ...user, name: trimmed, notifyWa: waTrimmed });
+      toast.success(data.message || "Informasi akun berhasil disimpan");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal menyimpan nama");
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan perubahan");
     } finally {
       setSavingName(false);
     }
@@ -192,6 +203,19 @@ export default function Settings() {
             <div className="space-y-2">
               <label className="text-xs font-medium">Email</label>
               <Input defaultValue={user?.email || ""} disabled />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium">Nomor Notifikasi WA</label>
+              <Input
+                value={notifyWa}
+                onChange={(e) => setNotifyWa(e.target.value)}
+                placeholder="cth. 6281234567890"
+                inputMode="tel"
+              />
+              <p className="text-xs text-muted-foreground">
+                Pengingat expired langganan (H-3 &amp; H-1) dikirim ke nomor ini
+                via WhatsApp. Kosongkan bila tidak ingin menerima.
+              </p>
             </div>
 
             <Button

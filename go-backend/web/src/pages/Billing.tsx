@@ -66,6 +66,23 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
       ]);
       setPlans(p.plans || []);
       setSub(s.subscription);
+      // Fitur 1: tombol "Perpanjang" di dashboard mengarah ke /billing?perpanjang=1
+      // -> langsung buka modal pembayaran untuk paket yang SAMA (tanpa pilih ulang).
+      try {
+        const q = new URLSearchParams(window.location.search);
+        if (q.get("perpanjang") === "1" && s.subscription?.Plan) {
+          q.delete("perpanjang");
+          const qs = q.toString();
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + (qs ? `?${qs}` : "")
+          );
+          setPayPlan(s.subscription.Plan);
+        }
+      } catch {
+        /* abaikan */
+      }
     } catch {
       /* abaikan, tampilkan kosong */
     } finally {

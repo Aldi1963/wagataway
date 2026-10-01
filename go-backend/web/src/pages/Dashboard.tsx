@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
 
 const NAVY = "#243370";
@@ -44,6 +45,11 @@ interface Plan {
   slug: string;
   name: string;
   maxDevices: number;
+}
+
+interface BillingSubscription {
+  endDate: string;
+  Plan?: { name: string; price: number };
 }
 
 type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator";
@@ -180,6 +186,8 @@ function StatCard({
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
   const [bulkStats, setBulkStats] = useState({ jobs: 0, wait: 0, sent: 0, failed: 0 });
@@ -246,8 +254,11 @@ export default function Dashboard() {
       apiGet<{ total: number }>("/messages")
         .then((res) => (typeof res.total === "number" ? res.total : null))
         .catch(() => null),
+      apiGet<{ subscription: BillingSubscription | null }>("/billing/subscription")
+        .then((res) => res.subscription)
+        .catch(() => null),
     ])
-      .then(([, plans, , msgTotal]) => {
+      .then(([, plans, , msgTotal, sub]) => {
         const planKey = (user?.plan || "").toLowerCase();
         const match = plans.find(
           (p) =>
@@ -255,6 +266,7 @@ export default function Dashboard() {
         );
         setDeviceLimit(match ? match.maxDevices : null);
         setMessagesTotal(msgTotal);
+        setSubscription(sub);
       })
       .catch((e) => setError(e.message || "Gagal memuat data"))
       .finally(() => setLoading(false));
@@ -495,6 +507,15 @@ export default function Dashboard() {
   const planName = user?.plan
     ? user.plan.charAt(0).toUpperCase() + user.plan.slice(1)
     : "-";
+  const subPlanName = subscription?.Plan?.name || planName;
+  const canRenew = !!subscription?.Plan && subscription.Plan.price > 0;
+  const subEndLabel = subscription
+    ? `Berakhir ${new Date(subscription.endDate).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })}`
+    : "Paket dasar gratis";
 
   return (
     <div className="space-y-6">
@@ -531,9 +552,18 @@ export default function Dashboard() {
 
         <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
-            {planName}
+            {subPlanName}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">Exp: -</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{subEndLabel}</p>
+          {canRenew && (
+            <Button
+              size="sm"
+              className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+              onClick={() => navigate("/billing?perpanjang=1")}
+            >
+              Perpanjang
+            </Button>
+          )}
         </StatCard>
 
         <StatCard label="Messages Sent" icon={MessageSquare} tile="#1a2a5e" loading={loading}>
