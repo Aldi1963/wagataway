@@ -17,9 +17,16 @@ interface SummaryRow {
 interface DetailRow {
   id: number;
   phone: string;
+  deviceId?: number;
   status: string;
   sentAt?: string;
   errorMsg?: string;
+}
+
+interface DeviceInfo {
+  id: number;
+  name: string;
+  phone: string;
 }
 
 function statusBadge(status: string) {
@@ -34,15 +41,22 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const [selected, setSelected] = useState("");
   const [details, setDetails] = useState<DetailRow[]>([]);
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const r = await apiGet<{ summary: SummaryRow[] } | SummaryRow[]>("/reports/summary");
+        const [r, d] = await Promise.all([
+          apiGet<{ summary: SummaryRow[] } | SummaryRow[]>("/reports/summary"),
+          apiGet<{ devices: DeviceInfo[] }>("/devices").catch(() => ({ devices: [] })),
+        ]);
         setRows(Array.isArray(r) ? r : r.summary ?? []);
+        setDevices(d.devices ?? []);
       } catch (e: any) {
         toast.error(e.message || "Gagal memuat laporan");
       } finally {
@@ -125,10 +139,11 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
                 <p className="text-sm text-muted-foreground">Memuat detail...</p>
               ) : selected && (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-sm">
+                  <table className="w-full min-w-[680px] text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">
                         <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nomor</th>
+                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pengirim</th>
                         <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</th>
                         <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Waktu Kirim</th>
                         <th className="py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Keterangan</th>
@@ -136,11 +151,21 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
                     </thead>
                     <tbody>
                       {details.length === 0 && (
-                        <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">Tidak ada data.</td></tr>
+                        <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Tidak ada data.</td></tr>
                       )}
                       {details.map((d) => (
                         <tr key={d.id} className="border-b border-border last:border-0">
                           <td className="py-3 pr-4 font-mono text-[13px]">{d.phone}</td>
+                          <td className="py-3 pr-4 text-xs">
+                            {d.deviceId && deviceById.get(d.deviceId) ? (
+                              <span title={deviceById.get(d.deviceId)!.name}>
+                                <span className="block font-medium">{deviceById.get(d.deviceId)!.name}</span>
+                                <span className="block text-muted-foreground font-mono">{deviceById.get(d.deviceId)!.phone}</span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
                           <td className="py-3 pr-4">{statusBadge(d.status)}</td>
                           <td className="py-3 pr-4 text-xs text-muted-foreground">
                             {d.sentAt ? new Date(d.sentAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}
