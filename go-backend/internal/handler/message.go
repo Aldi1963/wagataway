@@ -20,6 +20,7 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 		msgs.GET("", listMessages(db))
 		msgs.POST("/send", sendMessage(db, wm))
 		msgs.POST("/send-bulk", sendBulkMessage(db, wm))
+		msgs.GET("/bulk-stats", bulkStats(db))
 		registerMessageExtraRoutes(msgs, db, wm)
 	}
 }
@@ -303,5 +304,37 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			"job":       job,
 			"deviceIds": deviceIDs,
 		})
+	}
+}
+
+// GET /api/messages/bulk-stats — ringkasan blast/bulk untuk kartu dashboard:
+// jumlah job (campaign), penerima menunggu (pending), terkirim, dan gagal.
+func bulkStats(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		var jobs int64
+		db.Model(&models.BulkJob{}).Where("user_id = ?", userID).Count(&jobs)
+		type row struct {
+			Status string
+			Count  int64
+		}
+		var rows []row
+		db.Model(&models.BulkJobRecipient{}).
+			Select("status, COUNT(*) as count").
+			Joins("JOIN bulk_jobs ON bulk_jobs.id = bulk_job_recipients.bulk_job_id").
+			Where("bulk_jobs.user_id = ?", userID).
+			Group("status").Scan(&rows)
+		stats := gin.H{"jobs": jobs, "wait": int64(0), "sent": int64(0), "failed": int64(0)}
+		for _, r := range rows {
+			switch r.Status {
+			case "pending":
+				stats["wait"] = r.Count
+			case "sent":
+				stats["sent"] = r.Count
+			case "failed":
+				stats["failed"] = r.Count
+			}
+		}
+		c.JSON(http.StatusOK, stats)
 	}
 }

@@ -46,10 +46,6 @@ interface Plan {
   maxDevices: number;
 }
 
-interface Campaign {
-  id: number;
-}
-
 type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator";
 
 function Modal({
@@ -186,7 +182,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
-  const [campaignCount, setCampaignCount] = useState(0);
+  const [bulkStats, setBulkStats] = useState({ jobs: 0, wait: 0, sent: 0, failed: 0 });
   const [messagesTotal, setMessagesTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -237,21 +233,27 @@ export default function Dashboard() {
       apiGet<{ plans: Plan[] }>("/public/plans")
         .then((res) => res.plans || [])
         .catch(() => [] as Plan[]),
-      apiGet<{ campaigns: Campaign[] }>("/drip")
-        .then((res) => (res.campaigns || []).length)
-        .catch(() => 0),
+      apiGet<{ jobs: number; wait: number; sent: number; failed: number }>("/messages/bulk-stats")
+        .then((res) => {
+          setBulkStats({
+            jobs: res.jobs || 0,
+            wait: res.wait || 0,
+            sent: res.sent || 0,
+            failed: res.failed || 0,
+          });
+        })
+        .catch(() => {}),
       apiGet<{ total: number }>("/messages")
         .then((res) => (typeof res.total === "number" ? res.total : null))
         .catch(() => null),
     ])
-      .then(([, plans, campCount, msgTotal]) => {
+      .then(([, plans, , msgTotal]) => {
         const planKey = (user?.plan || "").toLowerCase();
         const match = plans.find(
           (p) =>
             p.slug.toLowerCase() === planKey || p.name.toLowerCase() === planKey
         );
         setDeviceLimit(match ? match.maxDevices : null);
-        setCampaignCount(campCount);
         setMessagesTotal(msgTotal);
       })
       .catch((e) => setError(e.message || "Gagal memuat data"))
@@ -510,20 +512,20 @@ export default function Dashboard() {
         <StatCard label="Blast / Bulk" icon={Megaphone} tile="#1e2a5c" loading={loading}>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             <span className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 text-[11px] font-semibold px-2 py-0.5">
-              0 Wait
+              {bulkStats.wait} Wait
             </span>
             <span
               className="inline-flex items-center rounded-full text-[11px] font-semibold px-2 py-0.5"
               style={{ backgroundColor: `${NAVY}1a`, color: NAVY }}
             >
-              0 Sent
+              {bulkStats.sent} Sent
             </span>
             <span className="inline-flex items-center rounded-full bg-red-500/15 text-red-700 text-[11px] font-semibold px-2 py-0.5">
-              0 Fail
+              {bulkStats.failed} Fail
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            {campaignCount} Campaigns
+            {bulkStats.jobs} Campaigns
           </p>
         </StatCard>
 
