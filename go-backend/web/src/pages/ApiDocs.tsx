@@ -635,6 +635,77 @@ function buildGroups(baseUrl: string): GroupDoc[] {
       ],
     },
     {
+      title: "Integration Hub",
+      desc: "Hubungkan 20+ platform (Google Forms, WooCommerce, WordPress, Zapier, ...) ke WhatsApp tanpa coding. Platform luar mem-POST JSON ke URL inbox publik yang diautentikasi via token acak di URL — bukan API key user.",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/api/integrations",
+          title: "Daftar integrasi (token tersensor)",
+          curl: curl("GET", "/api/integrations"),
+        },
+        {
+          method: "POST",
+          path: "/api/integrations",
+          title: "Buat integrasi (token penuh hanya dikembalikan di sini)",
+          params: [
+            { name: "name", type: "string", required: true, desc: "Nama integrasi" },
+            { name: "platform", type: "string", required: true, desc: "Slug platform: google_forms, woocommerce, wordpress, zapier, ..." },
+            { name: "deviceId", type: "number", required: true, desc: "ID perangkat pengirim (milik Anda)" },
+            { name: "template", type: "string", required: false, desc: 'Template pesan, variabel {{path.ke.field}} diisi dari payload JSON' },
+          ],
+          bodyExample: J({ name: "Notif Order Toko", platform: "woocommerce", deviceId: 1, template: "Order baru #{{id}} dari {{billing.first_name}} (Rp{{total}})" }),
+          curl: curl("POST", "/api/integrations", `{\\n    "name": "Notif Order Toko",\\n    "platform": "woocommerce",\\n    "deviceId": 1,\\n    "template": "Order baru #{{id}} dari {{billing.first_name}} (Rp{{total}})"\\n  }`),
+          note: "Respons berisi fullToken + inboxPath. Simpan segera — daftar hanya menampilkan token tersensor (ab12•••wxyz).",
+        },
+        {
+          method: "POST",
+          path: "/api/integrations/inbox/:token",
+          title: "Inbox publik — terima event dari platform luar (TANPA auth user)",
+          params: [
+            { name: "to", type: "string", required: true, desc: "Nomor WA tujuan, mis. 62812xxxxxxx (format 08… otomatis jadi 628…)" },
+            { name: "message", type: "string", required: false, desc: "Isi pesan langsung. Bila kosong, template integrasi di-render dari field lain" },
+          ],
+          bodyExample: J({ to: "62812xxxxxxx", message: "Order baru #12345 dari Budi (Rp250000)" }),
+          curl: [
+            `curl -X POST \\`,
+            `  ${baseUrl}/api/integrations/inbox/<token-64-hex> \\`,
+            `  -H "Content-Type: application/json" \\`,
+            `  -d '{\\n    "to": "62812xxxxxxx",\\n    "message": "Order baru #12345 dari Budi (Rp250000)"\\n  }'`,
+          ].join("\n"),
+          note: "Auth via token di URL. Rate limit 60 req/menit per token (429 bila lewat). Pesan dikirim via perangkat default integrasi milik pembuatnya. Contoh per platform: Google Forms → Apps Script onFormSubmit mem-POST {to, message}; WooCommerce → menu Settings → Advanced → Webhooks, topic Order created, Delivery URL = URL inbox, template \"Order baru #{{id}} dari {{billing.first_name}} (Rp{{total}})\"; WordPress → plugin WP Webhooks / snippet wp_remote_post ke URL inbox. Keamanan: token 32 byte acak (hex 64 char); token salah → 404 generik tanpa membocorkan integrasi lain; token penuh tidak ditulis ke server.log; inbox hanya menerima (tidak fetch URL luar, tanpa risiko SSRF). Jaga token seperti password — bila bocor, regenerate.",
+        },
+        {
+          method: "GET",
+          path: "/api/integrations/:id",
+          title: "Detail integrasi (termasuk token penuh untuk tombol salin)",
+          curl: curl("GET", "/api/integrations/1"),
+        },
+        {
+          method: "PUT",
+          path: "/api/integrations/:id",
+          title: "Ubah integrasi (nama, deviceId, template, isActive)",
+          bodyExample: J({ template: "Order #{{id}} lunas: Rp{{total}}", isActive: true }),
+          curl: curl("PUT", "/api/integrations/1", `{\\n    "template": "Order #{{id}} lunas: Rp{{total}}"\\n  }`),
+        },
+        {
+          method: "POST",
+          path: "/api/integrations/:id/regenerate",
+          title: "Buat token baru (URL inbox lama mati)",
+          curl: curl("POST", "/api/integrations/1/regenerate"),
+          note: "Token lama langsung tidak berlaku — tempel URL baru ke platform.",
+        },
+        {
+          method: "GET",
+          path: "/api/integrations/:id/logs",
+          title: "Riwayat event masuk (?limit=, maks 200)",
+          curl: curl("GET", "/api/integrations/1/logs?limit=50"),
+          note: "Payload disimpan tersensor (kunci token/secret/password/api_key disamarkan) dan dipotong ~2KB.",
+        },
+        { method: "DELETE", path: "/api/integrations/:id", title: "Hapus integrasi", curl: curl("DELETE", "/api/integrations/1") },
+      ],
+    },
+    {
       title: "Lainnya",
       desc: "Statistik, notifikasi, dan utilitas lain.",
       endpoints: [

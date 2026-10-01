@@ -19,6 +19,7 @@ import {
   ChevronDown,
   X,
   CodeXml,
+  PlugZap,
   FolderOpen,
   LogOut,
   Smartphone,
@@ -87,6 +88,7 @@ const sections: NavSection[] = [
     label: "Developer",
     items: [
       { label: "API Docs", href: "/api-docs", icon: CodeXml },
+      { label: "Integrasi", href: "/integrations", icon: PlugZap },
       { label: "Playground", href: "/api-playground", icon: FlaskConical },
       { label: "Webhook Logs", href: "/webhook-logs", icon: Webhook },
     ],
@@ -160,7 +162,7 @@ const ACTIVE_ALIASES: Record<string, string[]> = {
   "/automation": ["/automation", "/auto-reply", "/ai-reply", "/group-rules"],
   "/live-chat": ["/live-chat", "/chat-labels"],
   "/reports": ["/reports", "/analytics"],
-  "/developer": ["/developer", "/api-docs", "/api-playground", "/webhook-logs"],
+  "/developer": ["/developer", "/api-docs", "/integrations", "/api-playground", "/webhook-logs"],
   "/settings": ["/settings", "/team", "/profile"],
 };
 

@@ -191,6 +191,9 @@ function AppRouter() {
         <Route path="/webhook-logs">
           <ProtectedRoute><DeveloperHub /></ProtectedRoute>
         </Route>
+        <Route path="/integrations">
+          <ProtectedRoute><DeveloperHub /></ProtectedRoute>
+        </Route>
         <Route path="/bot-logs">
           <ProtectedRoute><DeveloperHub /></ProtectedRoute>
         </Route>
