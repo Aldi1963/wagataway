@@ -61,7 +61,6 @@ const topItems: NavItem[] = [
   { label: "Otomatisasi", href: "/automation", icon: Bot },
   { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
   { label: "Kontak", href: "/contacts", icon: Users },
-  { label: "Akun", href: "/settings", icon: Settings },
   { label: "Langganan", href: "/billing", icon: CreditCard },
 ];
 
@@ -525,9 +524,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
         ) : (
           <>
             {topItems.map(renderItem)}
-
-            {user?.role === "admin" &&
-              renderItem({ label: "Paket", href: "/admin?tab=paket", icon: Package })}
 
             {sections.map((section) => {
           if (collapsed) {
