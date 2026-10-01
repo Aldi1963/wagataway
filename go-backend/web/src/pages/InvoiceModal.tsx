@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Printer, X, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -38,20 +39,27 @@ export function metodeLabel(m?: string): string {
   return map[m.toLowerCase()] || m.charAt(0).toUpperCase() + m.slice(1);
 }
 
-// Print CSS: saat dialog print dibuka, hanya area invoice yang tercetak;
-// tombol & latar modal disembunyikan. User bisa cetak / simpan sebagai PDF
-// lewat dialog print bawaan browser (tanpa dependency PDF tambahan).
+// Print CSS: invoice dirender via portal langsung di bawah <body>, sehingga
+// saat print cukup sembunyikan semua anak body kecuali portal invoice.
+// Pola lama (visibility:hidden + position:fixed) bikin Chrome Android mengulang
+// elemen fixed di tiap halaman dan sisa layout tak terlihat menambah halaman
+// kosong -> hasilnya 2 halaman.
 const printCss = `
 @media print {
-  body * { visibility: hidden !important; }
-  #invoice-print, #invoice-print * { visibility: visible !important; }
+  @page { size: A4; margin: 12mm; }
+  body > *:not(#invoice-print-root) { display: none !important; }
+  #invoice-print-root {
+    display: block !important;
+    position: static !important;
+    padding: 0 !important;
+  }
   #invoice-print {
-    position: fixed !important;
-    inset: 0 !important;
+    position: static !important;
     width: 100% !important;
     max-width: none !important;
     max-height: none !important;
     margin: 0 !important;
+    padding: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     overflow: visible !important;
@@ -107,8 +115,8 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div id="invoice-print-root" className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <style>{printCss}</style>
       <div className="absolute inset-0 bg-black/50 invoice-no-print" onClick={onClose} />
       <div
@@ -179,6 +187,7 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

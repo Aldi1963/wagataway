@@ -100,6 +100,53 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Paket tidak ditemukan"})
 			return
 		}
+
+		// Fitur 4 (prorata): bila user punya langganan aktif yang belum
+		// expired dan memilih paket BERBEDA, hitung sisa nilai paket lama.
+		q, err := prorateQuote(db, userID, &plan)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghitung prorata"})
+			return
+		}
+		amount := q.PayableAmount
+		metadata := ""
+		if q.Prorate {
+			metadata = prorateMetadataJSON(q)
+		}
+
+		// Fitur 4: sisa nilai menutupi penuh (atau paket tujuan gratis) →
+		// bayar 0, langsung aktif tanpa ke Clipku Pay. Aktivasi lewat
+		// activateSubscription (titik yang sama dipakai webhook & sinkronisasi
+		// status), yang menonaktifkan langganan lama dan membuat yang baru
+		// mulai sekarang.
+		if q.Prorate && amount == 0 {
+			tx := models.Transaction{
+				UserID:        userID,
+				PlanID:        &req.PlanID,
+				Amount:        0,
+				Status:        "pending",
+				PaymentMethod: "clipkupay",
+				ExternalID:    fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix()),
+				Metadata:      metadata,
+			}
+			if err := db.Create(&tx).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
+				return
+			}
+			if err := activateSubscription(db, tx.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengaktifkan paket"})
+				return
+			}
+			c.JSON(http.StatusCreated, gin.H{
+				"transaction": tx,
+				"plan":        plan,
+				"quote":       q,
+				"activated":   true,
+				"message":     "Paket berhasil diganti — sisa nilai paket lama menutupi penuh",
+			})
+			return
+		}
+
 		if plan.Price <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Paket gratis tidak perlu pembayaran"})
 			return
@@ -119,19 +166,6 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 
 		orderID := fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix())
 
-		// Fitur 4 (prorata): bila user punya langganan aktif yang belum
-		// expired dan memilih paket BERBEDA, hitung sisa nilai paket lama.
-		q, err := prorateQuote(db, userID, &plan)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghitung prorata"})
-			return
-		}
-		amount := q.PayableAmount
-		metadata := ""
-		if q.Prorate {
-			metadata = prorateMetadataJSON(q)
-		}
-
 		// Catat transaksi lokal dulu sebagai pending
 		tx := models.Transaction{
 			UserID:        userID,
@@ -144,25 +178,6 @@ func createSubscription(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		}
 		if err := db.Create(&tx).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
-			return
-		}
-
-		// Fitur 4: sisa nilai menutupi penuh → bayar 0, langsung aktif tanpa
-		// ke Clipku Pay. Aktivasi lewat activateSubscription (titik yang sama
-		// dipakai webhook & sinkronisasi status), yang menonaktifkan langganan
-		// lama dan membuat yang baru mulai sekarang.
-		if q.Prorate && amount == 0 {
-			if err := activateSubscription(db, tx.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengaktifkan paket"})
-				return
-			}
-			c.JSON(http.StatusCreated, gin.H{
-				"transaction": tx,
-				"plan":        plan,
-				"quote":       q,
-				"activated":   true,
-				"message":     "Paket berhasil diganti — sisa nilai paket lama menutupi penuh",
-			})
 			return
 		}
 
