@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -173,7 +174,8 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		userID := middleware.GetUserID(c)
 
 		var req struct {
-			DeviceID   uint     `json:"deviceId" binding:"required"`
+			DeviceID   uint     `json:"deviceId"`
+			DeviceIDs  []uint   `json:"deviceIds"`
 			Recipients []string `json:"recipients" binding:"required"`
 			Type       string   `json:"type"`
 			Content    string   `json:"content" binding:"required"`
@@ -215,10 +217,40 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Cek kepemilikan device
-		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+		// Device pengirim: deviceIds (rotasi round-robin) atau deviceId tunggal (kompatibilitas lama).
+		// Dedupe, buang ID 0.
+		seenIDs := map[uint]bool{}
+		var deviceIDs []uint
+		for _, id := range append(req.DeviceIDs, req.DeviceID) {
+			if id == 0 || seenIDs[id] {
+				continue
+			}
+			seenIDs[id] = true
+			deviceIDs = append(deviceIDs, id)
+		}
+		if len(deviceIDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Pilih minimal satu perangkat pengirim", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		// Cek kepemilikan semua device
+		var devices []models.Device
+		db.Where("user_id = ? AND id IN ?", userID, deviceIDs).Find(&devices)
+		if len(devices) != len(deviceIDs) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Salah satu perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+
+		// Minimal satu device harus sedang connected, kalau tidak blast langsung gagal.
+		anyConnected := false
+		for _, id := range deviceIDs {
+			if wm.GetStatus(id) == "connected" {
+				anyConnected = true
+				break
+			}
+		}
+		if !anyConnected {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tidak ada perangkat pengirim yang terhubung", "code": "NO_DEVICE_CONNECTED"})
 			return
 		}
 
@@ -234,9 +266,11 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Create bulk job
+		idsJSON, _ := json.Marshal(deviceIDs)
 		job := models.BulkJob{
 			UserID:     userID,
-			DeviceID:   req.DeviceID,
+			DeviceID:   deviceIDs[0],
+			DeviceIDs:  string(idsJSON),
 			Type:       req.Type,
 			Content:    req.Content,
 			MediaURL:   mediaURL,
@@ -265,8 +299,9 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		go wm.ProcessBulkJob(job.ID, db)
 
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Bulk message dijadwalkan",
-			"job":     job,
+			"message":   "Bulk message dijadwalkan",
+			"job":       job,
+			"deviceIds": deviceIDs,
 		})
 	}
 }

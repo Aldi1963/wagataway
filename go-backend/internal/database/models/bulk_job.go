@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -9,7 +10,10 @@ import (
 type BulkJob struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
 	UserID      uint           `gorm:"index;not null" json:"userId"`
-	DeviceID    uint           `gorm:"index;not null" json:"deviceId"`
+	DeviceID    uint           `gorm:"index;not null" json:"deviceId"` // device utama (kompatibilitas job lama)
+	// DeviceIDs: JSON array ID perangkat pengirim untuk rotasi round-robin + failover.
+	// Kosong = fallback ke DeviceID tunggal (job yang dibuat sebelum fitur rotasi).
+	DeviceIDs string `gorm:"size:255" json:"-"`
 	Name        string         `gorm:"size:255" json:"name"`
 	Type        string         `gorm:"size:20;default:text" json:"type"`
 	Content     string         `gorm:"type:text" json:"content"`
@@ -38,8 +42,38 @@ type BulkJobRecipient struct {
 	BulkJobID uint       `gorm:"index;not null" json:"bulkJobId"`
 	Phone     string     `gorm:"size:20;not null" json:"phone"`
 	Name      string     `gorm:"size:255" json:"name"`
+	// DeviceID: device yang benar-benar mengirim pesan ini (bisa berbeda dari
+	// device utama job karena rotasi/failover antar device).
+	DeviceID  uint       `gorm:"index" json:"deviceId"`
 	Status    string     `gorm:"size:20;default:pending" json:"status"` // pending, sent, failed
 	ErrorMsg  string     `gorm:"type:text" json:"errorMsg"`
 	SentAt    *time.Time `json:"sentAt"`
 	CreatedAt time.Time  `json:"createdAt"`
+}
+
+// GetDeviceIDs mengembalikan daftar device pengirim job ini.
+// Order dari request dipertahankan, duplikat dan ID 0 dibuang.
+// Job lama (DeviceIDs kosong) fallback ke DeviceID tunggal.
+func (j *BulkJob) GetDeviceIDs() []uint {
+	var ids []uint
+	if j.DeviceIDs != "" {
+		if err := json.Unmarshal([]byte(j.DeviceIDs), &ids); err == nil && len(ids) > 0 {
+			seen := map[uint]bool{}
+			out := make([]uint, 0, len(ids))
+			for _, id := range ids {
+				if id == 0 || seen[id] {
+					continue
+				}
+				seen[id] = true
+				out = append(out, id)
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+	if j.DeviceID != 0 {
+		return []uint{j.DeviceID}
+	}
+	return nil
 }

@@ -296,7 +296,11 @@ func (m *Manager) GetGroups(deviceID uint) ([]*types.GroupInfo, error) {
 	return groups, nil
 }
 
-// ProcessBulkJob processes a bulk messaging job
+// ProcessBulkJob memproses bulk job dengan rotasi pengirim round-robin antar
+// device yang connected. Setiap device mengirim antreannya sendiri secara
+// paralel dengan jeda acak min–max detik antar pesan (per device).
+// Failover: bila satu device disconnect di tengah jalan, sisa antreannya
+// otomatis dialihkan ke device lain yang masih connected (ronde berikutnya).
 func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 	var job models.BulkJob
 	if err := db.First(&job, jobID).Error; err != nil {
@@ -311,14 +315,113 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 	})
 
 	var recipients []models.BulkJobRecipient
-	db.Where("bulk_job_id = ?", jobID).Find(&recipients)
+	db.Where("bulk_job_id = ? AND status = ?", jobID, "pending").Order("id ASC").Find(&recipients)
 
-	sentCount := 0
-	failedCount := 0
 	campaignID := fmt.Sprintf("bulk-%d", jobID)
 
-	for _, r := range recipients {
-		waMsgID, err := m.SendMessageWithOptions(job.DeviceID, r.Phone, SendOptions{
+	// Device milik user dari daftar rotasi (urutan request dipertahankan).
+	deviceIDs := job.GetDeviceIDs()
+	var owned []models.Device
+	if len(deviceIDs) > 0 {
+		db.Where("user_id = ? AND id IN ?", job.UserID, deviceIDs).Find(&owned)
+	}
+	ownedSet := map[uint]bool{}
+	for _, d := range owned {
+		ownedSet[d.ID] = true
+	}
+	liveDevices := func() []uint {
+		var live []uint
+		for _, id := range deviceIDs {
+			if !ownedSet[id] {
+				continue // bukan milik user / sudah dihapus
+			}
+			if m.GetStatus(id) == "connected" {
+				live = append(live, id)
+			}
+		}
+		return live
+	}
+
+	live := liveDevices()
+	if len(live) == 0 {
+		errMsg := "Tidak ada perangkat pengirim yang terhubung"
+		for _, r := range recipients {
+			db.Model(&r).Updates(map[string]interface{}{
+				"status":    "failed",
+				"error_msg": errMsg,
+			})
+			recordMessageReport(db, job.UserID, job.DeviceID, campaignID, r.Phone, "", "failed", errMsg, time.Now())
+		}
+		m.finishBulkJob(db, &job)
+		return
+	}
+
+	// Ronde failover: antrean yang dikembalikan device yang mati didistribusikan
+	// ulang ke device yang masih hidup. Dibatasi 10 ronde agar tidak loop selamanya.
+	pending := recipients
+	for round := 0; len(pending) > 0 && round < 10; round++ {
+		if round > 0 {
+			live = liveDevices()
+			if len(live) == 0 {
+				break
+			}
+		}
+
+		queues := distributeBulkRecipients(pending, live)
+
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		var requeue []models.BulkJobRecipient
+		for i, q := range queues {
+			if len(q) == 0 {
+				continue
+			}
+			wg.Add(1)
+			go func(deviceID uint, q []models.BulkJobRecipient) {
+				defer wg.Done()
+				if rest := m.processBulkQueue(db, &job, deviceID, q, campaignID); len(rest) > 0 {
+					mu.Lock()
+					requeue = append(requeue, rest...)
+					mu.Unlock()
+					log.Warn().
+						Uint("jobID", jobID).
+						Uint("deviceID", deviceID).
+						Int("requeued", len(rest)).
+						Msg("Device terputus saat blast, antrean dialihkan (failover)")
+				}
+			}(live[i], q)
+		}
+		wg.Wait()
+		pending = requeue
+	}
+
+	// Sisa antrean yang tidak bisa dialihkan (semua device mati) → failed.
+	if len(pending) > 0 {
+		errMsg := "Semua perangkat terputus sebelum pesan terkirim"
+		for _, r := range pending {
+			db.Model(&r).Updates(map[string]interface{}{
+				"status":    "failed",
+				"error_msg": errMsg,
+			})
+			recordMessageReport(db, job.UserID, job.DeviceID, campaignID, r.Phone, "", "failed", errMsg, time.Now())
+		}
+	}
+
+	m.finishBulkJob(db, &job)
+}
+
+// processBulkQueue mengirim satu antrean penerima via satu device, dengan jeda
+// acak min–max detik antar pesan (berlaku per device). Mengembalikan sisa
+// antrean bila device disconnect di tengah jalan (untuk failover ke device
+// lain); nil bila antrean habis terkirim.
+func (m *Manager) processBulkQueue(db *gorm.DB, job *models.BulkJob, deviceID uint, queue []models.BulkJobRecipient, campaignID string) []models.BulkJobRecipient {
+	for i, r := range queue {
+		// Cek koneksi sebelum tiap pesan: device mati → sisa antrean difailover.
+		if m.GetStatus(deviceID) != "connected" {
+			return queue[i:]
+		}
+
+		waMsgID, err := m.SendMessageWithOptions(deviceID, r.Phone, SendOptions{
 			Type:     job.Type,
 			Content:  job.Content,
 			MediaURL: job.MediaURL,
@@ -326,43 +429,62 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 
 		sentAt := time.Now()
 		if err != nil {
-			failedCount++
+			if isDisconnectError(err) || m.GetStatus(deviceID) != "connected" {
+				// Device putus saat mengirim → pesan ini + sisanya difailover.
+				return queue[i:]
+			}
 			db.Model(&r).Updates(map[string]interface{}{
 				"status":    "failed",
 				"error_msg": err.Error(),
+				"device_id": deviceID,
 			})
-			recordMessageReport(db, job.UserID, job.DeviceID, campaignID, r.Phone, "", "failed", err.Error(), sentAt)
+			recordMessageReport(db, job.UserID, deviceID, campaignID, r.Phone, "", "failed", err.Error(), sentAt)
 		} else {
-			sentCount++
 			db.Model(&r).Updates(map[string]interface{}{
-				"status":  "sent",
-				"sent_at": &sentAt,
+				"status":    "sent",
+				"sent_at":   &sentAt,
+				"device_id": deviceID,
 			})
-			recordMessageReport(db, job.UserID, job.DeviceID, campaignID, r.Phone, waMsgID, "sent", "", sentAt)
+			recordMessageReport(db, job.UserID, deviceID, campaignID, r.Phone, waMsgID, "sent", "", sentAt)
 		}
 
-		// Random delay between messages (anti-ban)
-		delay := time.Duration(job.MinDelay+rand.Intn(job.MaxDelay-job.MinDelay+1)) * time.Second
-		time.Sleep(delay)
+		// Jeda acak antar pesan untuk device ini (anti-ban). Defensif terhadap
+		// konfigurasi max < min agar tidak panic di rand.Intn.
+		minD, maxD := job.MinDelay, job.MaxDelay
+		if maxD < minD {
+			maxD = minD
+		}
+		if maxD > 0 {
+			time.Sleep(time.Duration(minD+rand.Intn(maxD-minD+1)) * time.Second)
+		}
 	}
+	return nil
+}
+
+// finishBulkJob menghitung ulang sent/failed dari DB (aman dari race antar
+// worker) lalu menandai job selesai.
+func (m *Manager) finishBulkJob(db *gorm.DB, job *models.BulkJob) {
+	var sent, failed int64
+	db.Model(&models.BulkJobRecipient{}).Where("bulk_job_id = ? AND status = ?", job.ID, "sent").Count(&sent)
+	db.Model(&models.BulkJobRecipient{}).Where("bulk_job_id = ? AND status = ?", job.ID, "failed").Count(&failed)
 
 	completed := time.Now()
 	status := "completed"
-	if failedCount > 0 && sentCount == 0 {
+	if failed > 0 && sent == 0 {
 		status = "failed"
 	}
 
-	db.Model(&job).Updates(map[string]interface{}{
+	db.Model(job).Updates(map[string]interface{}{
 		"status":       status,
-		"sent_count":   sentCount,
-		"failed_count": failedCount,
+		"sent_count":   sent,
+		"failed_count": failed,
 		"completed_at": &completed,
 	})
 
 	log.Info().
-		Uint("jobID", jobID).
-		Int("sent", sentCount).
-		Int("failed", failedCount).
+		Uint("jobID", job.ID).
+		Int64("sent", sent).
+		Int64("failed", failed).
 		Msg("Bulk job completed")
 }
 
