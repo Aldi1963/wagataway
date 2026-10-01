@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,7 +47,23 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
+		// Aset statis & health check tidak di-rate-limit: satu kali buka
+		// halaman butuh banyak aset, dan health dipakai supervisor tiap 30 dtk.
+		p := c.Request.URL.Path
+		if p == "/health" ||
+			strings.HasPrefix(p, "/assets/") ||
+			strings.HasPrefix(p, "/illustrations/") ||
+			strings.HasPrefix(p, "/uploads/") {
+			c.Next()
+			return
+		}
+
+		// X-Real-IP ditulis ulang oleh nginx ($remote_addr) jadi tidak
+		// bisa dipalsukan; fallback ke ClientIP bila header tak ada.
+		ip := c.GetHeader("X-Real-IP")
+		if ip == "" {
+			ip = c.ClientIP()
+		}
 
 		rl.mu.Lock()
 		v, exists := rl.visitors[ip]

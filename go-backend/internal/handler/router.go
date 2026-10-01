@@ -22,6 +22,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 
 	r := gin.New()
 
+	// Proxy terpercaya: hanya tunnel SSH lokal & nginx VPS yang boleh
+	// menentukan IP asli via X-Forwarded-For (ClientIP dipakai rate limiter).
+	// Tanpa ini semua trafik kehitung sebagai 127.0.0.1 dan berbagi satu bucket.
+	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+
 	// ── Global Middleware ───────────────────────────────────────────────────
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders())
