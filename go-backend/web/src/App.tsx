@@ -16,6 +16,7 @@ const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Send = lazy(() => import("@/pages/Send"));
+const History = lazy(() => import("@/pages/History"));
 const ScheduleHub = lazy(() => import("@/pages/ScheduleHub"));
 const ContactsHub = lazy(() => import("@/pages/ContactsHub"));
 const AutomationHub = lazy(() => import("@/pages/AutomationHub"));
@@ -126,6 +127,9 @@ function AppRouter() {
         </Route>
         <Route path="/send">
           <ProtectedRoute><Send /></ProtectedRoute>
+        </Route>
+        <Route path="/history">
+          <ProtectedRoute><History /></ProtectedRoute>
         </Route>
         <Route path="/bulk">
           <ProtectedRoute><Send /></ProtectedRoute>

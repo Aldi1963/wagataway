@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 	"unicode/utf8"
 
@@ -27,7 +28,17 @@ func listMessages(db *gorm.DB) gin.HandlerFunc {
 		userID := middleware.GetUserID(c)
 
 		page := 1
-		limit := 50
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if n, err := strconv.Atoi(p); err == nil && n > 0 {
+				page = n
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 100 {
+				limit = n
+			}
+		}
 
 		var messages []models.Message
 		var total int64

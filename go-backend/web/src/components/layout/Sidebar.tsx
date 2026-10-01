@@ -35,6 +35,7 @@ import {
   Webhook,
   CreditCard,
   Gift,
+  History,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -71,6 +72,7 @@ const sections: NavSection[] = [
     label: "Pesan",
     items: [
       { label: "Kirim Pesan", href: "/send", icon: Send },
+      { label: "Riwayat Pesan", href: "/history", icon: History },
       { label: "File Manager", href: "/files", icon: FolderOpen },
     ],
   },

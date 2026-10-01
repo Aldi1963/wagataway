@@ -5,8 +5,6 @@ import {
   Send,
   Smartphone,
   Loader2,
-  History,
-  Inbox,
   FileText,
   Paperclip,
   X,
@@ -40,14 +38,6 @@ interface Template {
   content: string;
 }
 
-interface Message {
-  id: number;
-  to: string;
-  content: string;
-  status: string;
-  createdAt: string;
-}
-
 type MsgType =
   | "text"
   | "poll"
@@ -74,49 +64,11 @@ const TYPE_ICON: Record<MsgType, typeof Send> = {
   location: MapPin,
 };
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "-";
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 0) return "baru saja";
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "baru saja";
-  if (mins < 60) return mins + " menit lalu";
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return hours + " jam lalu";
-  return Math.floor(hours / 24) + " hari lalu";
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Menunggu",
-  sent: "Terkirim",
-  delivered: "Terkirim",
-  read: "Dibaca",
-  failed: "Gagal",
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const label = STATUS_LABEL[status] ?? status;
-  const cls =
-    status === "failed"
-      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-      : status === "pending"
-        ? "bg-muted text-muted-foreground"
-        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}
-    >
-      {label}
-    </span>
-  );
-}
-
 export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
   const [, navigate] = useLocation();
   const { activeDeviceId, activeDevice } = useActiveDevice();
   const [devices, setDevices] = useState<Device[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [history, setHistory] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [to, setTo] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("text");
@@ -151,15 +103,6 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
 
   const [sending, setSending] = useState(false);
 
-  const loadHistory = async () => {
-    try {
-      const res = await apiGet<{ messages: Message[] }>("/messages");
-      setHistory(res.messages ?? []);
-    } catch {
-      // riwayat gagal dimuat — biarkan kosong
-    }
-  };
-
   useEffect(() => {
     (async () => {
       try {
@@ -176,7 +119,6 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
       } finally {
         setLoading(false);
       }
-      await loadHistory();
     })();
   }, []);
 
@@ -338,7 +280,6 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
       setTemplateId("");
       setPickedFile(null);
       resetTypeFields();
-      await loadHistory();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal mengirim pesan");
     } finally {
@@ -791,49 +732,6 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <History className="w-4 h-4" />
-            Riwayat Pengiriman
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="space-y-3 animate-pulse">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-12 rounded-md bg-muted" />
-              ))}
-            </div>
-          ) : history.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-8 text-center">
-              <Inbox className="h-8 w-8 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">
-                Belum ada pesan terkirim
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {history.slice(0, 10).map((m) => (
-                <li key={m.id} className="py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-medium">
-                      {m.to}
-                    </span>
-                    <StatusBadge status={m.status} />
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {m.content}
-                  </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    {timeAgo(m.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
 
       {msgType === "text" && templates.length === 0 && !loading && devices.length > 0 && (
         <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
