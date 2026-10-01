@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiGet } from "@/lib/api";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useLang } from "@/lib/i18n";
 
 interface BotDelivery {
   id: number;
@@ -43,6 +44,7 @@ const PAGE_SIZE = 20;
 
 export default function BotDeliveryLogs({ embedded = false }: { embedded?: boolean }) {
   const { activeDeviceId, activeDevice } = useActiveDevice();
+  const { t } = useLang();
   const [items, setItems] = useState<BotDelivery[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -58,7 +60,7 @@ export default function BotDeliveryLogs({ embedded = false }: { embedded?: boole
       setTotal(r.total ?? 0);
       setPage(p);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat riwayat bot");
+      toast.error(e.message || t("botDeliveryLogs.toastLoadFailed"));
     } finally {
       setLoading(false);
     }
@@ -77,23 +79,23 @@ export default function BotDeliveryLogs({ embedded = false }: { embedded?: boole
       <div className="flex flex-wrap items-center justify-between gap-2">
         {!embedded && (
           <div>
-            <h1 className="text-xl font-bold text-foreground">Riwayat Bot</h1>
+            <h1 className="text-xl font-bold text-foreground">{t("botDeliveryLogs.title")}</h1>
             <p className="text-sm text-muted-foreground">
-              Pengiriman webhook bot PPOB{activeDevice ? ` — ${activeDevice.name}` : ""}.
+              {t("botDeliveryLogs.subtitle")}{activeDevice ? ` — ${activeDevice.name}` : ""}.
             </p>
           </div>
         )}
         <Button variant="outline" size="sm" onClick={() => activeDeviceId && load(page, activeDeviceId)} disabled={!activeDeviceId}>
-          Muat Ulang
+          {t("botDeliveryLogs.reload")}
         </Button>
       </div>
 
       {!activeDeviceId ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          Pilih perangkat aktif di sidebar dulu untuk melihat riwayat bot.
+          {t("botDeliveryLogs.noDevice")}
         </CardContent></Card>
       ) : loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("botDeliveryLogs.loading")}</CardContent></Card>
       ) : (
         <>
           <Card>
@@ -102,19 +104,19 @@ export default function BotDeliveryLogs({ embedded = false }: { embedded?: boole
                 <table className="w-full min-w-[760px] text-sm">
                   <thead>
                     <tr className="border-b border-border text-left">
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Waktu</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Dari</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pesan</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">HTTP</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Coba</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("botDeliveryLogs.colTime")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("botDeliveryLogs.colFrom")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("botDeliveryLogs.colMessage")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("botDeliveryLogs.colHttp")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("botDeliveryLogs.colTries")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("botDeliveryLogs.colStatus")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.length === 0 && (
                       <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">
                         <Bot className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        Belum ada pengiriman bot tercatat.
+                        {t("botDeliveryLogs.empty")}
                       </td></tr>
                     )}
                     {items.map((d) => {
@@ -128,10 +130,10 @@ export default function BotDeliveryLogs({ embedded = false }: { embedded?: boole
                           <td className="py-3 px-4 font-mono text-[13px]">{(d.retryCount ?? 0) + 1}x</td>
                           <td className="py-3 px-4">
                             {d.success ? (
-                              <Badge variant="success">Terkirim</Badge>
+                              <Badge variant="success">{t("botDeliveryLogs.statusSent")}</Badge>
                             ) : (
                               <span title={d.errorMsg}>
-                                <Badge variant="destructive">Gagal</Badge>
+                                <Badge variant="destructive">{t("botDeliveryLogs.statusFailed")}</Badge>
                               </span>
                             )}
                             {!d.success && d.errorMsg && (
@@ -150,14 +152,14 @@ export default function BotDeliveryLogs({ embedded = false }: { embedded?: boole
           </Card>
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              Halaman {page} dari {totalPages} · {total} pengiriman
+              {t("botDeliveryLogs.pageInfo").replace("{page}", String(page)).replace("{totalPages}", String(totalPages)).replace("{total}", String(total))}
             </p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => activeDeviceId && load(page - 1, activeDeviceId)}>
-                <ChevronLeft className="w-4 h-4" /> Sebelumnya
+                <ChevronLeft className="w-4 h-4" /> {t("botDeliveryLogs.prevPage")}
               </Button>
               <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => activeDeviceId && load(page + 1, activeDeviceId)}>
-                Berikutnya <ChevronRight className="w-4 h-4" />
+                {t("botDeliveryLogs.nextPage")} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>

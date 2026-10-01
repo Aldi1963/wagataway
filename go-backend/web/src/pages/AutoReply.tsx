@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
@@ -22,12 +23,6 @@ interface Rule {
   priority: number;
 }
 
-const matchTypeLabels: Record<string, string> = {
-  contains: "Mengandung",
-  exact: "Persis sama",
-  startsWith: "Diawali",
-};
-
 function Modal({
   title,
   onClose,
@@ -37,6 +32,7 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -46,7 +42,7 @@ function Modal({
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card rounded-t-xl">
           <h3 className="font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label={t("autoReply.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -59,7 +55,13 @@ function Modal({
 const emptyForm = { name: "", keyword: "", matchType: "contains", replyContent: "" };
 
 export default function AutoReply({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const { activeDeviceId, activeDevice } = useActiveDevice();
+  const matchTypeLabels: Record<string, string> = {
+    contains: t("autoReply.matchContains"),
+    exact: t("autoReply.matchExact"),
+    startsWith: t("autoReply.matchStartsWith"),
+  };
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
       .then((r) => {
         setRules(r.rules || []);
       })
-      .catch((e) => setError(e.message || "Gagal memuat data"))
+      .catch((e) => setError(e.message || t("autoReply.loadError")))
       .finally(() => setLoading(false));
   };
 
@@ -84,7 +86,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
 
   const openAdd = () => {
     if (activeDeviceId == null) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("autoReply.selectDeviceFirst"));
       return;
     }
     setEditing(null);
@@ -105,11 +107,11 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
 
   const save = async () => {
     if (activeDeviceId == null) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("autoReply.selectDeviceFirst"));
       return;
     }
     if (!form.name.trim() || !form.keyword.trim() || !form.replyContent.trim()) {
-      toast.error("Nama, keyword, dan isi balasan wajib diisi");
+      toast.error(t("autoReply.validationError"));
       return;
     }
     setSaving(true);
@@ -124,15 +126,15 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
       if (editing) {
         const res = await apiPut<{ rule: Rule }>(`/auto-reply/${editing.id}`, payload);
         setRules((prev) => prev.map((r) => (r.id === editing.id ? res.rule : r)));
-        toast.success("Rule diperbarui");
+        toast.success(t("autoReply.ruleUpdated"));
       } else {
         const res = await apiPost<{ rule: Rule }>("/auto-reply", payload);
         setRules((prev) => [res.rule, ...prev]);
-        toast.success("Rule ditambahkan");
+        toast.success(t("autoReply.ruleAdded"));
       }
       setShowForm(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
+      toast.error(e instanceof Error ? e.message : t("autoReply.saveError"));
     } finally {
       setSaving(false);
     }
@@ -143,15 +145,15 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
     setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, isActive: next } : r)));
     try {
       const res = await apiFetch(`/auto-reply/${rule.id}/toggle`, { method: "PATCH" });
-      if (!res.ok) throw new Error((await res.json()).message || "Gagal mengubah status");
+      if (!res.ok) throw new Error((await res.json()).message || t("autoReply.toggleError"));
       const data = await res.json();
       setRules((prev) =>
         prev.map((r) => (r.id === rule.id ? { ...r, isActive: data.isActive } : r))
       );
-      toast.success(next ? "Rule diaktifkan" : "Rule dinonaktifkan");
+      toast.success(next ? t("autoReply.ruleEnabled") : t("autoReply.ruleDisabled"));
     } catch (e) {
       setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, isActive: rule.isActive } : r)));
-      toast.error(e instanceof Error ? e.message : "Gagal mengubah status");
+      toast.error(e instanceof Error ? e.message : t("autoReply.toggleError"));
     }
   };
 
@@ -160,9 +162,9 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
     try {
       await apiDelete(`/auto-reply/${deleting.id}`);
       setRules((prev) => prev.filter((r) => r.id !== deleting.id));
-      toast.success("Rule dihapus");
+      toast.success(t("autoReply.ruleDeleted"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus");
+      toast.error(e instanceof Error ? e.message : t("autoReply.deleteError"));
     } finally {
       setDeleting(null);
     }
@@ -178,12 +180,12 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
         {!embedded && (
           <div>
             <h2 className="text-lg font-semibold text-foreground">Auto Reply</h2>
-            <p className="text-sm text-muted-foreground">Balas pesan otomatis berdasarkan keyword</p>
+            <p className="text-sm text-muted-foreground">{t("autoReply.subtitle")}</p>
           </div>
         )}
         <Button size="sm" className="gap-1.5" onClick={openAdd}>
           <Plus className="w-3.5 h-3.5" />
-          Tambah Rule
+          {t("autoReply.addRule")}
         </Button>
       </div>
 
@@ -197,20 +199,20 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
         <div className="rounded-lg border border-border p-8 text-center space-y-3">
           <p className="text-sm text-destructive">{error}</p>
           <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-            <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+            <RefreshCw className="w-3.5 h-3.5" /> {t("autoReply.retry")}
           </Button>
         </div>
       ) : activeDeviceId == null ? (
         <div className="rounded-lg border border-border p-8 text-center">
           <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
-          <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
-          <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola auto reply</p>
+          <p className="text-sm font-medium mt-2">{t("autoReply.noDevice")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("autoReply.noDeviceHint")}</p>
         </div>
       ) : visibleRules.length === 0 ? (
         <div className="rounded-lg border border-border p-8 text-center">
           <Zap className="w-8 h-8 mx-auto text-muted-foreground" />
-          <p className="text-sm font-medium mt-2">Belum ada rule</p>
-          <p className="text-xs text-muted-foreground mt-1">Tambah rule pertama untuk mulai membalas otomatis</p>
+          <p className="text-sm font-medium mt-2">{t("autoReply.empty")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("autoReply.emptyHint")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -226,7 +228,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-foreground">{rule.name}</p>
                         <Badge variant={rule.isActive ? "default" : "outline"} className="text-[10px]">
-                          {rule.isActive ? "Aktif" : "Nonaktif"}
+                          {rule.isActive ? t("autoReply.active") : t("autoReply.inactive")}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
@@ -243,8 +245,8 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
                       type="button"
                       role="switch"
                       aria-checked={rule.isActive}
-                      aria-label={rule.isActive ? "Nonaktifkan rule" : "Aktifkan rule"}
-                      title={rule.isActive ? "Nonaktifkan rule" : "Aktifkan rule"}
+                      aria-label={rule.isActive ? t("autoReply.deactivateRule") : t("autoReply.activateRule")}
+                      title={rule.isActive ? t("autoReply.deactivateRule") : t("autoReply.activateRule")}
                       onClick={() => toggle(rule)}
                       className={cn(
                         "relative h-5 w-9 shrink-0 rounded-full transition-colors",
@@ -258,7 +260,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
                         )}
                       />
                     </button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(rule)} aria-label="Edit">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(rule)} aria-label={t("autoReply.edit")}>
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
                     <Button
@@ -266,7 +268,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
                       size="icon"
                       className="h-7 w-7 text-destructive"
                       onClick={() => setDeleting(rule)}
-                      aria-label="Hapus"
+                      aria-label={t("autoReply.delete")}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
@@ -279,10 +281,10 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
       )}
 
       {showForm && (
-        <Modal title={editing ? "Edit Rule" : "Tambah Rule"} onClose={() => setShowForm(false)}>
+        <Modal title={editing ? t("autoReply.editRule") : t("autoReply.addRule")} onClose={() => setShowForm(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-medium">Nama rule</label>
+              <label className="text-xs font-medium">{t("autoReply.ruleName")}</label>
               <Input
                 className="mt-1"
                 placeholder="cth: Salam pembuka"
@@ -291,7 +293,7 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-xs font-medium">Keyword (pisahkan koma)</label>
+              <label className="text-xs font-medium">{t("autoReply.keywordLabel")}</label>
               <Input
                 className="mt-1 font-mono"
                 placeholder="halo, hi, selamat pagi"
@@ -300,40 +302,40 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-xs font-medium">Tipe kecocokan</label>
+              <label className="text-xs font-medium">{t("autoReply.matchType")}</label>
               <Dropdown
                 value={form.matchType}
                 onChange={(v) => setForm({ ...form, matchType: v })}
-                ariaLabel="Tipe kecocokan keyword"
+                ariaLabel={t("autoReply.matchTypeAria")}
                 className="mt-1"
                 options={[
-                  { value: "contains", label: "Mengandung keyword" },
-                  { value: "exact", label: "Persis sama" },
-                  { value: "startsWith", label: "Diawali keyword" },
+                  { value: "contains", label: t("autoReply.matchContainsLong") },
+                  { value: "exact", label: t("autoReply.matchExact") },
+                  { value: "startsWith", label: t("autoReply.matchStartsWithLong") },
                 ]}
               />
             </div>
             <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Rule berlaku untuk perangkat{" "}
+              {t("autoReply.ruleForDevice")}{" "}
               <span className="font-medium text-foreground">
                 {activeDevice?.name || `#${activeDeviceId}`}
               </span>
             </p>
             <div>
-              <label className="text-xs font-medium">Isi balasan</label>
+              <label className="text-xs font-medium">{t("autoReply.replyContent")}</label>
               <textarea
                 className="mt-1 flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[100px]"
-                placeholder="Tulis balasan otomatis..."
+                placeholder={t("autoReply.replyPlaceholder")}
                 value={form.replyContent}
                 onChange={(e) => setForm({ ...form, replyContent: e.target.value })}
               />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
-                Batal
+                {t("autoReply.cancel")}
               </Button>
               <Button onClick={save} disabled={saving}>
-                {saving ? "Menyimpan..." : editing ? "Simpan" : "Tambah"}
+                {saving ? t("autoReply.saving") : editing ? t("autoReply.save") : t("autoReply.add")}
               </Button>
             </div>
           </div>
@@ -341,17 +343,16 @@ export default function AutoReply({ embedded = false }: { embedded?: boolean }) 
       )}
 
       {deleting && (
-        <Modal title="Hapus Rule" onClose={() => setDeleting(null)}>
+        <Modal title={t("autoReply.deleteRule")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground">
-            Hapus rule <span className="font-semibold text-foreground">"{deleting.name}"</span>? Tindakan ini
-            tidak bisa dibatalkan.
+            {t("autoReply.deleteConfirm").replace("{name}", deleting.name)}
           </p>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              Batal
+              {t("autoReply.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Hapus
+              {t("autoReply.delete")}
             </Button>
           </div>
         </Modal>

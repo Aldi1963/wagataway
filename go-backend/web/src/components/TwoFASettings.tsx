@@ -6,10 +6,12 @@ import { ShieldCheck, ShieldOff, Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 type Step = "loading" | "off" | "setup" | "show-codes" | "on";
 
 export default function TwoFASettings() {
+  const { t } = useLang();
   const [step, setStep] = useState<Step>("loading");
   const [qr, setQr] = useState("");
   const [secret, setSecret] = useState("");
@@ -33,7 +35,7 @@ export default function TwoFASettings() {
       setCode("");
       setStep("setup");
     } catch (e: any) {
-      toast.error(e.message || "Gagal memulai setup 2FA");
+      toast.error(e.message || t("twoFASettings.errStartSetup"));
     } finally {
       setBusy(false);
     }
@@ -41,7 +43,7 @@ export default function TwoFASettings() {
 
   const confirmEnable = async () => {
     if (code.trim().length < 6) {
-      toast.error("Masukkan 6 digit kode dari aplikasi authenticator");
+      toast.error(t("twoFASettings.errEnterCode"));
       return;
     }
     setBusy(true);
@@ -51,9 +53,9 @@ export default function TwoFASettings() {
       });
       setCodes(d.backup_codes || []);
       setStep("show-codes");
-      toast.success("2FA aktif");
+      toast.success(t("twoFASettings.enabled"));
     } catch (e: any) {
-      toast.error(e.message || "Kode salah, coba lagi");
+      toast.error(e.message || t("twoFASettings.errWrongCode"));
     } finally {
       setBusy(false);
     }
@@ -61,7 +63,7 @@ export default function TwoFASettings() {
 
   const disable = async () => {
     if (!password || code.trim().length < 6) {
-      toast.error("Isi password dan kode 2FA untuk menonaktifkan");
+      toast.error(t("twoFASettings.errFillToDisable"));
       return;
     }
     setBusy(true);
@@ -70,9 +72,9 @@ export default function TwoFASettings() {
       setStep("off");
       setPassword("");
       setCode("");
-      toast.success("2FA dinonaktifkan");
+      toast.success(t("twoFASettings.disabled"));
     } catch (e: any) {
-      toast.error(e.message || "Gagal menonaktifkan 2FA");
+      toast.error(e.message || t("twoFASettings.errDisable"));
     } finally {
       setBusy(false);
     }
@@ -80,7 +82,7 @@ export default function TwoFASettings() {
 
   const regenerate = async () => {
     if (code.trim().length < 6) {
-      toast.error("Masukkan kode 2FA saat ini dulu");
+      toast.error(t("twoFASettings.errEnterCurrentCode"));
       return;
     }
     setBusy(true);
@@ -92,23 +94,23 @@ export default function TwoFASettings() {
       setCodes(d.backup_codes || []);
       setCode("");
       setStep("show-codes");
-      toast.success("Kode cadangan baru dibuat");
+      toast.success(t("twoFASettings.codesRegenerated"));
     } catch (e: any) {
-      toast.error(e.message || "Gagal membuat kode cadangan");
+      toast.error(e.message || t("twoFASettings.errRegenerate"));
     } finally {
       setBusy(false);
     }
   };
 
-  const copyText = (t: string, label: string) => {
-    navigator.clipboard.writeText(t).then(
-      () => toast.success(label + " disalin"),
-      () => toast.error("Gagal menyalin")
+  const copyText = (t2: string, label: string) => {
+    navigator.clipboard.writeText(t2).then(
+      () => toast.success(t("twoFASettings.copied").replace("{label}", label)),
+      () => toast.error(t("twoFASettings.errCopy"))
     );
   };
 
   if (step === "loading") {
-    return <p className="text-sm text-muted-foreground">Memuat status 2FA…</p>;
+    return <p className="text-sm text-muted-foreground">{t("twoFASettings.loading")}</p>;
   }
 
   return (
@@ -129,27 +131,27 @@ export default function TwoFASettings() {
           )}
         </div>
         <div>
-          <p className="font-semibold text-sm">Autentikasi Dua Faktor (2FA)</p>
+          <p className="font-semibold text-sm">{t("twoFASettings.title")}</p>
           <p className="text-xs text-muted-foreground">
             {step === "on" || step === "show-codes"
-              ? "Aktif — login butuh kode dari aplikasi authenticator."
-              : "Belum aktif — akun hanya dilindungi password."}
+              ? t("twoFASettings.activeDesc")
+              : t("twoFASettings.inactiveDesc")}
           </p>
         </div>
       </div>
 
       {step === "off" && (
         <Button size="sm" onClick={startSetup} disabled={busy}>
-          {busy ? "Menyiapkan…" : "Aktifkan 2FA"}
+          {busy ? t("twoFASettings.preparing") : t("twoFASettings.enable")}
         </Button>
       )}
 
       {step === "setup" && (
         <div className="space-y-4">
           <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
-            <li>Buka aplikasi authenticator (Google Authenticator, Authy, 1Password).</li>
-            <li>Pindai QR di bawah atau masukkan secret manual.</li>
-            <li>Masukkan 6 digit kode yang muncul, lalu konfirmasi.</li>
+            <li>{t("twoFASettings.step1")}</li>
+            <li>{t("twoFASettings.step2")}</li>
+            <li>{t("twoFASettings.step3")}</li>
           </ol>
           <div className="flex flex-col sm:flex-row gap-4 items-start">
             {qr && (
@@ -160,7 +162,7 @@ export default function TwoFASettings() {
               />
             )}
             <div className="flex-1 w-full space-y-2">
-              <label className="text-xs font-medium">Secret (manual)</label>
+              <label className="text-xs font-medium">{t("twoFASettings.secretLabel")}</label>
               <div className="flex gap-2">
                 <Input value={secret} readOnly className="font-mono text-xs" />
                 <Button
@@ -174,7 +176,7 @@ export default function TwoFASettings() {
             </div>
           </div>
           <div className="space-y-2 max-w-xs">
-            <label className="text-xs font-medium">Kode 6 digit</label>
+            <label className="text-xs font-medium">{t("twoFASettings.codeLabel")}</label>
             <Input
               value={code}
               onChange={(e) =>
@@ -187,7 +189,7 @@ export default function TwoFASettings() {
           </div>
           <div className="flex gap-2">
             <Button size="sm" onClick={confirmEnable} disabled={busy}>
-              {busy ? "Memverifikasi…" : "Konfirmasi & Aktifkan"}
+              {busy ? t("twoFASettings.verifying") : t("twoFASettings.confirmEnable")}
             </Button>
             <Button
               size="sm"
@@ -195,7 +197,7 @@ export default function TwoFASettings() {
               onClick={() => setStep("off")}
               disabled={busy}
             >
-              Batal
+              {t("twoFASettings.cancel")}
             </Button>
           </div>
         </div>
@@ -204,8 +206,7 @@ export default function TwoFASettings() {
       {step === "show-codes" && (
         <div className="space-y-3">
           <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
-            Simpan kode cadangan ini di tempat aman. Tiap kode hanya bisa
-            dipakai sekali — untuk darurat kalau HP hilang.
+            {t("twoFASettings.saveCodes")}
           </p>
           <div className="grid grid-cols-2 gap-2 max-w-sm">
             {codes.map((c) => (
@@ -222,13 +223,13 @@ export default function TwoFASettings() {
               size="sm"
               variant="outline"
               onClick={() =>
-                copyText(codes.join("\n"), "Kode cadangan")
+                copyText(codes.join("\n"), t("twoFASettings.backupCodesLabel"))
               }
             >
-              <Copy className="w-4 h-4 mr-1" /> Salin semua
+              <Copy className="w-4 h-4 mr-1" /> {t("twoFASettings.copyAll")}
             </Button>
             <Button size="sm" onClick={() => setStep("on")}>
-              Saya sudah menyimpan
+              {t("twoFASettings.savedConfirm")}
             </Button>
           </div>
         </div>
@@ -238,7 +239,7 @@ export default function TwoFASettings() {
         <div className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-3 max-w-lg">
             <div className="space-y-2">
-              <label className="text-xs font-medium">Kode 2FA saat ini</label>
+              <label className="text-xs font-medium">{t("twoFASettings.currentCodeLabel")}</label>
               <Input
                 value={code}
                 onChange={(e) =>
@@ -250,11 +251,11 @@ export default function TwoFASettings() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Password</label>
+              <label className="text-xs font-medium">{t("twoFASettings.passwordLabel")}</label>
               <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Untuk nonaktifkan"
+                placeholder={t("twoFASettings.passwordPlaceholder")}
                 autoComplete="current-password"
               />
             </div>
@@ -267,7 +268,7 @@ export default function TwoFASettings() {
               disabled={busy}
             >
               <RefreshCw className="w-4 h-4 mr-1" />
-              Buat ulang kode cadangan
+              {t("twoFASettings.regenerateCodes")}
             </Button>
             <Button
               size="sm"
@@ -275,7 +276,7 @@ export default function TwoFASettings() {
               onClick={disable}
               disabled={busy}
             >
-              {busy ? "Memproses…" : "Nonaktifkan 2FA"}
+              {busy ? t("twoFASettings.processing") : t("twoFASettings.disable")}
             </Button>
           </div>
         </div>

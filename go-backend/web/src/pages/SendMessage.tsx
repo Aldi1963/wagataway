@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiGet, apiPost } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 import { useActiveDevice } from "@/hooks/use-active-device";
 import FilePickerModal, { type PickedFile } from "@/components/FilePickerModal";
 
@@ -46,15 +47,6 @@ type MsgType =
   | "voicenote"
   | "location";
 
-const MSG_TYPE_OPTIONS = [
-  { value: "text", label: "Teks / Media" },
-  { value: "poll", label: "Polling" },
-  { value: "interactive", label: "Tombol Interaktif" },
-  { value: "sticker", label: "Stiker" },
-  { value: "voicenote", label: "Voice Note" },
-  { value: "location", label: "Lokasi" },
-];
-
 const TYPE_ICON: Record<MsgType, typeof Send> = {
   text: Send,
   poll: BarChart3,
@@ -65,6 +57,7 @@ const TYPE_ICON: Record<MsgType, typeof Send> = {
 };
 
 export default function SendMessage({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [, navigate] = useLocation();
   const { activeDeviceId, activeDevice } = useActiveDevice();
   const [devices, setDevices] = useState<Device[]>([]);
@@ -72,6 +65,15 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
   const [loading, setLoading] = useState(true);
   const [to, setTo] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("text");
+
+  const MSG_TYPE_OPTIONS = [
+    { value: "text", label: t("sendMessage.typeText") },
+    { value: "poll", label: t("sendMessage.typePoll") },
+    { value: "interactive", label: t("sendMessage.typeInteractive") },
+    { value: "sticker", label: t("sendMessage.typeSticker") },
+    { value: "voicenote", label: t("sendMessage.typeVoicenote") },
+    { value: "location", label: t("sendMessage.typeLocation") },
+  ];
 
   // --- tipe teks (perilaku lama, jangan diubah) ---
   const [content, setContent] = useState("");
@@ -106,15 +108,15 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
   useEffect(() => {
     (async () => {
       try {
-        const [d, t] = await Promise.all([
+        const [d, tpl] = await Promise.all([
           apiGet<{ devices: Device[] }>("/devices"),
           apiGet<{ templates: Template[] }>("/templates"),
         ]);
         setDevices(d.devices ?? []);
-        setTemplates(t.templates ?? []);
+        setTemplates(tpl.templates ?? []);
       } catch (e) {
         toast.error(
-          e instanceof Error ? e.message : "Gagal memuat data"
+          e instanceof Error ? e.message : t("sendMessage.loadFailed")
         );
       } finally {
         setLoading(false);
@@ -184,19 +186,19 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
 
     // Validasi ringan per tipe
     if (msgType === "poll" && validOptions.length < 2) {
-      toast.error("Polling butuh minimal 2 opsi");
+      toast.error(t("sendMessage.pollMin2"));
       return;
     }
     if (msgType === "poll" && validOptions.length > 12) {
-      toast.error("Polling maksimal 12 opsi");
+      toast.error(t("sendMessage.pollMax12"));
       return;
     }
     if (msgType === "interactive" && validButtons.length === 0) {
-      toast.error("Isi minimal 1 tombol (ID + label)");
+      toast.error(t("sendMessage.buttonMin1"));
       return;
     }
     if (msgType === "location" && !validLocation) {
-      toast.error("Latitude (-90..90) dan longitude (-180..180) tidak valid");
+      toast.error(t("sendMessage.locationInvalid"));
       return;
     }
 
@@ -205,7 +207,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
       const base = { deviceId: activeDeviceId, to: to.trim() };
       let endpoint = "/messages/send";
       let body: Record<string, unknown> = base;
-      let okMsg = "Pesan terkirim";
+      let okMsg = t("sendMessage.sentMessage");
 
       switch (msgType) {
         case "text": {
@@ -234,7 +236,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
             options: validOptions,
             allowMultiple: pollMultiple,
           };
-          okMsg = "Polling terkirim";
+          okMsg = t("sendMessage.pollSent");
           break;
         case "interactive":
           endpoint = "/messages/send-interactive";
@@ -247,17 +249,17 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
             })),
             footer: btnFooter.trim() || undefined,
           };
-          okMsg = "Pesan interaktif terkirim";
+          okMsg = t("sendMessage.interactiveSent");
           break;
         case "sticker":
           endpoint = "/messages/send-sticker";
           body = { ...base, mediaUrl: mediaUrl.trim() };
-          okMsg = "Stiker terkirim";
+          okMsg = t("sendMessage.stickerSent");
           break;
         case "voicenote":
           endpoint = "/messages/send-voice-note";
           body = { ...base, mediaUrl: mediaUrl.trim() };
-          okMsg = "Voice note terkirim";
+          okMsg = t("sendMessage.voicenoteSent");
           break;
         case "location":
           endpoint = "/messages/send-location";
@@ -269,7 +271,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
             address: locAddress.trim() || undefined,
             live: locLive,
           };
-          okMsg = "Lokasi terkirim";
+          okMsg = t("sendMessage.locationSent");
           break;
       }
 
@@ -281,7 +283,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
       setPickedFile(null);
       resetTypeFields();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal mengirim pesan");
+      toast.error(e instanceof Error ? e.message : t("sendMessage.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -294,7 +296,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
       <Card>
         {!embedded && (
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Kirim Pesan</CardTitle>
+            <CardTitle className="text-sm font-semibold">{t("sendMessage.cardTitle")}</CardTitle>
           </CardHeader>
         )}
         <CardContent>
@@ -309,26 +311,25 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
               <Smartphone className="h-10 w-10 text-muted-foreground" />
               <div>
                 <p className="text-sm font-medium">
-                  Belum ada perangkat
+                  {t("sendMessage.noDevicesTitle")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Tambahkan dan hubungkan perangkat WhatsApp dulu sebelum
-                  mengirim pesan.
+                  {t("sendMessage.noDevicesHint")}
                 </p>
               </div>
               <Button size="sm" onClick={() => navigate("/")}>
-                Ke Dashboard
+                {t("sendMessage.goDashboard")}
               </Button>
             </div>
           ) : (
             <form onSubmit={handleSend} className="space-y-4">
               {activeDeviceId == null ? (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
-                  Pilih perangkat aktif di sidebar dulu sebelum mengirim pesan.
+                  {t("sendMessage.selectDeviceFirst")}
                 </div>
               ) : (
                 <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-                  Mengirim via{" "}
+                  {t("sendMessage.sendingVia")}{" "}
                   <span className="font-medium text-foreground">
                     {activeDevice?.name || `Perangkat #${activeDeviceId}`}
                   </span>
@@ -337,7 +338,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-foreground">
-                  Nomor Tujuan
+                  {t("sendMessage.labelTo")}
                 </label>
                 <Input
                   placeholder="628xxxxxxxxxx"
@@ -348,18 +349,18 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   required
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Format: 628xxx (tanpa + atau 0)
+                  {t("sendMessage.formatHint")}
                 </p>
               </div>
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-foreground">
-                  Tipe Pesan
+                  {t("sendMessage.labelType")}
                 </label>
                 <Dropdown
                   value={msgType}
                   onChange={handleTypeChange}
-                  ariaLabel="Tipe pesan"
+                  ariaLabel={t("sendMessage.ariaType")}
                   disabled={sending}
                   options={MSG_TYPE_OPTIONS}
                 />
@@ -370,16 +371,16 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   {templates.length > 0 && (
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-foreground">
-                        Template <span className="text-muted-foreground">(opsional)</span>
+                        {t("sendMessage.labelTemplate")} <span className="text-muted-foreground">{t("sendMessage.optional")}</span>
                       </label>
                       <Dropdown
                         value={templateId}
                         onChange={handleTemplate}
-                        ariaLabel="Template"
+                        ariaLabel={t("sendMessage.ariaTemplate")}
                         disabled={sending}
                         options={[
-                          { value: "", label: "Tanpa template" },
-                          ...templates.map((t) => ({ value: String(t.id), label: t.name })),
+                          { value: "", label: t("sendMessage.noTemplate") },
+                          ...templates.map((tpl) => ({ value: String(tpl.id), label: tpl.name })),
                         ]}
                       />
                     </div>
@@ -387,24 +388,24 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
 
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Pesan
+                      {t("sendMessage.labelMessage")}
                     </label>
                     <textarea
                       className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 min-h-[120px] resize-y disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Tulis pesan Anda..."
+                      placeholder={t("sendMessage.messagePlaceholder")}
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       disabled={sending}
                       required
                     />
                     <p className="text-[10px] text-muted-foreground text-right">
-                      {content.length} karakter
+                      {t("sendMessage.charCount").replace("{n}", String(content.length))}
                     </p>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Lampiran <span className="text-muted-foreground">(opsional)</span>
+                      {t("sendMessage.labelAttachment")} <span className="text-muted-foreground">{t("sendMessage.optional")}</span>
                     </label>
                     {pickedFile ? (
                       <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
@@ -415,7 +416,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                         <button
                           type="button"
                           onClick={() => setPickedFile(null)}
-                          aria-label="Hapus lampiran"
+                          aria-label={t("sendMessage.removeAttachment")}
                           className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
                         >
                           <X className="w-4 h-4" />
@@ -431,7 +432,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                         disabled={sending}
                       >
                         <Paperclip className="w-4 h-4" />
-                        Pilih dari File Manager
+                        {t("sendMessage.pickFromFileManager")}
                       </Button>
                     )}
                   </div>
@@ -442,7 +443,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                 <>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Pertanyaan
+                      {t("sendMessage.labelQuestion")}
                     </label>
                     <Input
                       placeholder="Mis. Kapan kita meeting?"
@@ -454,16 +455,16 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Opsi Jawaban{" "}
+                      {t("sendMessage.labelOptions")}{" "}
                       <span className="text-muted-foreground">
-                        ({validOptions.length}/12, min 2)
+                        ({t("sendMessage.optionsHint").replace("{n}", String(validOptions.length))})
                       </span>
                     </label>
                     <div className="space-y-2">
                       {pollOptions.map((opt, i) => (
                         <div key={i} className="flex items-center gap-2">
                           <Input
-                            placeholder={`Opsi ${i + 1}`}
+                            placeholder={t("sendMessage.optionPlaceholder").replace("{i}", String(i + 1))}
                             value={opt}
                             onChange={(e) =>
                               setPollOptions(
@@ -484,7 +485,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                               )
                             }
                             disabled={sending || pollOptions.length <= 2}
-                            aria-label={`Hapus opsi ${i + 1}`}
+                            aria-label={t("sendMessage.removeOption").replace("{i}", String(i + 1))}
                             className="p-2 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-500/10 disabled:opacity-40 disabled:pointer-events-none shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -504,7 +505,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                         disabled={sending}
                       >
                         <Plus className="w-4 h-4" />
-                        Tambah opsi
+                        {t("sendMessage.addOption")}
                       </Button>
                     )}
                   </div>
@@ -516,7 +517,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                       disabled={sending}
                       className="h-4 w-4 rounded border-border accent-[#243370]"
                     />
-                    Boleh pilih lebih dari satu jawaban
+                    {t("sendMessage.allowMultiple")}
                   </label>
                 </>
               )}
@@ -525,11 +526,11 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                 <>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Isi Pesan
+                      {t("sendMessage.labelInteractiveBody")}
                     </label>
                     <textarea
                       className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 min-h-[100px] resize-y disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Tulis isi pesan..."
+                      placeholder={t("sendMessage.interactiveBodyPlaceholder")}
                       value={btnBody}
                       onChange={(e) => setBtnBody(e.target.value)}
                       disabled={sending}
@@ -538,9 +539,9 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Tombol{" "}
+                      {t("sendMessage.labelButtons")}{" "}
                       <span className="text-muted-foreground">
-                        ({validButtons.length}/3, min 1)
+                        ({t("sendMessage.buttonsHint").replace("{n}", String(validButtons.length))})
                       </span>
                     </label>
                     <div className="space-y-2">
@@ -550,7 +551,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                           className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-2"
                         >
                           <Input
-                            placeholder="ID tombol"
+                            placeholder={t("sendMessage.buttonIdPlaceholder")}
                             value={b.id}
                             onChange={(e) =>
                               setButtons(
@@ -563,7 +564,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                             className="min-w-0 flex-1 basis-28 font-mono text-xs"
                           />
                           <Input
-                            placeholder="Label tombol"
+                            placeholder={t("sendMessage.buttonLabelPlaceholder")}
                             value={b.title}
                             onChange={(e) =>
                               setButtons(
@@ -582,7 +583,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                               setButtons(buttons.filter((_, x) => x !== i))
                             }
                             disabled={sending || buttons.length <= 1}
-                            aria-label={`Hapus tombol ${i + 1}`}
+                            aria-label={t("sendMessage.removeButton").replace("{i}", String(i + 1))}
                             className="p-2 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-500/10 disabled:opacity-40 disabled:pointer-events-none shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -602,21 +603,20 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                         disabled={sending}
                       >
                         <Plus className="w-4 h-4" />
-                        Tambah tombol
+                        {t("sendMessage.addButton")}
                       </Button>
                     )}
                     <p className="text-[10px] text-muted-foreground">
-                      ID dipakai untuk mengenali tombol yang ditekan penerima
-                      (mis. "ya", "tidak").
+                      {t("sendMessage.buttonsHelpText")}
                     </p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Footer{" "}
-                      <span className="text-muted-foreground">(opsional)</span>
+                      {t("sendMessage.labelFooter")}{" "}
+                      <span className="text-muted-foreground">{t("sendMessage.optional")}</span>
                     </label>
                     <Input
-                      placeholder="Teks kecil di bawah tombol"
+                      placeholder={t("sendMessage.footerPlaceholder")}
                       value={btnFooter}
                       onChange={(e) => setBtnFooter(e.target.value)}
                       disabled={sending}
@@ -628,7 +628,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
               {(msgType === "sticker" || msgType === "voicenote") && (
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-foreground">
-                    URL Media
+                    {t("sendMessage.labelMediaUrl")}
                   </label>
                   <Input
                     placeholder={
@@ -644,8 +644,8 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   />
                   <p className="text-[10px] text-muted-foreground">
                     {msgType === "sticker"
-                      ? "Link langsung ke file gambar .webp"
-                      : "Link langsung ke file audio (ogg/opus, mp3)"}
+                      ? t("sendMessage.stickerHint")
+                      : t("sendMessage.voicenoteHint")}
                   </p>
                 </div>
               )}
@@ -655,7 +655,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-foreground">
-                        Latitude
+                        {t("sendMessage.labelLatitude")}
                       </label>
                       <Input
                         placeholder="-6.2"
@@ -669,7 +669,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-foreground">
-                        Longitude
+                        {t("sendMessage.labelLongitude")}
                       </label>
                       <Input
                         placeholder="106.8"
@@ -684,8 +684,8 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Nama tempat{" "}
-                      <span className="text-muted-foreground">(opsional)</span>
+                      {t("sendMessage.labelPlaceName")}{" "}
+                      <span className="text-muted-foreground">{t("sendMessage.optional")}</span>
                     </label>
                     <Input
                       placeholder="Mis. Kantor Clipku"
@@ -696,8 +696,8 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-foreground">
-                      Alamat{" "}
-                      <span className="text-muted-foreground">(opsional)</span>
+                      {t("sendMessage.labelAddress")}{" "}
+                      <span className="text-muted-foreground">{t("sendMessage.optional")}</span>
                     </label>
                     <Input
                       placeholder="Jl. Contoh No. 1"
@@ -714,7 +714,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                       disabled={sending}
                       className="h-4 w-4 rounded border-border accent-[#243370]"
                     />
-                    Lokasi live (real-time)
+                    {t("sendMessage.liveLocation")}
                   </label>
                 </>
               )}
@@ -725,7 +725,7 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
                 ) : (
                   <TypeIcon className="w-4 h-4" />
                 )}
-                {sending ? "Mengirim..." : "Kirim"}
+                {sending ? t("sendMessage.sending") : t("sendMessage.sendButton")}
               </Button>
             </form>
           )}
@@ -736,11 +736,11 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
       {msgType === "text" && templates.length === 0 && !loading && devices.length > 0 && (
         <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <FileText className="w-3.5 h-3.5" />
-          Belum ada template.{" "}
+          {t("sendMessage.noTemplatesPrefix")}{" "}
           <Link to="/templates" className="underline underline-offset-2">
-            Buat template
+            {t("sendMessage.createTemplate")}
           </Link>{" "}
-          untuk pengiriman lebih cepat.
+          {t("sendMessage.noTemplatesSuffix")}
         </p>
       )}
 

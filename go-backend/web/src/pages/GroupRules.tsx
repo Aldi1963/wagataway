@@ -8,6 +8,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useLang } from "@/lib/i18n";
 
 interface GroupRule {
   id: number;
@@ -26,13 +27,14 @@ interface SyncedGroup {
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -47,6 +49,7 @@ const inputCls =
 
 export default function GroupRules({ embedded = false }: { embedded?: boolean }) {
   const { activeDeviceId, activeDevice } = useActiveDevice();
+  const { t } = useLang();
   const [items, setItems] = useState<GroupRule[]>([]);
   const [syncedGroups, setSyncedGroups] = useState<SyncedGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +72,7 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
       setItems(Array.isArray(r) ? r : r.rules ?? []);
       setSyncedGroups((g.groups ?? []).filter((x) => x.waJid));
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat aturan grup");
+      toast.error(e.message || t("groupRules.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -86,7 +89,7 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
 
   const openModal = (g?: GroupRule) => {
     if (activeDeviceId == null && !g) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("groupRules.selectDeviceFirst"));
       return;
     }
     setEditing(g ?? null);
@@ -100,8 +103,8 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
 
   const save = async () => {
     const targetDeviceId = editing ? editing.deviceId : activeDeviceId;
-    if (targetDeviceId == null) { toast.error("Pilih perangkat aktif di sidebar dulu"); return; }
-    if (!groupJid.trim()) { toast.error("Pilih grup atau isi JID grup"); return; }
+    if (targetDeviceId == null) { toast.error(t("groupRules.selectDeviceFirst")); return; }
+    if (!groupJid.trim()) { toast.error(t("groupRules.groupRequired")); return; }
     try {
       const payload = {
         deviceId: targetDeviceId,
@@ -110,11 +113,11 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
         antiLink,
         antiSpam,
       };
-      if (editing) { await apiPut(`/group-rules/${editing.id}`, payload); toast.success("Diperbarui"); }
-      else { await apiPost("/group-rules", payload); toast.success("Aturan ditambahkan"); }
+      if (editing) { await apiPut(`/group-rules/${editing.id}`, payload); toast.success(t("groupRules.updated")); }
+      else { await apiPost("/group-rules", payload); toast.success(t("groupRules.added")); }
       setShowModal(false);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menyimpan"); }
+    } catch (e: any) { toast.error(e.message || t("groupRules.saveFailed")); }
   };
 
   // Toggle isActive via POST /:id/toggle
@@ -122,8 +125,8 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
     try {
       await apiPost(`/group-rules/${g.id}/toggle`, {});
       setItems((prev) => prev.map((x) => (x.id === g.id ? { ...x, isActive: v } : x)));
-      toast.success(v ? "Aturan diaktifkan" : "Aturan dinonaktifkan");
-    } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
+      toast.success(v ? t("groupRules.activated") : t("groupRules.deactivated"));
+    } catch (e: any) { toast.error(e.message || t("groupRules.statusFailed")); }
   };
 
   // Toggle antiLink/antiSpam via PUT dengan payload penuh
@@ -137,18 +140,18 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
         antiSpam: field === "antiSpam" ? v : g.antiSpam,
       });
       setItems((prev) => prev.map((x) => (x.id === g.id ? { ...x, [field]: v } : x)));
-      toast.success("Aturan diperbarui");
-    } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
+      toast.success(t("groupRules.ruleUpdated"));
+    } catch (e: any) { toast.error(e.message || t("groupRules.statusFailed")); }
   };
 
   const confirmDelete = async () => {
     if (deleting == null) return;
     try {
       await apiDelete(`/group-rules/${deleting}`);
-      toast.success("Dihapus");
+      toast.success(t("groupRules.deleted"));
       setDeleting(null);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menghapus"); }
+    } catch (e: any) { toast.error(e.message || t("groupRules.deleteFailed")); }
   };
 
   return (
@@ -156,23 +159,23 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
       <div className="flex flex-wrap items-center justify-between gap-2">
         {!embedded && (
           <div>
-            <h1 className="text-xl font-bold text-foreground">Aturan Grup</h1>
-            <p className="text-sm text-muted-foreground">Sambutan otomatis anggota baru, anti-link & anti-spam.</p>
+            <h1 className="text-xl font-bold text-foreground">{t("groupRules.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("groupRules.description")}</p>
           </div>
         )}
         <Button size="sm" onClick={() => openModal()} className="gap-1.5">
-          <Plus className="w-4 h-4" /> Tambah Aturan
+          <Plus className="w-4 h-4" /> {t("groupRules.addRule")}
         </Button>
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("groupRules.loading")}</CardContent></Card>
       ) : activeDeviceId == null ? (
         <Card>
           <CardContent className="p-8 text-center">
             <ShieldCheck className="w-8 h-8 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
-            <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola aturan grup</p>
+            <p className="text-sm font-medium mt-2">{t("groupRules.noDevice")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("groupRules.noDeviceHint")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -182,17 +185,17 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
               <table className="w-full min-w-[680px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("groupRules.colGroup")}</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Welcome</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anti-Link</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anti-Spam</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Aktif</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("groupRules.colAntiLink")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("groupRules.colAntiSpam")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("groupRules.colActive")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("groupRules.colActions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleItems.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Belum ada aturan grup untuk perangkat {activeDevice?.name || `#${activeDeviceId}`}.</td></tr>
+                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">{t("groupRules.noRules").replace("{device}", activeDevice?.name || `#${activeDeviceId}`)}</td></tr>
                   )}
                   {visibleItems.map((g) => (
                     <tr key={g.id} className="border-b border-border last:border-0">
@@ -208,16 +211,16 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
                         </span>
                       </td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate" title={g.welcomeMsg}>{g.welcomeMsg || "-"}</td>
-                      <td className="py-3 px-4"><Toggle checked={g.antiLink} label={`Anti-link ${g.groupJid}`} onToggle={(v) => toggleField(g, "antiLink", v)} /></td>
-                      <td className="py-3 px-4"><Toggle checked={g.antiSpam} label={`Anti-spam ${g.groupJid}`} onToggle={(v) => toggleField(g, "antiSpam", v)} /></td>
+                      <td className="py-3 px-4"><Toggle checked={g.antiLink} label={t("groupRules.toggleAntiLink").replace("{jid}", g.groupJid)} onToggle={(v) => toggleField(g, "antiLink", v)} /></td>
+                      <td className="py-3 px-4"><Toggle checked={g.antiSpam} label={t("groupRules.toggleAntiSpam").replace("{jid}", g.groupJid)} onToggle={(v) => toggleField(g, "antiSpam", v)} /></td>
                       <td className="py-3 px-4">
-                        <Toggle checked={g.isActive} label={`Aktif ${g.groupJid}`} onToggle={(v) => toggleActive(g, v)} />
+                        <Toggle checked={g.isActive} label={t("groupRules.toggleActive").replace("{jid}", g.groupJid)} onToggle={(v) => toggleActive(g, v)} />
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(g)} aria-label="Ubah">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(g)} aria-label={t("groupRules.edit")}>
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(g.id)} aria-label="Hapus">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(g.id)} aria-label={t("common.delete")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
@@ -231,73 +234,70 @@ export default function GroupRules({ embedded = false }: { embedded?: boolean })
       )}
 
       {showModal && (
-        <Modal title={editing ? "Ubah Aturan Grup" : "Tambah Aturan Grup"} onClose={() => setShowModal(false)}>
+        <Modal title={editing ? t("groupRules.editTitle") : t("groupRules.addTitle")} onClose={() => setShowModal(false)}>
           <div className="space-y-4">
             <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Aturan berlaku untuk perangkat{" "}
-              <span className="font-medium text-foreground">
-                {activeDevice?.name || (editing ? `#${editing.deviceId}` : "")}
-              </span>
+              {t("groupRules.ruleForDevice").replace("{device}", activeDevice?.name || (editing ? `#${editing.deviceId}` : ""))}
             </p>
             {syncedGroups.length > 0 && (
               <div>
-                <label className="text-sm font-medium">Pilih grup</label>
+                <label className="text-sm font-medium">{t("groupRules.pickGroup")}</label>
                 <Dropdown
                   value={pickedGroup}
                   onChange={(v) => {
                     setPickedGroup(v);
                     if (v) setGroupJid(v);
                   }}
-                  ariaLabel="Pilih grup WhatsApp"
+                  ariaLabel={t("groupRules.pickGroupAria")}
                   className="mt-1.5"
                   options={[
-                    { value: "", label: "— Pilih dari grup tersinkron —" },
+                    { value: "", label: t("groupRules.pickGroupPlaceholder") },
                     ...syncedGroups.map((x) => ({ value: x.waJid, label: x.name })),
                   ]}
                 />
               </div>
             )}
             <div>
-              <label className="text-sm font-medium">JID Grup {syncedGroups.length > 0 && <span className="text-muted-foreground font-normal">(atau isi manual)</span>}</label>
+              <label className="text-sm font-medium">{t("groupRules.labelGroupJid")} {syncedGroups.length > 0 && <span className="text-muted-foreground font-normal">{t("groupRules.orManual")}</span>}</label>
               <Input className="mt-1.5 font-mono" placeholder="120363xxxx@g.us" value={groupJid} onChange={(e) => { setGroupJid(e.target.value); setPickedGroup(""); }} />
               {syncedGroups.length === 0 && (
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Tip: sinkronkan grup WA dulu di halaman Kontak → Grup agar bisa pilih dari daftar.
+                  {t("groupRules.syncTip")}
                 </p>
               )}
             </div>
             <div>
-              <label className="text-sm font-medium">Pesan Welcome <span className="text-muted-foreground font-normal">(opsional)</span></label>
-              <textarea value={welcome} onChange={(e) => setWelcome(e.target.value)} rows={3} placeholder="Selamat datang di grup, kak! 🙏" className={`${inputCls} mt-1.5 resize-y`} />
+              <label className="text-sm font-medium">{t("groupRules.labelWelcome")} <span className="text-muted-foreground font-normal">{t("groupRules.optional")}</span></label>
+              <textarea value={welcome} onChange={(e) => setWelcome(e.target.value)} rows={3} placeholder={t("groupRules.welcomePlaceholder")} className={`${inputCls} mt-1.5 resize-y`} />
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
-                <p className="text-sm font-medium">Anti-Link</p>
-                <p className="text-xs text-muted-foreground">Peringatkan pengirim link otomatis</p>
+                <p className="text-sm font-medium">{t("groupRules.antiLinkHeading")}</p>
+                <p className="text-xs text-muted-foreground">{t("groupRules.antiLinkDesc")}</p>
               </div>
-              <Toggle checked={antiLink} label="Anti-link" onToggle={setAntiLink} />
+              <Toggle checked={antiLink} label={t("groupRules.antiLinkLabel")} onToggle={setAntiLink} />
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
-                <p className="text-sm font-medium">Anti-Spam</p>
-                <p className="text-xs text-muted-foreground">Batasi pesan beruntun dari satu anggota</p>
+                <p className="text-sm font-medium">{t("groupRules.antiSpamHeading")}</p>
+                <p className="text-xs text-muted-foreground">{t("groupRules.antiSpamDesc")}</p>
               </div>
-              <Toggle checked={antiSpam} label="Anti-spam" onToggle={setAntiSpam} />
+              <Toggle checked={antiSpam} label={t("groupRules.antiSpamLabel")} onToggle={setAntiSpam} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowModal(false)}>Batal</Button>
-              <Button onClick={save}>Simpan</Button>
+              <Button variant="outline" onClick={() => setShowModal(false)}>{t("common.cancel")}</Button>
+              <Button onClick={save}>{t("common.save")}</Button>
             </div>
           </div>
         </Modal>
       )}
 
       {deleting != null && (
-        <Modal title="Hapus?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-muted-foreground">Aturan yang dihapus tidak bisa dikembalikan.</p>
+        <Modal title={t("groupRules.deleteTitle")} onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground">{t("groupRules.deleteConfirm")}</p>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Hapus</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>{t("common.cancel")}</Button>
+            <Button variant="destructive" onClick={confirmDelete}>{t("common.delete")}</Button>
           </div>
         </Modal>
       )}

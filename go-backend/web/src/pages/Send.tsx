@@ -6,18 +6,21 @@ import TemplateHub from "./TemplateHub";
 import Polls from "./Polls";
 import { PageTabs } from "@/components/ui/tabs";
 import GraceBanner from "@/components/GraceBanner";
-
-const TABS = [
-  { id: "kirim", label: "Kirim", href: "/send" },
-  { id: "blast", label: "Blast", href: "/bulk" },
-  { id: "polling", label: "Polling", href: "/polls" },
-  { id: "followup", label: "Follow-up", href: "/followups" },
-  { id: "template", label: "Template", href: "/templates" },
-];
+import { useLang } from "@/lib/i18n";
 
 /** Halaman gabungan "Kirim Pesan": Kirim + Blast + Follow-up + Template. */
 export default function Send() {
+  const { t } = useLang();
   const [location, navigate] = useLocation();
+
+  const TABS = [
+    { id: "kirim", label: t("send.tabKirim"), href: "/send" },
+    { id: "blast", label: t("send.tabBlast"), href: "/bulk" },
+    { id: "polling", label: t("send.tabPolling"), href: "/polls" },
+    { id: "followup", label: t("send.tabFollowup"), href: "/followups" },
+    { id: "template", label: t("send.tabTemplate"), href: "/templates" },
+  ];
+
   const active =
     location === "/bulk"
       ? "blast"
@@ -32,9 +35,9 @@ export default function Send() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold">Kirim Pesan</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{t("send.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Kirim pesan satuan, blast, polling, follow-up, atau pakai template
+          {t("send.subtitle")}
         </p>
       </div>
       <PageTabs tabs={TABS} active={active} onSelect={(tab) => navigate(tab.href)} />

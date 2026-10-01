@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface SummaryRow {
   campaignId: string;
@@ -29,15 +30,16 @@ interface DeviceInfo {
   phone: string;
 }
 
-function statusBadge(status: string) {
+function statusBadge(status: string, t: (key: string) => string) {
   const s = (status || "").toLowerCase();
-  if (s === "read") return <Badge variant="success">Dibaca</Badge>;
-  if (s === "sent") return <Badge variant="default">Terkirim</Badge>;
-  if (s === "failed") return <Badge variant="destructive">Gagal</Badge>;
+  if (s === "read") return <Badge variant="success">{t("reports.read")}</Badge>;
+  if (s === "sent") return <Badge variant="default">{t("reports.sent")}</Badge>;
+  if (s === "failed") return <Badge variant="destructive">{t("reports.failed")}</Badge>;
   return <Badge variant="secondary">{status}</Badge>;
 }
 
 export default function Reports({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const [selected, setSelected] = useState("");
   const [details, setDetails] = useState<DetailRow[]>([]);
@@ -58,7 +60,7 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
         setRows(Array.isArray(r) ? r : r.summary ?? []);
         setDevices(d.devices ?? []);
       } catch (e: any) {
-        toast.error(e.message || "Gagal memuat laporan");
+        toast.error(e.message || t("reports.loadFail"));
       } finally {
         setLoading(false);
       }
@@ -73,7 +75,7 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
       const r = await apiGet<{ reports: DetailRow[] } | DetailRow[]>(`/reports/campaigns/${encodeURIComponent(id)}`);
       setDetails(Array.isArray(r) ? r : r.reports ?? []);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat detail campaign");
+      toast.error(e.message || t("reports.detailFail"));
       setDetails([]);
     } finally {
       setLoadingDetail(false);
@@ -86,19 +88,19 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
   );
 
   const cards = [
-    { label: "Terkirim", value: totals.sent, icon: Send, cls: "text-[#243370] dark:text-blue-400" },
-    { label: "Gagal", value: totals.failed, icon: XCircle, cls: "text-red-500" },
-    { label: "Dibaca", value: totals.read, icon: Eye, cls: "text-emerald-500" },
+    { label: t("reports.sent"), value: totals.sent, icon: Send, cls: "text-[#243370] dark:text-blue-400" },
+    { label: t("reports.failed"), value: totals.failed, icon: XCircle, cls: "text-red-500" },
+    { label: t("reports.read"), value: totals.read, icon: Eye, cls: "text-emerald-500" },
   ];
 
   return (
     <div className="space-y-4">
       {!embedded && (
-        <h1 className="text-xl font-bold text-foreground">Laporan Broadcast</h1>
+        <h1 className="text-xl font-bold text-foreground">{t("reports.title")}</h1>
       )}
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("reports.loading")}</CardContent></Card>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -120,38 +122,38 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Megaphone className="w-4 h-4" /> Detail per Campaign
+                <Megaphone className="w-4 h-4" /> {t("reports.detailTitle")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <Dropdown
                 value={selected}
                 onChange={loadDetail}
-                ariaLabel="Pilih campaign"
+                ariaLabel={t("reports.selectCampaignAria")}
                 className="max-w-sm"
                 options={[
-                  { value: "", label: "Pilih campaign..." },
-                  ...rows.map((r) => ({ value: r.campaignId, label: `${r.campaignId} (${r.sent} terkirim, ${r.failed} gagal)` })),
+                  { value: "", label: t("reports.selectCampaign") },
+                  ...rows.map((r) => ({ value: r.campaignId, label: t("reports.campaignOption").replace("{id}", r.campaignId).replace("{sent}", String(r.sent)).replace("{failed}", String(r.failed)) })),
                 ]}
               />
 
               {loadingDetail ? (
-                <p className="text-sm text-muted-foreground">Memuat detail...</p>
+                <p className="text-sm text-muted-foreground">{t("reports.loadingDetail")}</p>
               ) : selected && (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[680px] text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">
-                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nomor</th>
-                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pengirim</th>
-                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</th>
-                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Waktu Kirim</th>
-                        <th className="py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Keterangan</th>
+                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("reports.colPhone")}</th>
+                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("reports.colSender")}</th>
+                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("reports.colStatus")}</th>
+                        <th className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("reports.colSentAt")}</th>
+                        <th className="py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("reports.colNote")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {details.length === 0 && (
-                        <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Tidak ada data.</td></tr>
+                        <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">{t("reports.noData")}</td></tr>
                       )}
                       {details.map((d) => (
                         <tr key={d.id} className="border-b border-border last:border-0">
@@ -166,7 +168,7 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
                               <span className="text-muted-foreground">-</span>
                             )}
                           </td>
-                          <td className="py-3 pr-4">{statusBadge(d.status)}</td>
+                          <td className="py-3 pr-4">{statusBadge(d.status, t)}</td>
                           <td className="py-3 pr-4 text-xs text-muted-foreground">
                             {d.sentAt ? new Date(d.sentAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}
                           </td>

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface ChatLabel {
   id: number;
@@ -28,13 +29,14 @@ const LABEL_COLORS = [
 ];
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -48,6 +50,7 @@ const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function ChatLabels({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [tab, setTab] = useState<"labels" | "assign">("labels");
   const [labels, setLabels] = useState<ChatLabel[]>([]);
   const [assigns, setAssigns] = useState<Assignment[]>([]);
@@ -76,7 +79,7 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
       setLabels(l);
       setAssigns(a);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat data");
+      toast.error(e.message || t("chatLabels.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -92,22 +95,22 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
   };
 
   const saveLabel = async () => {
-    if (!labelName.trim()) { toast.error("Nama label wajib diisi"); return; }
+    if (!labelName.trim()) { toast.error(t("chatLabels.nameRequired")); return; }
     try {
       if (editingLabel) {
         await apiPut(`/chat-labels/${editingLabel.id}`, { name: labelName.trim(), color: labelColor });
-        toast.success("Label diperbarui");
+        toast.success(t("chatLabels.labelUpdated"));
       } else {
         await apiPost("/chat-labels", { name: labelName.trim(), color: labelColor });
-        toast.success("Label ditambahkan");
+        toast.success(t("chatLabels.labelAdded"));
       }
       setShowLabelModal(false);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menyimpan label"); }
+    } catch (e: any) { toast.error(e.message || t("chatLabels.labelSaveFailed")); }
   };
 
   const saveAssign = async () => {
-    if (!assignJid.trim()) { toast.error("Nomor/JID wajib diisi"); return; }
+    if (!assignJid.trim()) { toast.error(t("chatLabels.jidRequired")); return; }
     try {
       await apiPost("/chat-assignments", {
         chatJid: assignJid.trim(),
@@ -115,11 +118,11 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
         assignedTo: assignCs.trim(),
         note: assignNote.trim(),
       });
-      toast.success("Chat di-assign");
+      toast.success(t("chatLabels.assigned"));
       setShowAssignModal(false);
       setAssignJid(""); setAssignLabelId(""); setAssignCs(""); setAssignNote("");
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal assign chat"); }
+    } catch (e: any) { toast.error(e.message || t("chatLabels.assignFailed")); }
   };
 
   const confirmDelete = async () => {
@@ -127,47 +130,47 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
     try {
       if (deleting.kind === "label") await apiDelete(`/chat-labels/${deleting.id}`);
       else await apiDelete(`/chat-assignments/${deleting.id}`);
-      toast.success("Dihapus");
+      toast.success(t("chatLabels.deleted"));
       setDeleting(null);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menghapus"); }
+    } catch (e: any) { toast.error(e.message || t("chatLabels.deleteFailed")); }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {!embedded && (
-          <h1 className="text-xl font-bold text-foreground">Label & Assign Chat</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("chatLabels.title")}</h1>
         )}
         <div className="flex flex-wrap gap-2">
           {tab === "labels" ? (
             <Button size="sm" onClick={() => openLabelModal()} className="gap-1.5">
-              <Plus className="w-4 h-4" /> Tambah Label
+              <Plus className="w-4 h-4" /> {t("chatLabels.addLabel")}
             </Button>
           ) : (
             <Button size="sm" onClick={() => setShowAssignModal(true)} className="gap-1.5">
-              <Plus className="w-4 h-4" /> Assign Chat
+              <Plus className="w-4 h-4" /> {t("chatLabels.assignChat")}
             </Button>
           )}
         </div>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-        {(["labels", "assign"] as const).map((t) => (
+        {(["labels", "assign"] as const).map((k) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={k}
+            onClick={() => setTab(k)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              tab === t ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
+              tab === k ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "labels" ? "Label" : "Assignment"}
+            {k === "labels" ? t("chatLabels.tabLabels") : t("chatLabels.tabAssign")}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("chatLabels.loading")}</CardContent></Card>
       ) : tab === "labels" ? (
         <Card>
           <CardContent className="p-0">
@@ -175,13 +178,13 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
               <table className="w-full min-w-[480px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Label</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("chatLabels.colLabel")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("chatLabels.colActions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {labels.length === 0 && (
-                    <tr><td colSpan={2} className="py-8 text-center text-muted-foreground">Belum ada label. Tambah label untuk mengelompokkan chat.</td></tr>
+                    <tr><td colSpan={2} className="py-8 text-center text-muted-foreground">{t("chatLabels.noLabels")}</td></tr>
                   )}
                   {labels.map((l) => (
                     <tr key={l.id} className="border-b border-border last:border-0">
@@ -194,10 +197,10 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openLabelModal(l)} aria-label="Ubah">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openLabelModal(l)} aria-label={t("chatLabels.edit")}>
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting({ kind: "label", id: l.id })} aria-label="Hapus">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting({ kind: "label", id: l.id })} aria-label={t("common.delete")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
@@ -215,16 +218,16 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nomor / JID</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Label</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">CS</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Catatan</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("chatLabels.colJid")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("chatLabels.colLabel")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("chatLabels.colCs")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("chatLabels.colNotes")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("chatLabels.colActions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {assigns.length === 0 && (
-                    <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Belum ada assignment.</td></tr>
+                    <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">{t("chatLabels.noAssigns")}</td></tr>
                   )}
                   {assigns.map((a) => (
                     <tr key={a.id} className="border-b border-border last:border-0">
@@ -243,7 +246,7 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
                       </td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate">{a.note || "-"}</td>
                       <td className="py-3 px-4 text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting({ kind: "assign", id: a.id })} aria-label="Hapus">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting({ kind: "assign", id: a.id })} aria-label={t("common.delete")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
@@ -257,14 +260,14 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
       )}
 
       {showLabelModal && (
-        <Modal title={editingLabel ? "Ubah Label" : "Tambah Label"} onClose={() => setShowLabelModal(false)}>
+        <Modal title={editingLabel ? t("chatLabels.editLabel") : t("chatLabels.addLabel")} onClose={() => setShowLabelModal(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Nama Label</label>
-              <Input className="mt-1.5" placeholder="cth: Prospek, Komplain, Closing" value={labelName} onChange={(e) => setLabelName(e.target.value)} />
+              <label className="text-sm font-medium">{t("chatLabels.labelName")}</label>
+              <Input className="mt-1.5" placeholder={t("chatLabels.placeholderName")} value={labelName} onChange={(e) => setLabelName(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm font-medium">Warna</label>
+              <label className="text-sm font-medium">{t("chatLabels.labelColor")}</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {LABEL_COLORS.map((c) => (
                   <button
@@ -273,61 +276,61 @@ export default function ChatLabels({ embedded = false }: { embedded?: boolean })
                     onClick={() => setLabelColor(c)}
                     className={`w-9 h-9 rounded-full transition-transform ${labelColor === c ? "ring-2 ring-offset-2 ring-foreground scale-110" : "hover:scale-105"}`}
                     style={{ backgroundColor: c }}
-                    aria-label={`Warna ${c}`}
+                    aria-label={t("chatLabels.colorAria").replace("{color}", c)}
                   />
                 ))}
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowLabelModal(false)}>Batal</Button>
-              <Button onClick={saveLabel}>Simpan</Button>
+              <Button variant="outline" onClick={() => setShowLabelModal(false)}>{t("common.cancel")}</Button>
+              <Button onClick={saveLabel}>{t("common.save")}</Button>
             </div>
           </div>
         </Modal>
       )}
 
       {showAssignModal && (
-        <Modal title="Assign Chat" onClose={() => setShowAssignModal(false)}>
+        <Modal title={t("chatLabels.assignChat")} onClose={() => setShowAssignModal(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Nomor / JID</label>
+              <label className="text-sm font-medium">{t("chatLabels.colJid")}</label>
               <Input className="mt-1.5" placeholder="62812xxxxxxx" value={assignJid} onChange={(e) => setAssignJid(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm font-medium">Label</label>
+              <label className="text-sm font-medium">{t("chatLabels.colLabel")}</label>
               <Dropdown
                 value={assignLabelId}
                 onChange={setAssignLabelId}
-                ariaLabel="Label"
+                ariaLabel={t("chatLabels.colLabel")}
                 className="mt-1.5"
                 options={[
-                  { value: "", label: "Tanpa label" },
+                  { value: "", label: t("chatLabels.noLabel") },
                   ...labels.map((l) => ({ value: String(l.id), label: l.name })),
                 ]}
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Assign ke CS</label>
-              <Input className="mt-1.5" placeholder="Nama CS" value={assignCs} onChange={(e) => setAssignCs(e.target.value)} />
+              <label className="text-sm font-medium">{t("chatLabels.assignToCs")}</label>
+              <Input className="mt-1.5" placeholder={t("chatLabels.placeholderCs")} value={assignCs} onChange={(e) => setAssignCs(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm font-medium">Catatan</label>
-              <textarea value={assignNote} onChange={(e) => setAssignNote(e.target.value)} rows={2} placeholder="Catatan internal..." className={`${inputCls} mt-1.5 resize-none`} />
+              <label className="text-sm font-medium">{t("chatLabels.colNotes")}</label>
+              <textarea value={assignNote} onChange={(e) => setAssignNote(e.target.value)} rows={2} placeholder={t("chatLabels.placeholderNotes")} className={`${inputCls} mt-1.5 resize-none`} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowAssignModal(false)}>Batal</Button>
-              <Button onClick={saveAssign}>Simpan</Button>
+              <Button variant="outline" onClick={() => setShowAssignModal(false)}>{t("common.cancel")}</Button>
+              <Button onClick={saveAssign}>{t("common.save")}</Button>
             </div>
           </div>
         </Modal>
       )}
 
       {deleting && (
-        <Modal title="Hapus?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-muted-foreground">Data yang dihapus tidak bisa dikembalikan.</p>
+        <Modal title={t("chatLabels.deleteTitle")} onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground">{t("chatLabels.deleteConfirm")}</p>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Hapus</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>{t("common.cancel")}</Button>
+            <Button variant="destructive" onClick={confirmDelete}>{t("common.delete")}</Button>
           </div>
         </Modal>
       )}

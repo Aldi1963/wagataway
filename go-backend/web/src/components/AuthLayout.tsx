@@ -1,24 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { Send, Zap, ShieldCheck, MessageCircle } from "lucide-react";
-
-const features = [
-  {
-    icon: Send,
-    title: "Kirim pesan massal",
-    desc: "Blast, jadwal, dan drip campaign WhatsApp otomatis.",
-  },
-  {
-    icon: Zap,
-    title: "API developer-friendly",
-    desc: "REST API + webhook untuk integrasi ke sistem Anda.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Aman & terkontrol",
-    desc: "API key, blacklist, dan batas kuota per perangkat.",
-  },
-];
+import { useLang } from "@/lib/i18n";
 
 export default function AuthLayout({
   children,
@@ -29,6 +12,24 @@ export default function AuthLayout({
   title: string;
   subtitle: string;
 }) {
+  const { t } = useLang();
+  const features = [
+    {
+      icon: Send,
+      title: t("authLayout.feature1Title"),
+      desc: t("authLayout.feature1Desc"),
+    },
+    {
+      icon: Zap,
+      title: t("authLayout.feature2Title"),
+      desc: t("authLayout.feature2Desc"),
+    },
+    {
+      icon: ShieldCheck,
+      title: t("authLayout.feature3Title"),
+      desc: t("authLayout.feature3Desc"),
+    },
+  ];
   return (
     <div className="min-h-screen flex bg-background">
       {/* Panel kiri — branding (desktop) */}
@@ -45,13 +46,12 @@ export default function AuthLayout({
         <div className="space-y-8">
           <div>
             <h2 className="text-3xl xl:text-4xl font-bold leading-tight tracking-tight">
-              WhatsApp Gateway
+              {t("authLayout.heroTitle1")}
               <br />
-              untuk bisnis Anda
+              {t("authLayout.heroTitle2")}
             </h2>
             <p className="text-white/70 mt-3 text-[15px] leading-relaxed max-w-md">
-              Kelola pengiriman pesan, auto-reply, dan campaign WhatsApp dari
-              satu dashboard.
+              {t("authLayout.heroSubtitle")}
             </p>
           </div>
           <ul className="space-y-5">
@@ -70,7 +70,7 @@ export default function AuthLayout({
         </div>
 
         <p className="text-white/50 text-xs">
-          © 2026 WaGataway — Platform WhatsApp Gateway
+          {t("authLayout.footer")}
         </p>
       </div>
 

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { apiGet, apiPatch, apiPost, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useLang } from "@/lib/i18n";
 
 interface Template {
   id: number;
@@ -139,6 +140,7 @@ function ChatAvatar({
 
 export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
   const { activeDeviceId } = useActiveDevice();
+  const { t } = useLang();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activePhone, setActivePhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -278,7 +280,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       });
       })
       .catch(() => {
-        if (!cancelled) toast.error("Gagal membuka koneksi real-time");
+        if (!cancelled) toast.error(t("liveChat.realtimeError"));
       });
     return () => {
       cancelled = true;
@@ -312,14 +314,14 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      toast.error("Gagal menyalin nomor");
+      toast.error(t("liveChat.copyError"));
     }
   };
 
   const handleSend = async () => {
     if (!input.trim() || !activePhone) return;
     if (activeDeviceId == null) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("liveChat.selectDeviceFirst"));
       return;
     }
     setLoading(true);
@@ -339,7 +341,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       }
       setInput("");
     } catch (err: any) {
-      toast.error(err?.message || "Gagal mengirim pesan");
+      toast.error(err?.message || t("liveChat.sendError"));
     } finally {
       setLoading(false);
     }
@@ -348,7 +350,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const handleAIReply = async () => {
     if (!activePhone) return;
     if (activeDeviceId == null) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("liveChat.selectDeviceFirst"));
       return;
     }
     setLoading(true);
@@ -358,7 +360,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
         phone: activePhone,
       });
     } catch (err: any) {
-      toast.error(err?.message || "Gagal meminta balasan AI");
+      toast.error(err?.message || t("liveChat.aiReplyError"));
     } finally {
       setLoading(false);
     }
@@ -384,7 +386,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
-              placeholder="Cari percakapan..."
+              placeholder={t("liveChat.searchPlaceholder")}
               className="pl-8 h-8 text-xs"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -395,13 +397,9 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {activeDeviceId == null ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">
-              Pilih perangkat aktif di sidebar dulu
-            </div>
+            <div className="p-6 text-center text-xs text-muted-foreground">{t("liveChat.selectDeviceFirst")}</div>
           ) : filteredConvos.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">
-              Belum ada percakapan
-            </div>
+            <div className="p-6 text-center text-xs text-muted-foreground">{t("liveChat.noConversations")}</div>
           ) : (
             filteredConvos.map((convo) => (
               <button
@@ -450,7 +448,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="Kembali"
+                  aria-label={t("liveChat.back")}
                   onClick={() => setActivePhone(null)}
                   className="md:hidden -ml-2 h-8 w-8 shrink-0"
                 >
@@ -479,15 +477,15 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   onClick={() => setAiMode(!aiMode)}
                 >
                   <Bot className="w-3 h-3" />
-                  {aiMode ? "AI Aktif" : "AI Mati"}
+                  {aiMode ? t("liveChat.aiOn") : t("liveChat.aiOff")}
                 </Button>
                 <div className="relative" ref={infoRef}>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    aria-label="Info kontak"
-                    title="Info kontak"
+                    aria-label={t("liveChat.contactInfo")}
+                    title={t("liveChat.contactInfo")}
                     onClick={() => setShowInfo((v) => !v)}
                   >
                     <MoreHorizontal className="w-4 h-4" />
@@ -515,7 +513,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                           onClick={copyPhone}
                         >
                           {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                          {copied ? "Tersalin" : "Salin nomor"}
+                          {copied ? t("liveChat.copied") : t("liveChat.copyNumber")}
                         </Button>
                       </div>
                     </div>
@@ -568,13 +566,13 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
               {showQuickReplies && (
                 <div className="absolute left-3 right-3 bottom-full mb-2 z-20 rounded-lg border border-border bg-card shadow-xl max-h-64 overflow-y-auto">
                   <div className="flex items-center justify-between px-3 py-2 border-b border-border sticky top-0 bg-card">
-                    <p className="text-xs font-semibold text-foreground">Balasan cepat</p>
+                    <p className="text-xs font-semibold text-foreground">{t("liveChat.quickReplies")}</p>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6"
                       onClick={() => setShowQuickReplies(false)}
-                      aria-label="Tutup balasan cepat"
+                      aria-label={t("liveChat.closeQuickReplies")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </Button>
@@ -586,9 +584,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                       ))}
                     </div>
                   ) : templates.length === 0 ? (
-                    <p className="p-4 text-xs text-muted-foreground text-center">
-                      Belum ada template. Buat di menu Templates.
-                    </p>
+                    <p className="p-4 text-xs text-muted-foreground text-center">{t("liveChat.noTemplates")}</p>
                   ) : (
                     <div className="p-1.5">
                       {templates.map((t) => (
@@ -615,7 +611,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   className="flex-1 gap-2"
                 >
                   <Bot className="w-4 h-4" />
-                  {loading ? "Generating..." : "Generate AI Reply"}
+                  {loading ? t("liveChat.generating") : t("liveChat.generateAiReply")}
                 </Button>
               ) : (
                 <>
@@ -624,13 +620,13 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                     size="icon"
                     className="h-9 w-9 shrink-0"
                     onClick={toggleQuickReplies}
-                    aria-label="Balasan cepat"
-                    title="Balasan cepat"
+                    aria-label={t("liveChat.quickReplies")}
+                    title={t("liveChat.quickReplies")}
                   >
                     <Zap className="w-4 h-4" />
                   </Button>
                   <Input
-                    placeholder="Ketik pesan..."
+                    placeholder={t("liveChat.typeMessage")}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
@@ -657,9 +653,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 <Wifi className="w-5 h-5 text-muted-foreground" />
               </div>
               <p className="text-sm font-medium text-foreground">Live Chat</p>
-              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-                Pilih percakapan di sebelah kiri untuk mulai membalas
-              </p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">{t("liveChat.emptyHint")}</p>
             </div>
           </div>
         )}

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { toast } from "sonner";
+import { useLang } from "@/lib/i18n";
 
 export interface ApiKey {
   id: number;
@@ -36,17 +37,16 @@ interface ScopeDef {
   Label: string;
 }
 
-const SCOPE_LABELS: Record<string, string> = {
-  full: "Penuh",
-  "messages:send": "Kirim pesan",
-  "messages:read": "Baca pesan",
-  contacts: "Kontak",
-  "devices:read": "Lihat perangkat",
-  "devices:write": "Kelola perangkat",
-};
-
-function scopeLabel(s: string): string {
-  return SCOPE_LABELS[s] || s;
+function scopeLabel(t: (k: string) => string, s: string): string {
+  const map: Record<string, string> = {
+    full: t("keyManager.scopeFull"),
+    "messages:send": t("keyManager.scopeMessagesSend"),
+    "messages:read": t("keyManager.scopeMessagesRead"),
+    contacts: t("keyManager.scopeContacts"),
+    "devices:read": t("keyManager.scopeDevicesRead"),
+    "devices:write": t("keyManager.scopeDevicesWrite"),
+  };
+  return map[s] || s;
 }
 
 function Modal({
@@ -58,6 +58,7 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -67,7 +68,7 @@ function Modal({
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card rounded-t-xl">
           <h3 className="font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label={t("keyManager.closeModal")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -80,6 +81,7 @@ function Modal({
 /* ── Kelola API Key ──────────────────── */
 
 export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
+  const { t } = useLang();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +103,7 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
     setError(null);
     apiGet<{ apiKeys: ApiKey[] }>("/api-keys")
       .then((d) => setKeys(d.apiKeys || []))
-      .catch((e) => setError(e.message || "Gagal memuat API key"))
+      .catch((e) => setError(e.message || t("keyManager.errLoad")))
       .finally(() => setLoading(false));
     apiGet<{ scopes: ScopeDef[] }>("/api-keys/scopes")
       .then((d) => setScopes(d.scopes || []))
@@ -122,11 +124,11 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
 
   const createKey = async () => {
     if (!name.trim()) {
-      toast.error("Nama API key wajib diisi");
+      toast.error(t("keyManager.errNameRequired"));
       return;
     }
     if (selScopes.length === 0) {
-      toast.error("Pilih minimal satu scope");
+      toast.error(t("keyManager.errScopeRequired"));
       return;
     }
     setSaving(true);
@@ -147,9 +149,9 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
       setSelScopes(["full"]);
       setExpiry("never");
       setShowForm(false);
-      toast.success("API key dibuat");
+      toast.success(t("keyManager.created"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal membuat API key");
+      toast.error(e instanceof Error ? e.message : t("keyManager.errCreate"));
     } finally {
       setSaving(false);
     }
@@ -169,9 +171,9 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
       setNewKeyName(rotating.name);
       setShowNewKey(true);
       setRotating(null);
-      toast.success("Key dirotasi — key lama sudah mati");
+      toast.success(t("keyManager.rotated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal merotasi key");
+      toast.error(e instanceof Error ? e.message : t("keyManager.errRotate"));
     } finally {
       setRotatingBusy(false);
     }
@@ -183,18 +185,18 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
       await apiDelete(`/api-keys/${deleting.id}`);
       setKeys((prev) => prev.filter((k) => k.id !== deleting.id));
       setDeleting(null);
-      toast.success("API key dihapus");
+      toast.success(t("keyManager.deleted"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus API key");
+      toast.error(e instanceof Error ? e.message : t("keyManager.errDelete"));
     }
   };
 
   const copyText = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(label + " disalin");
+      toast.success(t("keyManager.copied").replace("{label}", label));
     } catch {
-      toast.error("Gagal menyalin");
+      toast.error(t("keyManager.errCopy"));
     }
   };
 
@@ -202,25 +204,25 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <KeyRound className="w-4 h-4" /> Kelola API Key
+          <KeyRound className="w-4 h-4" /> {t("keyManager.title")}
         </CardTitle>
         <Button size="sm" onClick={() => setShowForm(true)} className="gap-1">
-          <Plus className="w-4 h-4" /> Buat Key
+          <Plus className="w-4 h-4" /> {t("keyManager.createKey")}
         </Button>
       </CardHeader>
       <CardContent>
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
-            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
+            <RefreshCw className="w-4 h-4 animate-spin" /> {t("keyManager.loading")}
           </div>
         ) : error ? (
           <div className="text-sm text-destructive flex items-center gap-2 py-4">
             <AlertTriangle className="w-4 h-4" /> {error}
-            <Button variant="outline" size="sm" onClick={load}>Coba lagi</Button>
+            <Button variant="outline" size="sm" onClick={load}>{t("keyManager.retry")}</Button>
           </div>
         ) : keys.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
-            Belum ada API key. Buat satu untuk mulai memakai API.
+            {t("keyManager.empty")}
           </p>
         ) : (
           <div className="space-y-2">
@@ -233,27 +235,27 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                   <p className="text-sm font-medium truncate">{k.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">
                     {k.keyPreview}
-                    {k.lastUsed ? ` · terakhir dipakai ${new Date(k.lastUsed).toLocaleDateString("id-ID")}` : " · belum pernah dipakai"}
-                    {k.expiresAt ? ` · kedaluwarsa ${new Date(k.expiresAt).toLocaleDateString("id-ID")}` : ""}
+                    {k.lastUsed ? ` · ${t("keyManager.lastUsed").replace("{date}", new Date(k.lastUsed).toLocaleDateString("id-ID"))}` : ` · ${t("keyManager.neverUsed")}`}
+                    {k.expiresAt ? ` · ${t("keyManager.expiresOn").replace("{date}", new Date(k.expiresAt).toLocaleDateString("id-ID"))}` : ""}
                   </p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {(k.scopes || ["full"]).map((s) => (
                       <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">
-                        {scopeLabel(s)}
+                        {scopeLabel(t, s)}
                       </Badge>
                     ))}
                   </div>
                 </div>
                 <Badge variant={k.isActive ? "default" : "secondary"} className="text-[10px]">
-                  {k.expired ? "Kedaluwarsa" : k.isActive ? "Aktif" : "Nonaktif"}
+                  {k.expired ? t("keyManager.expired") : k.isActive ? t("keyManager.active") : t("keyManager.inactive")}
                 </Badge>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setRotating(k)}
-                  aria-label={`Rotasi ${k.name}`}
-                  title="Rotasi key"
+                  aria-label={t("keyManager.rotateAria").replace("{name}", k.name)}
+                  title={t("keyManager.rotateTitle")}
                 >
                   <RefreshCw className="w-4 h-4" />
                 </Button>
@@ -262,7 +264,7 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                   onClick={() => setDeleting(k)}
-                  aria-label={`Hapus ${k.name}`}
+                  aria-label={t("keyManager.deleteAria").replace("{name}", k.name)}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -272,20 +274,20 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
         )}
 
         {showForm && (
-          <Modal title="Buat API Key Baru" onClose={() => setShowForm(false)}>
+          <Modal title={t("keyManager.createTitle")} onClose={() => setShowForm(false)}>
             <div className="space-y-3">
               <div>
-                <label className="text-xs">Nama key</label>
+                <label className="text-xs">{t("keyManager.nameLabel")}</label>
                 <Input
                   className="mt-1"
-                  placeholder="cth: Integrasi Toko"
+                  placeholder={t("keyManager.namePlaceholder")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && createKey()}
                 />
               </div>
               <div>
-                <label className="text-xs">Scope akses</label>
+                <label className="text-xs">{t("keyManager.scopesLabel")}</label>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                   {scopes.map((s) => {
                     const active = selScopes.includes(s.Value);
@@ -306,30 +308,30 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                   })}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  "Akses penuh" tidak bisa digabung scope lain.
+                  {t("keyManager.scopeHint")}
                 </p>
               </div>
               <div>
-                <label className="text-xs">Masa berlaku</label>
+                <label className="text-xs">{t("keyManager.expiryLabel")}</label>
                 <Dropdown
                   className="mt-1"
                   value={expiry}
                   onChange={setExpiry}
                   options={[
-                    { value: "never", label: "Tanpa batas waktu" },
-                    { value: "30", label: "30 hari" },
-                    { value: "90", label: "90 hari" },
-                    { value: "365", label: "1 tahun" },
+                    { value: "never", label: t("keyManager.expiryNever") },
+                    { value: "30", label: t("keyManager.expiry30") },
+                    { value: "90", label: t("keyManager.expiry90") },
+                    { value: "365", label: t("keyManager.expiry365") },
                   ]}
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Key penuh hanya ditampilkan sekali setelah dibuat. Simpan di tempat aman.
+                {t("keyManager.keyWarning")}
               </p>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowForm(false)}>Batal</Button>
+                <Button variant="outline" onClick={() => setShowForm(false)}>{t("keyManager.cancel")}</Button>
                 <Button onClick={createKey} disabled={saving}>
-                  {saving ? "Membuat..." : "Buat Key"}
+                  {saving ? t("keyManager.creating") : t("keyManager.createKey")}
                 </Button>
               </div>
             </div>
@@ -337,19 +339,19 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
         )}
 
         {newKey && (
-          <Modal title="API Key Baru Dibuat" onClose={() => setNewKey(null)}>
+          <Modal title={t("keyManager.createdTitle")} onClose={() => setNewKey(null)}>
             <div className="space-y-3">
               <p className="text-sm">
-                Key <strong>{newKeyName}</strong> berhasil dibuat. Salin sekarang — key penuh tidak akan ditampilkan lagi.
+                {t("keyManager.createdBody").replace("{name}", newKeyName)}
               </p>
               <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2">
                 <code className="flex-1 font-mono text-xs break-all">
                   {showNewKey ? newKey : "•".repeat(32)}
                 </code>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setShowNewKey((v) => !v)} aria-label="Tampilkan/sembunyikan">
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setShowNewKey((v) => !v)} aria-label={t("keyManager.toggleVisibility")}>
                   {showNewKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copyText(newKey, "API key")} aria-label="Salin key">
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copyText(newKey, "API key")} aria-label={t("keyManager.copyKey")}>
                   <Copy className="w-4 h-4" />
                 </Button>
               </div>
@@ -362,38 +364,37 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                       setNewKey(null);
                     }}
                   >
-                    <FlaskConical className="w-4 h-4 mr-1" /> Pakai untuk mencoba
+                    <FlaskConical className="w-4 h-4 mr-1" /> {t("keyManager.tryIt")}
                   </Button>
                 )}
-                <Button onClick={() => setNewKey(null)}>Selesai</Button>
+                <Button onClick={() => setNewKey(null)}>{t("keyManager.done")}</Button>
               </div>
             </div>
           </Modal>
         )}
 
         {rotating && (
-          <Modal title="Rotasi API Key" onClose={() => setRotating(null)}>
+          <Modal title={t("keyManager.rotateModalTitle")} onClose={() => setRotating(null)}>
             <p className="text-sm mb-4">
-              Buat key baru untuk <strong>{rotating.name}</strong>? Key lama
-              langsung mati dan integrasi yang memakainya harus diganti.
+              {t("keyManager.rotateBody").replace("{name}", rotating.name)}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRotating(null)}>Batal</Button>
+              <Button variant="outline" onClick={() => setRotating(null)}>{t("keyManager.cancel")}</Button>
               <Button onClick={rotateKey} disabled={rotatingBusy}>
-                {rotatingBusy ? "Merotasi..." : "Rotasi Sekarang"}
+                {rotatingBusy ? t("keyManager.rotating") : t("keyManager.rotateNow")}
               </Button>
             </div>
           </Modal>
         )}
 
         {deleting && (
-          <Modal title="Hapus API Key" onClose={() => setDeleting(null)}>
+          <Modal title={t("keyManager.deleteModalTitle")} onClose={() => setDeleting(null)}>
             <p className="text-sm mb-4">
-              Hapus key <strong>{deleting.name}</strong>? Integrasi yang memakai key ini akan berhenti bekerja.
+              {t("keyManager.deleteBody").replace("{name}", deleting.name)}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
-              <Button variant="destructive" onClick={deleteKey}>Hapus</Button>
+              <Button variant="outline" onClick={() => setDeleting(null)}>{t("keyManager.cancel")}</Button>
+              <Button variant="destructive" onClick={deleteKey}>{t("keyManager.delete")}</Button>
             </div>
           </Modal>
         )}

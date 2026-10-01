@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiGet, apiPost } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface Affiliate {
   id: number;
@@ -31,6 +32,7 @@ function fmtRp(n: number) {
 }
 
 export default function Affiliate({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [info, setInfo] = useState<Affiliate | null>(null);
   const [stats, setStats] = useState<AffiliateStats>({ pending: 0, paid: 0, referrals: 0 });
   const [earnings, setEarnings] = useState<Earning[]>([]);
@@ -50,7 +52,7 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
       setStats(i?.stats ?? { pending: 0, paid: 0, referrals: 0 });
       setEarnings(e);
     } catch (err: any) {
-      toast.error(err.message || "Gagal memuat data afiliasi");
+      toast.error(err.message || t("affiliate.loadFail"));
     } finally {
       setLoading(false);
     }
@@ -63,9 +65,9 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
     try {
       const r = await apiPost<{ affiliate: Affiliate }>("/affiliate", {});
       setInfo(r.affiliate);
-      toast.success("Kode referral dibuat");
+      toast.success(t("affiliate.codeCreated"));
     } catch (e: any) {
-      toast.error(e.message || "Gagal membuat kode referral");
+      toast.error(e.message || t("affiliate.codeCreateFail"));
     } finally {
       setCreating(false);
     }
@@ -76,28 +78,28 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
   const copy = (text: string, label: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text)
-      .then(() => toast.success(`${label} disalin`))
-      .catch(() => toast.error("Gagal menyalin"));
+      .then(() => toast.success(t("affiliate.copied").replace("{label}", label)))
+      .catch(() => toast.error(t("affiliate.copyFail")));
   };
 
   return (
     <div className="space-y-4">
       {!embedded && (
         <div>
-          <h1 className="text-xl font-bold text-foreground">Afiliasi</h1>
-          <p className="text-sm text-muted-foreground">Ajak orang berlangganan dan dapatkan komisi.</p>
+          <h1 className="text-xl font-bold text-foreground">{t("affiliate.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("affiliate.subtitle")}</p>
         </div>
       )}
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("affiliate.loading")}</CardContent></Card>
       ) : !info ? (
         <Card>
           <CardContent className="p-8 text-center space-y-4">
             <Gift className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
-            <p className="text-sm text-muted-foreground">Kamu belum punya kode referral. Buat sekarang untuk mulai dapat komisi.</p>
+            <p className="text-sm text-muted-foreground">{t("affiliate.noCode")}</p>
             <Button onClick={create} disabled={creating} className="gap-1.5">
-              <Plus className="w-4 h-4" /> {creating ? "Membuat..." : "Buat Kode Referral"}
+              <Plus className="w-4 h-4" /> {creating ? t("affiliate.creating") : t("affiliate.createCode")}
             </Button>
           </CardContent>
         </Card>
@@ -107,7 +109,7 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
             <Card className="min-w-0">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Gift className="w-4 h-4" /> Kode Referral Kamu
+                  <Gift className="w-4 h-4" /> {t("affiliate.yourCode")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -115,22 +117,22 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
                   <code className="flex-1 min-w-0 rounded-lg bg-muted px-4 py-3 font-mono text-lg font-bold text-center tracking-widest truncate">
                     {info.code}
                   </code>
-                  <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => copy(info.code, "Kode referral")} aria-label="Salin kode">
+                  <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => copy(info.code, t("affiliate.codeLabel"))} aria-label={t("affiliate.copyCodeAria")}>
                     <Copy className="w-4 h-4" />
                   </Button>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Link referral</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("affiliate.referralLink")}</label>
                   <div className="mt-1 flex items-center gap-2">
                     <code className="flex-1 min-w-0 truncate rounded-md border border-border bg-background px-3 py-2 font-mono text-xs">
                       {referralLink}
                     </code>
-                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => copy(referralLink, "Link referral")}>
-                      <Copy className="w-3.5 h-3.5" /> Salin
+                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => copy(referralLink, t("affiliate.referralLink"))}>
+                      <Copy className="w-3.5 h-3.5" /> {t("affiliate.copy")}
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Komisi {Math.round(info.commissionRate * 100)}% dari setiap langganan yang mendaftar lewat link kamu.</p>
+                <p className="text-xs text-muted-foreground">{t("affiliate.commissionNote").replace("{rate}", String(Math.round(info.commissionRate * 100)))}</p>
               </CardContent>
             </Card>
 
@@ -141,7 +143,7 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
                     <Wallet className="w-5 h-5 text-white" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-[11px] uppercase tracking-wide text-muted-foreground truncate">Total Komisi</p>
+                    <p className="text-[10px] sm:text-[11px] uppercase tracking-wide text-muted-foreground truncate">{t("affiliate.totalCommission")}</p>
                     <p className="text-lg sm:text-xl font-bold text-foreground truncate">{fmtRp(stats.pending + stats.paid)}</p>
                   </div>
                 </CardContent>
@@ -152,7 +154,7 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
                     <Users className="w-5 h-5 text-white" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-[11px] uppercase tracking-wide text-muted-foreground truncate">Referral</p>
+                    <p className="text-[10px] sm:text-[11px] uppercase tracking-wide text-muted-foreground truncate">{t("affiliate.referrals")}</p>
                     <p className="text-lg sm:text-xl font-bold text-foreground truncate">{stats.referrals}</p>
                   </div>
                 </CardContent>
@@ -162,22 +164,22 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Riwayat Komisi</CardTitle>
+              <CardTitle className="text-base">{t("affiliate.earningsHistory")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b border-border text-left">
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tanggal</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">User ID</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Jumlah</th>
-                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Status</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.colDate")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.colUserId")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.colAmount")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("affiliate.colStatus")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {earnings.length === 0 && (
-                      <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">Belum ada komisi.</td></tr>
+                      <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">{t("affiliate.noEarnings")}</td></tr>
                     )}
                     {earnings.map((e) => (
                       <tr key={e.id} className="border-b border-border last:border-0">
@@ -187,8 +189,8 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
                         <td className="py-3 px-4 font-mono text-[13px]">#{e.referredUserId}</td>
                         <td className="py-3 px-4 font-semibold text-emerald-600 dark:text-emerald-400">{fmtRp(e.amount)}</td>
                         <td className="py-3 px-4 text-right">
-                          {e.status === "paid" ? <Badge variant="success">Dibayar</Badge>
-                            : e.status === "pending" ? <Badge variant="secondary">Pending</Badge>
+                          {e.status === "paid" ? <Badge variant="success">{t("affiliate.paid")}</Badge>
+                            : e.status === "pending" ? <Badge variant="secondary">{t("affiliate.pending")}</Badge>
                             : <Badge variant="outline">{e.status}</Badge>}
                         </td>
                       </tr>

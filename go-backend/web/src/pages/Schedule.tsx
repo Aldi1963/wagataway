@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useLang } from "@/lib/i18n";
 
 interface ScheduleItem {
   id: number;
@@ -25,13 +26,6 @@ const statusStyle: Record<string, string> = {
   cancelled: "text-muted-foreground",
 };
 
-const statusLabel: Record<string, string> = {
-  pending: "Menunggu",
-  sent: "Terkirim",
-  failed: "Gagal",
-  cancelled: "Dibatalkan",
-};
-
 function Modal({
   title,
   onClose,
@@ -41,6 +35,7 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -50,7 +45,7 @@ function Modal({
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card rounded-t-xl">
           <h3 className="font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label={t("schedule.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -71,12 +66,6 @@ function dateKey(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-const MONTH_NAMES = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-];
-
 function CalendarView({
   schedules,
   month,
@@ -94,6 +83,31 @@ function CalendarView({
   onCancel: (item: ScheduleItem) => void;
   onDelete: (item: ScheduleItem) => void;
 }) {
+  const { t } = useLang();
+  const dayNames = [
+    t("schedule.daySun"),
+    t("schedule.dayMon"),
+    t("schedule.dayTue"),
+    t("schedule.dayWed"),
+    t("schedule.dayThu"),
+    t("schedule.dayFri"),
+    t("schedule.daySat"),
+  ];
+  const monthNames = [
+    t("schedule.monthJan"),
+    t("schedule.monthFeb"),
+    t("schedule.monthMar"),
+    t("schedule.monthApr"),
+    t("schedule.monthMay"),
+    t("schedule.monthJun"),
+    t("schedule.monthJul"),
+    t("schedule.monthAug"),
+    t("schedule.monthSep"),
+    t("schedule.monthOct"),
+    t("schedule.monthNov"),
+    t("schedule.monthDec"),
+  ];
+
   const year = month.getFullYear();
   const mon = month.getMonth();
   const firstDay = new Date(year, mon, 1).getDay();
@@ -124,18 +138,18 @@ function CalendarView({
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth} aria-label="Bulan sebelumnya">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth} aria-label={t("schedule.prevMonth")}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <p className="text-sm font-semibold text-foreground">
-              {MONTH_NAMES[mon]} {year}
+              {monthNames[mon]} {year}
             </p>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={nextMonth} aria-label="Bulan berikutnya">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={nextMonth} aria-label={t("schedule.nextMonth")}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
           <div className="grid grid-cols-7 gap-1">
-            {DAY_NAMES.map((d) => (
+            {dayNames.map((d) => (
               <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">
                 {d}
               </div>
@@ -174,7 +188,8 @@ function CalendarView({
       {selectedDate && (
         <div className="space-y-3">
           <p className="text-sm font-medium text-foreground">
-            Jadwal {new Date(selectedDate + "T00:00:00").toLocaleDateString("id-ID", {
+            {t("schedule.dayHeading")}{" "}
+            {new Date(selectedDate + "T00:00:00").toLocaleDateString("id-ID", {
               weekday: "long",
               day: "numeric",
               month: "long",
@@ -183,7 +198,7 @@ function CalendarView({
             <span className="text-muted-foreground font-normal">({dayItems.length})</span>
           </p>
           {dayItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Tidak ada jadwal pada tanggal ini.</p>
+            <p className="text-sm text-muted-foreground">{t("schedule.noScheduleOnDate")}</p>
           ) : (
             dayItems.map((item) => (
               <ScheduleRow key={item.id} item={item} onCancel={onCancel} onDelete={onDelete} />
@@ -204,6 +219,13 @@ function ScheduleRow({
   onCancel: (item: ScheduleItem) => void;
   onDelete: (item: ScheduleItem) => void;
 }) {
+  const { t } = useLang();
+  const statusText: Record<string, string> = {
+    pending: t("schedule.statusPending"),
+    sent: t("schedule.statusSent"),
+    failed: t("schedule.statusFailed"),
+    cancelled: t("schedule.statusCancelled"),
+  };
   return (
     <Card>
       <CardContent className="p-4">
@@ -227,7 +249,7 @@ function ScheduleRow({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Badge variant="outline" className={`text-[10px] ${statusStyle[item.status] || ""}`}>
-              {statusLabel[item.status] || item.status}
+              {statusText[item.status] || item.status}
             </Badge>
             {item.status === "pending" && (
               <>
@@ -236,8 +258,8 @@ function ScheduleRow({
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => onCancel(item)}
-                  aria-label="Batalkan"
-                  title="Batalkan jadwal"
+                  aria-label={t("schedule.cancelAria")}
+                  title={t("schedule.cancelScheduleTitle")}
                 >
                   <Ban className="w-3.5 h-3.5" />
                 </Button>
@@ -246,7 +268,7 @@ function ScheduleRow({
                   size="icon"
                   className="h-7 w-7 text-destructive"
                   onClick={() => onDelete(item)}
-                  aria-label="Hapus"
+                  aria-label={t("schedule.deleteAria")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </Button>
@@ -260,6 +282,7 @@ function ScheduleRow({
 }
 
 export default function Schedule({ embedded = false, forcedView }: { embedded?: boolean; forcedView?: "list" | "calendar" }) {
+  const { t } = useLang();
   const { activeDeviceId, activeDevice } = useActiveDevice();
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -287,7 +310,7 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       .then((s) => {
         setSchedules(s.schedules || []);
       })
-      .catch((e) => setError(e.message || "Gagal memuat data"))
+      .catch((e) => setError(e.message || t("schedule.loadFail")))
       .finally(() => setLoading(false));
   };
 
@@ -295,7 +318,7 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
 
   const openAdd = () => {
     if (activeDeviceId == null) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("schedule.selectDeviceFirst"));
       return;
     }
     setTo("");
@@ -306,16 +329,16 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
 
   const save = async () => {
     if (activeDeviceId == null) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("schedule.selectDeviceFirst"));
       return;
     }
     if (!to.trim() || !content.trim() || !sendAt) {
-      toast.error("Nomor tujuan, isi pesan, dan waktu kirim wajib diisi");
+      toast.error(t("schedule.fieldsRequired"));
       return;
     }
     const iso = new Date(sendAt).toISOString();
     if (new Date(iso).getTime() <= Date.now()) {
-      toast.error("Waktu kirim harus di masa depan");
+      toast.error(t("schedule.futureTime"));
       return;
     }
     setSaving(true);
@@ -328,9 +351,9 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       });
       setSchedules((prev) => [res.schedule, ...prev].sort((a, b) => +new Date(a.sendAt) - +new Date(b.sendAt)));
       setShowForm(false);
-      toast.success("Pesan dijadwalkan");
+      toast.success(t("schedule.scheduled"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menjadwalkan");
+      toast.error(e instanceof Error ? e.message : t("schedule.scheduleFail"));
     } finally {
       setSaving(false);
     }
@@ -339,11 +362,11 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
   const cancel = async (item: ScheduleItem) => {
     try {
       const res = await apiFetch(`/schedule/${item.id}/cancel`, { method: "PATCH" });
-      if (!res.ok) throw new Error((await res.json()).message || "Gagal membatalkan");
+      if (!res.ok) throw new Error((await res.json()).message || t("schedule.cancelFail"));
       setSchedules((prev) => prev.map((s) => (s.id === item.id ? { ...s, status: "cancelled" } : s)));
-      toast.success("Jadwal dibatalkan");
+      toast.success(t("schedule.cancelledToast"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal membatalkan");
+      toast.error(e instanceof Error ? e.message : t("schedule.cancelFail"));
     }
   };
 
@@ -352,9 +375,9 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
     try {
       await apiDelete(`/schedule/${deleting.id}`);
       setSchedules((prev) => prev.filter((s) => s.id !== deleting.id));
-      toast.success("Jadwal dihapus");
+      toast.success(t("schedule.deletedToast"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus");
+      toast.error(e instanceof Error ? e.message : t("schedule.deleteFail"));
     } finally {
       setDeleting(null);
     }
@@ -365,8 +388,8 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
         {!embedded && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Jadwal Pesan</h2>
-            <p className="text-sm text-muted-foreground">Kirim pesan di waktu tertentu</p>
+            <h2 className="text-lg font-semibold text-foreground">{t("schedule.title")}</h2>
+            <p className="text-sm text-muted-foreground">{t("schedule.subtitle")}</p>
           </div>
         )}
         <div className="flex items-center gap-2">
@@ -378,7 +401,7 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
               className="h-7 gap-1 text-xs"
               onClick={() => setView("list")}
             >
-              <List className="w-3.5 h-3.5" /> Daftar
+              <List className="w-3.5 h-3.5" /> {t("schedule.viewList")}
             </Button>
             <Button
               variant={view === "calendar" ? "secondary" : "ghost"}
@@ -386,13 +409,13 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
               className="h-7 gap-1 text-xs"
               onClick={() => setView("calendar")}
             >
-              <CalendarDays className="w-3.5 h-3.5" /> Kalender
+              <CalendarDays className="w-3.5 h-3.5" /> {t("schedule.viewCalendar")}
             </Button>
           </div>
           )}
           <Button size="sm" className="gap-1.5" onClick={openAdd}>
             <Plus className="w-3.5 h-3.5" />
-            Jadwalkan Baru
+            {t("schedule.addNew")}
           </Button>
         </div>
       </div>
@@ -407,7 +430,7 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
         <div className="rounded-lg border border-border p-8 text-center space-y-3">
           <p className="text-sm text-destructive">{error}</p>
           <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-            <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+            <RefreshCw className="w-3.5 h-3.5" /> {t("schedule.retry")}
           </Button>
         </div>
       ) : view === "calendar" ? (
@@ -423,8 +446,8 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       ) : schedules.length === 0 ? (
         <div className="rounded-lg border border-border p-8 text-center">
           <Clock className="w-8 h-8 mx-auto text-muted-foreground" />
-          <p className="text-sm font-medium mt-2">Belum ada jadwal</p>
-          <p className="text-xs text-muted-foreground mt-1">Jadwalkan pesan untuk dikirim nanti</p>
+          <p className="text-sm font-medium mt-2">{t("schedule.emptyTitle")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("schedule.emptyHint")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -435,16 +458,16 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       )}
 
       {showForm && (
-        <Modal title="Jadwalkan Pesan Baru" onClose={() => setShowForm(false)}>
+        <Modal title={t("schedule.formTitle")} onClose={() => setShowForm(false)}>
           <div className="space-y-4">
             <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Dijadwalkan via perangkat{" "}
+              {t("schedule.scheduledVia")}{" "}
               <span className="font-medium text-foreground">
                 {activeDevice?.name || `#${activeDeviceId}`}
               </span>
             </p>
             <div>
-              <label className="text-xs font-medium">Nomor tujuan</label>
+              <label className="text-xs font-medium">{t("schedule.toLabel")}</label>
               <Input
                 className="mt-1 font-mono"
                 placeholder="628123456789"
@@ -453,16 +476,16 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
               />
             </div>
             <div>
-              <label className="text-xs font-medium">Isi pesan</label>
+              <label className="text-xs font-medium">{t("schedule.contentLabel")}</label>
               <textarea
                 className="mt-1 flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[100px]"
-                placeholder="Tulis pesan..."
+                placeholder={t("schedule.messagePlaceholder")}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
               />
             </div>
             <div>
-              <label className="text-xs font-medium">Waktu kirim</label>
+              <label className="text-xs font-medium">{t("schedule.sendAtLabel")}</label>
               <Input
                 className="mt-1"
                 type="datetime-local"
@@ -473,10 +496,10 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
-                Batal
+                {t("schedule.cancel")}
               </Button>
               <Button onClick={save} disabled={saving}>
-                {saving ? "Menyimpan..." : "Jadwalkan"}
+                {saving ? t("schedule.saving") : t("schedule.scheduleBtn")}
               </Button>
             </div>
           </div>
@@ -484,16 +507,16 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
       )}
 
       {deleting && (
-        <Modal title="Hapus Jadwal" onClose={() => setDeleting(null)}>
+        <Modal title={t("schedule.deleteTitle")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground">
-            Hapus jadwal pesan ke <span className="font-mono font-semibold text-foreground">{deleting.to}</span>?
+            {t("schedule.deleteConfirm").replace("{to}", deleting.to)}
           </p>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              Batal
+              {t("schedule.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Hapus
+              {t("schedule.deleteAria")}
             </Button>
           </div>
         </Modal>

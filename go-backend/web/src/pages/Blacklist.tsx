@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface BlacklistEntry {
   id: number;
@@ -34,6 +35,7 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -46,7 +48,7 @@ function Modal({
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-secondary"
-            aria-label="Tutup"
+            aria-label={t("common.close")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -58,6 +60,7 @@ function Modal({
 }
 
 export default function Blacklist({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [items, setItems] = useState<BlacklistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +78,7 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
       const res = await apiGet<{ blacklist: BlacklistEntry[] }>("/blacklist");
       setItems(res.blacklist || []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal memuat blacklist");
+      setError(e instanceof Error ? e.message : t("blacklist.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -93,17 +96,17 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
 
   const saveEntry = async () => {
     if (!phone.trim()) {
-      toast.error("Nomor wajib diisi");
+      toast.error(t("blacklist.phoneRequired"));
       return;
     }
     setSaving(true);
     try {
       await apiPost("/blacklist", { phone: phone.trim(), reason: reason.trim() });
-      toast.success("Nomor ditambahkan ke blacklist");
+      toast.success(t("blacklist.added"));
       setShowForm(false);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menambah blacklist");
+      toast.error(e instanceof Error ? e.message : t("blacklist.addFailed"));
     } finally {
       setSaving(false);
     }
@@ -113,11 +116,11 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
     if (!deleting) return;
     try {
       await apiDelete(`/blacklist/${deleting.id}`);
-      toast.success("Nomor dihapus dari blacklist");
+      toast.success(t("blacklist.deleted"));
       setDeleting(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus");
+      toast.error(e instanceof Error ? e.message : t("blacklist.deleteFailed"));
     }
   };
 
@@ -126,15 +129,15 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
       <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
         {!embedded && (
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">Blacklist</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">{t("title.blacklist")}</h1>
             <p className="text-sm text-muted-foreground">
-              Nomor di daftar ini tidak akan menerima pesan broadcast
+              {t("blacklist.description")}
             </p>
           </div>
         )}
         <Button onClick={openAdd} className="gap-1.5 self-start sm:self-auto">
           <Plus className="w-4 h-4" />
-          Tambah Nomor
+          {t("blacklist.addNumber")}
         </Button>
       </div>
 
@@ -153,7 +156,7 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
             <Button variant="outline" onClick={load} className="gap-1.5">
               <RefreshCw className="w-4 h-4" />
-              Coba lagi
+              {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -161,9 +164,9 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
         <Card>
           <CardContent className="p-10 text-center">
             <ShieldAlert className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium mb-1">Blacklist kosong</p>
+            <p className="font-medium mb-1">{t("blacklist.empty")}</p>
             <p className="text-sm text-muted-foreground">
-              Tambahkan nomor yang tidak boleh menerima pesan
+              {t("blacklist.emptyHint")}
             </p>
           </CardContent>
         </Card>
@@ -182,7 +185,7 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{item.phone}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {item.reason || "Tanpa alasan"} · {formatDate(item.createdAt)}
+                      {item.reason || t("blacklist.noReason")} · {formatDate(item.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -191,7 +194,7 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
                   size="icon"
                   className="h-8 w-8 shrink-0"
                   onClick={() => setDeleting(item)}
-                  aria-label={`Hapus ${item.phone}`}
+                  aria-label={t("blacklist.deleteNumber").replace("{phone}", item.phone)}
                 >
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </Button>
@@ -203,10 +206,10 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
 
       {/* Add dialog */}
       {showForm && (
-        <Modal title="Tambah ke Blacklist" onClose={() => setShowForm(false)}>
+        <Modal title={t("blacklist.addTitle")} onClose={() => setShowForm(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Nomor WhatsApp *</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("blacklist.labelPhone")}</label>
               <Input
                 placeholder="62812xxxxxxx"
                 value={phone}
@@ -214,19 +217,19 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Alasan</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("blacklist.labelReason")}</label>
               <Input
-                placeholder="Contoh: spam, berhenti berlangganan"
+                placeholder={t("blacklist.placeholderReason")}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setShowForm(false)}>
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button onClick={saveEntry} disabled={saving}>
-                {saving ? "Menyimpan..." : "Tambah"}
+                {saving ? t("blacklist.saving") : t("blacklist.add")}
               </Button>
             </div>
           </div>
@@ -235,17 +238,16 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
 
       {/* Delete confirm */}
       {deleting && (
-        <Modal title="Hapus dari Blacklist" onClose={() => setDeleting(null)}>
+        <Modal title={t("blacklist.deleteTitle")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground mb-5">
-            Hapus nomor <span className="font-medium text-foreground">{deleting.phone}</span>{" "}
-            dari blacklist? Nomor ini bisa menerima pesan lagi.
+            {t("blacklist.deleteConfirm").replace("{phone}", deleting.phone)}
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Hapus
+              {t("common.delete")}
             </Button>
           </div>
         </Modal>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface Template {
   id: number;
@@ -22,6 +23,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -37,7 +39,7 @@ function Modal({
             size="icon"
             className="h-8 w-8"
             onClick={onClose}
-            aria-label="Tutup"
+            aria-label={t("templates.close")}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -94,6 +96,7 @@ function renderPreview(
 }
 
 export default function Templates({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +135,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
     setError(null);
     apiGet<{ templates: Template[] }>("/templates")
       .then((res) => setTemplates(res.templates || []))
-      .catch((e) => setError(e.message || "Gagal memuat template"))
+      .catch((e) => setError(e.message || t("templates.loadError")))
       .finally(() => setLoading(false));
   };
 
@@ -140,7 +143,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
 
   const handleAdd = async () => {
     if (!addName.trim() || !addContent.trim()) {
-      toast.error("Nama dan isi template wajib diisi");
+      toast.error(t("templates.validationError"));
       return;
     }
     setSavingAdd(true);
@@ -150,14 +153,14 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
         category: addCategory.trim(),
         content: addContent.trim(),
       });
-      toast.success("Template ditambahkan");
+      toast.success(t("templates.templateAdded"));
       setShowAdd(false);
       setAddName("");
       setAddCategory("");
       setAddContent("");
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menambah template");
+      toast.error(e instanceof Error ? e.message : t("templates.addError"));
     } finally {
       setSavingAdd(false);
     }
@@ -173,7 +176,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
   const handleEdit = async () => {
     if (!editing) return;
     if (!editName.trim() || !editContent.trim()) {
-      toast.error("Nama dan isi template wajib diisi");
+      toast.error(t("templates.validationError"));
       return;
     }
     setSavingEdit(true);
@@ -183,11 +186,11 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
         category: editCategory.trim(),
         content: editContent.trim(),
       });
-      toast.success("Template diperbarui");
+      toast.success(t("templates.templateUpdated"));
       setEditing(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memperbarui template");
+      toast.error(e instanceof Error ? e.message : t("templates.updateError"));
     } finally {
       setSavingEdit(false);
     }
@@ -198,11 +201,11 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
     setDeletingBusy(true);
     try {
       await apiDelete(`/templates/${deleting.id}`);
-      toast.success("Template dihapus");
+      toast.success(t("templates.templateDeleted"));
       setDeleting(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus template");
+      toast.error(e instanceof Error ? e.message : t("templates.deleteError"));
     } finally {
       setDeletingBusy(false);
     }
@@ -211,9 +214,9 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
-      toast.success("Template disalin ke clipboard");
+      toast.success(t("templates.copied"));
     } catch {
-      toast.error("Gagal menyalin");
+      toast.error(t("templates.copyError"));
     }
   };
 
@@ -221,15 +224,15 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
     <div className="space-y-6"> <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {!embedded && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Template Pesan</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("templates.title")}</h2>
             <p className="text-sm text-muted-foreground">
-              Template reusable dengan variabel
+              {t("templates.subtitle")}
             </p>
           </div>
         )}
         <Button size="sm" className="gap-1.5" onClick={() => setShowAdd(true)}>
           <Plus className="w-3.5 h-3.5" />
-          Tambah Template
+          {t("templates.addTemplate")}
         </Button>
       </div>
 
@@ -253,7 +256,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
           <CardContent className="p-6 text-center space-y-3">
             <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+              <RefreshCw className="w-3.5 h-3.5" /> {t("templates.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -264,14 +267,13 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
           <CardContent className="p-10 text-center space-y-3">
             <FileText className="w-8 h-8 mx-auto text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">
-              Belum ada template
+              {t("templates.empty")}
             </p>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Buat template pesan yang bisa dipakai ulang dengan variabel seperti
-              {" {{nama}}"}.
+              {t("templates.emptyHint").replace("{var}", "{{nama}}")}.
             </p>
             <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Buat Template
+              <Plus className="w-3.5 h-3.5" /> {t("templates.createTemplate")}
             </Button>
           </CardContent>
         </Card>
@@ -305,14 +307,14 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                     className="h-7 text-[10px] gap-1"
                     onClick={() => handleCopy(tpl.content)}
                   >
-                    <Copy className="w-3 h-3" /> Salin
+                    <Copy className="w-3 h-3" /> {t("templates.copy")}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => openPreview(tpl)}
-                    aria-label="Preview template"
+                    aria-label={t("templates.previewAria")}
                   >
                     <Eye className="w-3.5 h-3.5" />
                   </Button>
@@ -321,7 +323,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => openEdit(tpl)}
-                    aria-label="Edit template"
+                    aria-label={t("templates.editAria")}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
@@ -330,7 +332,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                     size="icon"
                     className="h-7 w-7 text-destructive"
                     onClick={() => setDeleting(tpl)}
-                    aria-label="Hapus template"
+                    aria-label={t("templates.deleteAria")}
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
@@ -342,10 +344,10 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
       )}
 
       {showAdd && (
-        <Modal title="Tambah Template" onClose={() => setShowAdd(false)}>
+        <Modal title={t("templates.addTemplate")} onClose={() => setShowAdd(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-medium text-foreground">Nama</label>
+              <label className="text-xs font-medium text-foreground">{t("templates.nameLabel")}</label>
               <Input
                 className="mt-1"
                 placeholder="cth: Sapaan Pagi"
@@ -354,9 +356,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground">
-                Kategori (opsional)
-              </label>
+              <label className="text-xs font-medium text-foreground">{t("templates.categoryLabel")}</label>
               <Input
                 className="mt-1"
                 placeholder="cth: umum, order, sales"
@@ -365,7 +365,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground">Isi</label>
+              <label className="text-xs font-medium text-foreground">{t("templates.contentLabel")}</label>
               <textarea
                 className={`${inputCls} mt-1 min-h-[120px]`}
                 placeholder={"Halo {{nama}}, terima kasih..."}
@@ -379,10 +379,10 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                 size="sm"
                 onClick={() => setShowAdd(false)}
               >
-                Batal
+                {t("templates.cancel")}
               </Button>
               <Button size="sm" onClick={handleAdd} disabled={savingAdd}>
-                {savingAdd ? "Menyimpan..." : "Simpan"}
+                {savingAdd ? t("templates.saving") : t("templates.save")}
               </Button>
             </div>
           </div>
@@ -390,10 +390,10 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
       )}
 
       {editing && (
-        <Modal title="Edit Template" onClose={() => setEditing(null)}>
+        <Modal title={t("templates.editTemplate")} onClose={() => setEditing(null)}>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-medium text-foreground">Nama</label>
+              <label className="text-xs font-medium text-foreground">{t("templates.nameLabel")}</label>
               <Input
                 className="mt-1"
                 value={editName}
@@ -401,9 +401,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground">
-                Kategori (opsional)
-              </label>
+              <label className="text-xs font-medium text-foreground">{t("templates.categoryLabel")}</label>
               <Input
                 className="mt-1"
                 value={editCategory}
@@ -411,7 +409,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground">Isi</label>
+              <label className="text-xs font-medium text-foreground">{t("templates.contentLabel")}</label>
               <textarea
                 className={`${inputCls} mt-1 min-h-[120px]`}
                 value={editContent}
@@ -424,10 +422,10 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                 size="sm"
                 onClick={() => setEditing(null)}
               >
-                Batal
+                {t("templates.cancel")}
               </Button>
               <Button size="sm" onClick={handleEdit} disabled={savingEdit}>
-                {savingEdit ? "Menyimpan..." : "Simpan"}
+                {savingEdit ? t("templates.saving") : t("templates.save")}
               </Button>
             </div>
           </div>
@@ -435,7 +433,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
       )}
 
       {previewing && (
-        <Modal title="Preview Template" onClose={() => setPreviewing(null)}>
+        <Modal title={t("templates.previewTitle")} onClose={() => setPreviewing(null)}>
           <div className="space-y-4">
             <div>
               <p className="text-sm font-semibold text-foreground">
@@ -443,7 +441,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               </p>
               {previewing.category && (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Kategori: {previewing.category}
+                  {t("templates.categoryPrefix").replace("{category}", previewing.category)}
                 </p>
               )}
             </div>
@@ -454,7 +452,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                   {previewing.content}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Template ini tidak memakai variabel.
+                  {t("templates.noVariables")}
                 </p>
               </>
             ) : (
@@ -480,7 +478,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
                 </div>
                 <div>
                   <p className="text-xs font-medium text-foreground mb-1.5">
-                    Hasil preview
+                    {t("templates.previewResult")}
                   </p>
                   <div className="rounded-md border border-border bg-secondary/40 p-3 text-sm text-muted-foreground whitespace-pre-wrap break-words">
                     {renderPreview(previewing.content, previewValues)}
@@ -503,9 +501,9 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
       )}
 
       {deleting && (
-        <Modal title="Hapus Template" onClose={() => setDeleting(null)}>
+        <Modal title={t("templates.deleteTitle")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground">
-            Hapus template <b className="text-foreground">{deleting.name}</b>?
+            {t("templates.deleteConfirm").replace("{name}", deleting.name)}
           </p>
           <div className="flex justify-end gap-2 mt-5">
             <Button
@@ -513,7 +511,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               size="sm"
               onClick={() => setDeleting(null)}
             >
-              Batal
+              {t("templates.cancel")}
             </Button>
             <Button
               size="sm"
@@ -521,7 +519,7 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
               onClick={handleDelete}
               disabled={deletingBusy}
             >
-              {deletingBusy ? "Menghapus..." : "Hapus"}
+              {deletingBusy ? t("templates.deleting") : t("templates.delete")}
             </Button>
           </div>
         </Modal>

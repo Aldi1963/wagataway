@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiGet } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 const NAVY = "#243370";
 
@@ -61,6 +62,7 @@ function dayLabel(dateStr: string, short: boolean): string {
 }
 
 export default function Analytics({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [stats, setStats] = useState<DayStat[]>([]);
   const [days, setDays] = useState<7 | 30>(7);
@@ -73,7 +75,7 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
     setError(null);
     apiGet<Overview>("/analytics/overview")
       .then(setOverview)
-      .catch((e) => setError(e instanceof Error ? e.message : "Gagal memuat data"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("analytics.loadFail")))
       .finally(() => setLoading(false));
   };
 
@@ -104,9 +106,9 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
     <div className="space-y-6">
       {!embedded && (
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Analytics</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("analytics.title")}</h2>
           <p className="text-sm text-muted-foreground">
-            Ringkasan pengiriman pesan {days} hari terakhir
+            {t("analytics.subtitle").replace("{days}", String(days))}
           </p>
         </div>
       )}
@@ -116,7 +118,7 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
           <CardContent className="p-5 flex items-center justify-between">
             <p className="text-sm text-destructive">{error}</p>
             <Button variant="outline" size="sm" onClick={loadOverview} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+              <RefreshCw className="w-3.5 h-3.5" /> {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -132,15 +134,14 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
               <Inbox className="w-8 h-8" style={{ color: NAVY }} />
             </div>
             <p className="mt-4 text-base font-semibold text-foreground">
-              Belum ada pesan terkirim
+              {t("analytics.emptyTitle")}
             </p>
             <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-              Mulai kirim pesan WhatsApp pertama kamu, statistik pengiriman
-              akan tampil di sini.
+              {t("analytics.emptyHint")}
             </p>
             <Link to="/send">
               <Button className="mt-5 gap-1.5">
-                <Send className="w-4 h-4" /> Kirim Pesan Pertama
+                <Send className="w-4 h-4" /> {t("analytics.sendFirst")}
               </Button>
             </Link>
           </CardContent>
@@ -150,12 +151,12 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
           {/* Kartu statistik */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <StatCard
-              label="Total Pesan"
+              label={t("analytics.totalMessages")}
               loading={loading}
               value={(overview?.totalMessages ?? 0).toLocaleString("id-ID")}
             />
             <StatCard
-              label="Terkirim"
+              label={t("analytics.sent")}
               loading={loading}
               value={(overview?.sentMessages ?? 0).toLocaleString("id-ID")}
               badge={
@@ -167,22 +168,22 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
               }
             />
             <StatCard
-              label="Gagal"
+              label={t("analytics.failed")}
               loading={loading}
               value={(overview?.failedMessages ?? 0).toLocaleString("id-ID")}
             />
             <StatCard
-              label="Pesan Hari Ini"
+              label={t("analytics.todayMessages")}
               loading={loading}
               value={(overview?.todayMessages ?? 0).toLocaleString("id-ID")}
             />
             <StatCard
-              label="Perangkat Aktif"
+              label={t("analytics.activeDevices")}
               loading={loading}
               value={(overview?.activeDevices ?? 0).toLocaleString("id-ID")}
             />
             <StatCard
-              label="Total Kontak"
+              label={t("analytics.totalContacts")}
               loading={loading}
               value={(overview?.totalContacts ?? 0).toLocaleString("id-ID")}
             />
@@ -193,7 +194,7 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <CardTitle className="text-sm font-semibold">
-                  Pesan per Hari
+                  {t("analytics.chartTitle")}
                 </CardTitle>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
@@ -202,11 +203,11 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
                         className="w-2.5 h-2.5 rounded-sm inline-block"
                         style={{ backgroundColor: NAVY }}
                       />
-                      Terkirim
+                      {t("analytics.sent")}
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-sm inline-block bg-red-500" />
-                      Gagal
+                      {t("analytics.failed")}
                     </span>
                   </div>
                   <div className="inline-flex rounded-lg bg-muted p-1">
@@ -221,7 +222,7 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        {d} Hari
+                        {t("analytics.daysButton").replace("{days}", String(d))}
                       </button>
                     ))}
                   </div>
@@ -241,7 +242,7 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
                 </div>
               ) : stats.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
-                  Belum ada data pengiriman.
+                  {t("analytics.noChartData")}
                 </p>
               ) : (
                 <div className="flex items-end gap-1.5 sm:gap-3 h-44">
@@ -255,7 +256,7 @@ export default function Analytics({ embedded = false }: { embedded?: boolean }) 
                       <div
                         key={s.date}
                         className="flex-1 flex flex-col items-center gap-1.5 min-w-0"
-                        title={`${dayLabel(s.date, false)} — Terkirim: ${s.sent}, Gagal: ${s.failed}`}
+                        title={t("analytics.chartTooltip").replace("{date}", dayLabel(s.date, false)).replace("{sent}", String(s.sent)).replace("{failed}", String(s.failed))}
                       >
                         <div className="w-full flex flex-col justify-end h-32">
                           <div

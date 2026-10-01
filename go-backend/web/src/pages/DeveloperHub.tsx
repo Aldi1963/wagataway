@@ -5,18 +5,19 @@ import WebhookLogs from "./WebhookLogs";
 import BotDeliveryLogs from "./BotDeliveryLogs";
 import Integrations from "./Integrations";
 import { PageTabs } from "@/components/ui/tabs";
-
-const TABS = [
-  { id: "api-docs", label: "API Docs", href: "/developer" },
-  { id: "integrations", label: "Integrasi", href: "/integrations" },
-  { id: "playground", label: "Playground", href: "/api-playground" },
-  { id: "webhook-logs", label: "Webhook Logs", href: "/webhook-logs" },
-  { id: "bot-logs", label: "Riwayat Bot", href: "/bot-logs" },
-];
+import { useLang } from "@/lib/i18n";
 
 /** Halaman gabungan "Developer": dokumentasi API, integration hub, playground, dan log webhook. */
 export default function DeveloperHub() {
   const [location, navigate] = useLocation();
+  const { t } = useLang();
+  const TABS = [
+    { id: "api-docs", label: "API Docs", href: "/developer" },
+    { id: "integrations", label: t("developerHub.tabIntegrations"), href: "/integrations" },
+    { id: "playground", label: "Playground", href: "/api-playground" },
+    { id: "webhook-logs", label: "Webhook Logs", href: "/webhook-logs" },
+    { id: "bot-logs", label: t("developerHub.tabBotHistory"), href: "/bot-logs" },
+  ];
   const active =
     location === "/integrations"
       ? "integrations"
@@ -33,7 +34,7 @@ export default function DeveloperHub() {
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">Developer</h1>
         <p className="text-sm text-muted-foreground">
-          Dokumentasi API, coba endpoint, dan pantau webhook
+          {t("developerHub.subtitle")}
         </p>
       </div>
       <PageTabs tabs={TABS} active={active} onSelect={(tab) => navigate(tab.href)} />

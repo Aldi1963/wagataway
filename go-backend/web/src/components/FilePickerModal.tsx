@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { apiGet } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 export interface PickedFile {
   id: number | string;
@@ -60,6 +61,7 @@ function formatSize(bytes?: number): string {
 }
 
 export default function FilePickerModal({ open, onClose, onSelect }: FilePickerModalProps) {
+  const { t } = useLang();
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,7 +84,7 @@ export default function FilePickerModal({ open, onClose, onSelect }: FilePickerM
           }))
         )
       )
-      .catch((e) => setError(e instanceof Error ? e.message : "Gagal memuat file"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("filePickerModal.errLoad")))
       .finally(() => setLoading(false));
   }, [open ]);
 
@@ -105,11 +107,11 @@ export default function FilePickerModal({ open, onClose, onSelect }: FilePickerM
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Pilih File</h3>
+          <h3 className="text-lg font-semibold">{t("filePickerModal.title")}</h3>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-secondary"
-            aria-label="Tutup"
+            aria-label={t("filePickerModal.close")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -118,7 +120,7 @@ export default function FilePickerModal({ open, onClose, onSelect }: FilePickerM
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Cari file..."
+            placeholder={t("filePickerModal.searchPlaceholder")}
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -151,19 +153,19 @@ export default function FilePickerModal({ open, onClose, onSelect }: FilePickerM
                       )
                     )
                     .catch((e) =>
-                      setError(e instanceof Error ? e.message : "Gagal memuat file")
+                      setError(e instanceof Error ? e.message : t("filePickerModal.errLoad"))
                     )
                     .finally(() => setLoading(false));
                 }}
               >
-                Coba lagi
+                {t("filePickerModal.retry")}
               </button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12">
               <FileIcon className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">
-                {search ? "Tidak ada file yang cocok" : "Belum ada file"}
+                {search ? t("filePickerModal.noMatch") : t("filePickerModal.empty")}
               </p>
             </div>
           ) : (

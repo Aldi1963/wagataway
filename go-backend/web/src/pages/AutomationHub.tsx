@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Info } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 import AutoReply from "./AutoReply";
 import AIReply from "./AIReply";
 import GroupRules from "./GroupRules";
@@ -8,13 +9,6 @@ import MenuBot from "./MenuBot";
 import { PageTabs } from "@/components/ui/tabs";
 import { apiGet } from "@/lib/api";
 import { useActiveDevice } from "@/hooks/use-active-device";
-
-const TABS = [
-  { id: "auto-reply", label: "Auto Reply", href: "/auto-reply" },
-  { id: "menu-bot", label: "Menu Bot", href: "/menu-bot" },
-  { id: "ai-reply", label: "AI Reply", href: "/ai-reply" },
-  { id: "group-rules", label: "Aturan Grup", href: "/group-rules" },
-];
 
 /** Ringkasan jumlah otomatisasi yang aktif untuk perangkat aktif. */
 function useAutomationSummary(tabKey: string) {
@@ -56,7 +50,14 @@ function useAutomationSummary(tabKey: string) {
 
 /** Halaman gabungan "Otomatisasi": Auto Reply + Menu Bot + AI Reply + Aturan Grup. */
 export default function AutomationHub() {
+  const { t } = useLang();
   const [location, navigate] = useLocation();
+  const TABS = [
+    { id: "auto-reply", label: "Auto Reply", href: "/auto-reply" },
+    { id: "menu-bot", label: "Menu Bot", href: "/menu-bot" },
+    { id: "ai-reply", label: "AI Reply", href: "/ai-reply" },
+    { id: "group-rules", label: t("automationHub.groupRulesTab"), href: "/group-rules" },
+  ];
   const active =
     location === "/menu-bot"
       ? "menu-bot"
@@ -72,15 +73,15 @@ export default function AutomationHub() {
     { label: "Auto Reply", value: summary.autoReply },
     { label: "Menu Bot", value: summary.menuBot },
     { label: "AI Reply", value: summary.aiReply },
-    { label: "Aturan Grup", value: summary.groupRules },
+    { label: t("automationHub.groupRulesTab"), value: summary.groupRules },
   ];
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold">Otomatisasi</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{t("automationHub.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Balasan otomatis dan aturan grup
+          {t("automationHub.subtitle")}
         </p>
       </div>
 
@@ -88,7 +89,9 @@ export default function AutomationHub() {
         <div className="rounded-lg border border-border px-4 py-3">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
             <span className="text-muted-foreground">
-              Aktif di <span className="font-medium text-foreground">{activeDevice?.name || `#${activeDeviceId}`}</span>:
+              {t("automationHub.activeOnPrefix")}{" "}
+              <span className="font-medium text-foreground">{activeDevice?.name || `#${activeDeviceId}`}</span>
+              {t("automationHub.activeOnSuffix")}
             </span>
             {stats.map((s) => (
               <span key={s.label} className="inline-flex items-center gap-1.5">
@@ -106,8 +109,7 @@ export default function AutomationHub() {
           <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground">
             <Info className="w-3.5 h-3.5 mt-px shrink-0" />
             <span>
-              Urutan balasan di chat pribadi: Menu Bot (bila menangani) → Auto Reply (rule keyword
-              yang cocok) → AI Reply (fallback). Aturan Grup berjalan sendiri untuk pesan grup.
+              {t("automationHub.orderHint")}
             </span>
           </p>
         </div>

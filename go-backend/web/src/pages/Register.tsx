@@ -7,8 +7,10 @@ import { useAuth } from "@/hooks/use-auth";
 import AuthLayout from "@/components/AuthLayout";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 export default function Register() {
+  const { t } = useLang();
   const { register } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,18 +26,18 @@ export default function Register() {
     e.preventDefault();
     setError("");
     if (password !== confirm) {
-      setError("Konfirmasi password tidak sama.");
+      setError(t("register.errorConfirmMismatch"));
       return;
     }
     if (password.length < 6) {
-      setError("Password minimal 6 karakter.");
+      setError(t("register.errorPasswordShort"));
       return;
     }
     setLoading(true);
     try {
       await register(name, email, password);
     } catch (err: any) {
-      setError(err.message || "Registrasi gagal. Coba lagi.");
+      setError(err.message || t("register.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -43,16 +45,16 @@ export default function Register() {
 
   return (
     <AuthLayout
-      title="Buat akun gratis"
-      subtitle="Mulai kirim pesan WhatsApp otomatis hari ini."
+      title={t("register.title")}
+      subtitle={t("register.subtitle")}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-foreground">
-            Nama lengkap
+            {t("register.fullName")}
           </label>
           <Input
-            placeholder="Nama Anda"
+            placeholder={t("register.namePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -61,7 +63,7 @@ export default function Register() {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-foreground">Email</label>
+          <label className="text-[13px] font-medium text-foreground">{t("register.emailLabel")}</label>
           <Input
             type="email"
             placeholder="nama@perusahaan.com"
@@ -74,12 +76,12 @@ export default function Register() {
 
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-foreground">
-            Password
+            {t("register.passwordLabel")}
           </label>
           <PasswordInput
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimal 6 karakter"
+            placeholder={t("register.passwordPlaceholder")}
             required
             minLength={6}
             autoComplete="new-password"
@@ -89,13 +91,13 @@ export default function Register() {
 
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-foreground">
-            Konfirmasi password
+            {t("register.confirmPassword")}
           </label>
           <div className="relative">
             <PasswordInput
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Ulangi password"
+              placeholder={t("register.confirmPlaceholder")}
               required
               autoComplete="new-password"
               className={cn(
@@ -110,7 +112,7 @@ export default function Register() {
             )}
           </div>
           {mismatch && (
-            <p className="text-[11px] text-red-500">Password tidak sama.</p>
+            <p className="text-[11px] text-red-500">{t("register.passwordMismatch")}</p>
           )}
         </div>
 
@@ -127,28 +129,27 @@ export default function Register() {
           disabled={loading}
         >
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {loading ? "Memproses..." : "Daftar"}
+          {loading ? t("register.processing") : t("register.submit")}
         </Button>
 
         {/* Fitur 7: info trial otomatis */}
         <p className="flex items-center justify-center gap-1.5 text-[12px] text-muted-foreground">
           <Sparkles className="w-3.5 h-3.5 text-[#243370] dark:text-blue-400 shrink-0" />
-          Daftar sekarang, gratis 7 hari paket Lite.
+          {t("register.trialInfo")}
         </p>
 
         <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-          Dengan mendaftar, Anda menyetujui Syarat Layanan dan Kebijakan Privasi
-          WaGataway.
+          {t("register.termsNotice")}
         </p>
       </form>
 
       <p className="text-center text-[13px] text-muted-foreground mt-6">
-        Sudah punya akun?{" "}
+        {t("register.haveAccount")}{" "}
         <Link
           href="/login"
           className="font-semibold text-[#243370] dark:text-blue-400 hover:underline"
         >
-          Masuk
+          {t("register.loginLink")}
         </Link>
       </p>
     </AuthLayout>

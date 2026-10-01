@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
+import { useLang } from "@/lib/i18n";
 import InvoiceModal, {
   tglID,
   metodeLabel,
@@ -60,25 +61,25 @@ interface ProrateQuote {
   isTrial?: boolean;
 }
 
-const txStatusMeta: Record<string, { label: string; className: string }> = {
-  paid: { label: "Lunas", className: "bg-green-500/15 text-green-600 border-green-500/30" },
-  pending: { label: "Menunggu", className: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
-  failed: { label: "Gagal", className: "bg-red-500/15 text-red-600 border-red-500/30" },
-  expired: { label: "Kadaluarsa", className: "bg-muted text-muted-foreground border-border" },
-  cancelled: { label: "Dibatalkan", className: "bg-muted text-muted-foreground border-border" },
-  refunded: { label: "Refund", className: "bg-blue-500/15 text-blue-600 border-blue-500/30" },
+const txStatusMeta: Record<string, { key: string; className: string }> = {
+  paid: { key: "billing.txPaid", className: "bg-green-500/15 text-green-600 border-green-500/30" },
+  pending: { key: "billing.txPending", className: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
+  failed: { key: "billing.txFailed", className: "bg-red-500/15 text-red-600 border-red-500/30" },
+  expired: { key: "billing.txExpired", className: "bg-muted text-muted-foreground border-border" },
+  cancelled: { key: "billing.txCancelled", className: "bg-muted text-muted-foreground border-border" },
+  refunded: { key: "billing.txRefunded", className: "bg-blue-500/15 text-blue-600 border-blue-500/30" },
 };
 
-function txStatusBadge(status: string) {
+function txStatusBadge(status: string, t: (key: string) => string) {
   const meta = txStatusMeta[status?.toLowerCase()] || {
-    label: status || "-",
+    key: "",
     className: "bg-muted text-muted-foreground border-border",
   };
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${meta.className}`}
     >
-      {meta.label}
+      {meta.key ? t(meta.key) : status || "-"}
     </span>
   );
 }
@@ -97,6 +98,7 @@ function rupiah(n: number) {
 }
 
 export default function Billing({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
@@ -206,7 +208,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
         );
         setQuote(r.quote);
       } catch {
-        setPayError("Gagal menghitung prorata. Coba lagi.");
+        setPayError(t("billing.prorateFail"));
       } finally {
         setQuoteLoading(false);
       }
@@ -255,7 +257,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
       setTxStatus("pending");
       startPolling(r.transaction.id);
     } catch (e: any) {
-      setPayError(e?.message || "Gagal membuat pembayaran");
+      setPayError(e?.message || t("billing.payFail"));
     } finally {
       setPaying(false);
     }
@@ -266,10 +268,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
   const dead = ["expired", "failed", "cancelled"].includes(txStatus);
   // BONUS: badge & teks tanggal mengikuti status langganan terpusat.
   const subState = sub?.subState || "active";
-  const subStateMeta: Record<string, { label: string; className: string }> = {
-    active: { label: "Aktif", className: "" },
-    grace: { label: "Masa Tenggang", className: "bg-amber-500/15 text-amber-700 border-amber-500/30" },
-    expired: { label: "Berakhir", className: "bg-red-500/15 text-red-600 border-red-500/30" },
+  const subStateMeta: Record<string, { key: string; className: string }> = {
+    active: { key: "billing.subActive", className: "" },
+    grace: { key: "billing.subGrace", className: "bg-amber-500/15 text-amber-700 border-amber-500/30" },
+    expired: { key: "billing.subExpired", className: "bg-red-500/15 text-red-600 border-red-500/30" },
   };
   const subMeta = subStateMeta[subState] || subStateMeta.active;
   const endDateLabel = sub
@@ -280,8 +282,8 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
     <div className="space-y-6">
       {!embedded && (
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Langganan</h2>
-          <p className="text-sm text-muted-foreground">Pilih paket yang sesuai kebutuhan</p>
+          <h2 className="text-lg font-semibold text-foreground">{t("billing.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("billing.subtitle")}</p>
         </div>
       )}
 
@@ -290,7 +292,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
         <CardContent className="p-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
-              Paket saat ini: <span className="font-bold">{currentPlanName}</span>
+              {t("billing.currentPlan").replace("{name}", currentPlanName)}
               {/* Fitur 7: label Trial */}
               {sub?.isTrial && (
                 <span className="ml-2 align-middle inline-flex items-center rounded-full bg-[#243370]/10 text-[#243370] dark:text-blue-400 text-[11px] font-semibold px-2 py-0.5">
@@ -301,9 +303,9 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
             <p className="text-xs text-muted-foreground">
               {sub
                 ? subState === "active"
-                  ? `Aktif sampai ${endDateLabel}`
-                  : `Berakhir ${endDateLabel}`
-                : "Tidak ada langganan aktif"}
+                  ? t("billing.activeUntil").replace("{date}", endDateLabel)
+                  : t("billing.endedAt").replace("{date}", endDateLabel)
+                : t("billing.noSubscription")}
             </p>
             {/* Fitur 7: ajakan upgrade untuk user trial */}
             {sub?.isTrial && (
@@ -316,12 +318,12 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
               >
-                Upgrade sekarang
+                {t("billing.upgradeNow")}
               </Button>
             )}
           </div>
           <Badge variant="outline" className={`shrink-0 ${subMeta.className}`}>
-            {subMeta.label}
+            {t(subMeta.key)}
           </Badge>
         </CardContent>
       </Card>
@@ -347,11 +349,11 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                   </div>
                   <div className="pt-1">
                     <span className="text-2xl font-bold text-foreground">
-                      {plan.price === 0 ? "Gratis" : rupiah(plan.price)}
+                      {plan.price === 0 ? t("billing.free") : rupiah(plan.price)}
                     </span>
                     {plan.price > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        /{plan.duration >= 360 ? "tahun" : "bulan"}
+                        /{t(plan.duration >= 360 ? "billing.perYear" : "billing.perMonth")}
                       </span>
                     )}
                   </div>
@@ -372,7 +374,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     disabled={isCurrent}
                     onClick={() => openPay(plan)}
                   >
-                    {isCurrent ? "Paket Saat Ini" : isSwitch ? "Ganti Paket" : "Pilih Paket"}
+                    {isCurrent ? t("billing.currentPlanBtn") : isSwitch ? t("billing.switchPlan") : t("billing.choosePlan")}
                   </Button>
                 </CardContent>
               </Card>
@@ -384,7 +386,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
       {/* Fitur 2: Riwayat Transaksi */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Riwayat Transaksi</CardTitle>
+          <CardTitle className="text-sm">{t("billing.txHistory")}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {txLoading ? (
@@ -393,19 +395,19 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
             </div>
           ) : txs.length === 0 ? (
             <p className="text-sm text-muted-foreground px-4 pb-4">
-              Belum ada riwayat transaksi.
+              {t("billing.noTx")}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-sm">
                 <thead>
                   <tr className="border-y border-border text-left text-xs text-muted-foreground">
-                    <th className="font-medium px-4 py-2.5">Tanggal</th>
-                    <th className="font-medium px-4 py-2.5">Invoice</th>
-                    <th className="font-medium px-4 py-2.5">Paket</th>
-                    <th className="font-medium px-4 py-2.5 text-right">Nominal</th>
-                    <th className="font-medium px-4 py-2.5">Metode</th>
-                    <th className="font-medium px-4 py-2.5">Status</th>
+                    <th className="font-medium px-4 py-2.5">{t("billing.colDate")}</th>
+                    <th className="font-medium px-4 py-2.5">{t("billing.colInvoice")}</th>
+                    <th className="font-medium px-4 py-2.5">{t("billing.colPlan")}</th>
+                    <th className="font-medium px-4 py-2.5 text-right">{t("billing.colAmount")}</th>
+                    <th className="font-medium px-4 py-2.5">{t("billing.colMethod")}</th>
+                    <th className="font-medium px-4 py-2.5">{t("billing.colStatus")}</th>
                     <th className="font-medium px-4 py-2.5 w-28" />
                   </tr>
                 </thead>
@@ -425,10 +427,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                         {rupiah(tx.amount)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                        {metodeLabel(tx.paymentMethod)}
+                        {metodeLabel(tx.paymentMethod, t)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {txStatusBadge(tx.status)}
+                        {txStatusBadge(tx.status, t)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
                         {tx.status === "paid" && (
@@ -439,7 +441,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                             onClick={() => setInvoiceTx(tx)}
                           >
                             <Receipt className="w-3.5 h-3.5 mr-1" />
-                            Kwitansi
+                            {t("billing.receipt")}
                           </Button>
                         )}
                       </td>
@@ -459,9 +461,9 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
           <Card className="relative w-full max-w-md max-h-[90vh] overflow-y-auto">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="text-base">
-                {paid ? "Pembayaran Berhasil" : `Bayar Paket ${payPlan.name}`}
+                {paid ? t("billing.paySuccess") : t("billing.payPlan").replace("{name}", payPlan.name)}
               </CardTitle>
-              <Button variant="ghost" size="sm" onClick={closePay} aria-label="Tutup">
+              <Button variant="ghost" size="sm" onClick={closePay} aria-label={t("common.close")}>
                 <X className="w-4 h-4" />
               </Button>
             </CardHeader>
@@ -474,44 +476,44 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                       <span className="text-lg font-bold text-foreground">{rupiah(payPlan.price)}</span>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {payPlan.duration} hari &middot; pembayaran via QRIS / VA / e-wallet melalui Clipku Pay
+                      {t("billing.payInfo").replace("{days}", String(payPlan.duration))}
                     </p>
                   </div>
                   {/* Fitur 4: rincian prorata sebelum bayar */}
                   {quoteLoading ? (
                     <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Menghitung prorata&hellip;
+                      {t("billing.calcProrate")}
                     </div>
                   ) : quote?.prorate ? (
                     <div className="rounded-lg border border-[#243370]/30 bg-[#243370]/5 p-3 space-y-2">
                       <p className="text-xs font-semibold text-foreground">
-                        Rincian Ganti Paket (prorata)
+                        {t("billing.prorateTitle")}
                       </p>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">
-                          Harga {quote.newPlanName}
+                          {t("billing.priceOf").replace("{name}", quote.newPlanName)}
                         </span>
                         <span className="font-medium text-foreground">{rupiah(quote.newPrice)}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">
-                          Sisa nilai {quote.oldPlanName}
+                          {t("billing.remainingValue").replace("{name}", quote.oldPlanName || "")}
                           <span className="block text-[11px]">
-                            {quote.remainingDays} hari tersisa{quote.isTrial ? " (trial)" : ""}
+                            {t("billing.daysLeft").replace("{days}", String(quote.remainingDays))}{quote.isTrial ? " (trial)" : ""}
                           </span>
                         </span>
                         <span className="font-medium text-foreground">− {rupiah(quote.creditAmount)}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-border pt-2">
-                        <span className="text-sm font-semibold text-foreground">Total bayar</span>
+                        <span className="text-sm font-semibold text-foreground">{t("billing.totalPay")}</span>
                         <span className="text-base font-bold text-foreground">
-                          {quote.payableAmount === 0 ? "Gratis" : rupiah(quote.payableAmount)}
+                          {quote.payableAmount === 0 ? t("billing.free") : rupiah(quote.payableAmount)}
                         </span>
                       </div>
                       {quote.payableAmount === 0 && (
                         <p className="text-[11px] text-muted-foreground">
-                          Sisa nilai paket lama menutupi penuh — paket baru langsung aktif tanpa pembayaran.
+                          {t("billing.prorateFreeNote")}
                         </p>
                       )}
                     </div>
@@ -526,10 +528,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                       disabled={paying || quoteLoading}
                     >
                       {paying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      {quote?.prorate && quote.payableAmount === 0 ? "Aktifkan Sekarang" : "Bayar Sekarang"}
+                      {quote?.prorate && quote.payableAmount === 0 ? t("billing.activateNow") : t("billing.payNow")}
                     </Button>
                     <Button variant="outline" onClick={closePay}>
-                      Batal
+                      {t("common.cancel")}
                     </Button>
                   </div>
                 </>
@@ -539,23 +541,23 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     <Check className="w-6 h-6 text-green-500" />
                   </div>
                   <p className="text-sm font-semibold text-foreground">
-                    Paket {payPlan.name} sudah aktif
+                    {t("billing.planActive").replace("{name}", payPlan.name)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Langganan Anda berlaku {payPlan.duration} hari ke depan.
+                    {t("billing.validFor").replace("{days}", String(payPlan.duration))}
                   </p>
                   <Button className="w-full" onClick={closePay}>
-                    Selesai
+                    {t("billing.done")}
                   </Button>
                 </div>
               ) : dead ? (
                 <div className="text-center space-y-3 py-4">
-                  <p className="text-sm font-semibold text-foreground">Pembayaran {txStatus}</p>
+                  <p className="text-sm font-semibold text-foreground">{t("billing.payStatus").replace("{status}", txStatus)}</p>
                   <p className="text-xs text-muted-foreground">
-                    Silakan buat pembayaran baru bila masih ingin upgrade.
+                    {t("billing.payDeadNote")}
                   </p>
                   <Button className="w-full" variant="outline" onClick={closePay}>
-                    Tutup
+                    {t("common.close")}
                   </Button>
                 </div>
               ) : (
@@ -564,7 +566,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     {qrUrl ? (
                       <img
                         src={qrUrl}
-                        alt="QRIS pembayaran"
+                        alt={t("billing.qrAlt")}
                         className="w-48 h-48 rounded-lg border border-border bg-white p-2"
                       />
                     ) : (
@@ -573,7 +575,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground text-center">
-                      Scan QRIS di atas atau buka halaman pembayaran
+                      {t("billing.scanHint")}
                     </p>
                   </div>
                   <Button
@@ -581,14 +583,14 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                     onClick={() => window.open(paymentUrl, "_blank", "noopener")}
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    Buka Halaman Pembayaran
+                    {t("billing.openPayPage")}
                   </Button>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    Menunggu pembayaran&hellip; status diperbarui otomatis
+                    {t("billing.waitingPay")}
                   </div>
                   <Button variant="ghost" className="w-full" size="sm" onClick={closePay}>
-                    Tutup (pembayaran tetap berjalan)
+                    {t("billing.closeKeepRunning")}
                   </Button>
                 </div>
               )}

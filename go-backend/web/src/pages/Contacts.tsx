@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiPut, apiDelete, apiFetch } from "@/lib/api";
 import SyncWAButton from "@/components/contacts/SyncWAButton";
+import { useLang } from "@/lib/i18n";
 
 interface ContactGroup {
   id: number;
@@ -64,6 +65,7 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -76,7 +78,7 @@ function Modal({
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-secondary"
-            aria-label="Tutup"
+            aria-label={t("common.close")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -116,6 +118,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
   const [clearingAll, setClearingAll] = useState(false);
 
   const firstRun = useRef(true);
+  const { t } = useLang();
 
   const load = async (q: string) => {
     setLoading(true);
@@ -127,7 +130,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       setContacts(res.contacts || []);
       setTotal(res.total ?? (res.contacts || []).length);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal memuat kontak");
+      setError(e instanceof Error ? e.message : t("contacts.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -186,24 +189,24 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
   const saveContact = async () => {
     if (!form.name.trim() || !form.phone.trim()) {
-      toast.error("Nama dan nomor wajib diisi");
+      toast.error(t("contacts.namePhoneRequired"));
       return;
     }
     setSaving(true);
     try {
       if (editing) {
         await apiPut(`/contacts/${editing.id}`, form);
-        toast.success("Kontak diperbarui");
+        toast.success(t("contacts.updated"));
       } else {
         await apiPost("/contacts", form);
-        toast.success("Kontak ditambahkan");
+        toast.success(t("contacts.added"));
       }
       setShowForm(false);
       setEditing(null);
       setForm(emptyForm);
       load(search);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menyimpan kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -213,11 +216,11 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     if (!deleting) return;
     try {
       await apiDelete(`/contacts/${deleting.id}`);
-      toast.success("Kontak dihapus");
+      toast.success(t("contacts.deleted"));
       setDeleting(null);
       load(search);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.deleteFailed"));
     }
   };
 
@@ -244,12 +247,12 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     setBulkBusy(true);
     try {
       await apiDeleteWithBody("/contacts/bulk", { ids: Array.from(selected) });
-      toast.success(`${selected.size} kontak dihapus`);
+      toast.success(t("contacts.bulkDeleted").replace("{count}", String(selected.size)));
       setSelected(new Set());
       setShowBulkDelete(false);
       load(search);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.deleteFailed"));
     } finally {
       setBulkBusy(false);
     }
@@ -274,7 +277,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    toast.success(`${rows.length} kontak diekspor ke CSV`);
+    toast.success(t("contacts.exportedCsv").replace("{count}", String(rows.length)));
   };
 
   const exportCsv = () => {
@@ -283,7 +286,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
         ? contacts.filter((c) => selected.has(c.id))
         : contacts;
     if (rows.length === 0) {
-      toast.error("Tidak ada kontak untuk diekspor");
+      toast.error(t("contacts.nothingToExport"));
       return;
     }
     buildAndDownloadCsv(rows);
@@ -309,12 +312,12 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     try {
       const all = await fetchAllContacts();
       if (all.length === 0) {
-        toast.error("Tidak ada kontak untuk diekspor");
+        toast.error(t("contacts.nothingToExport"));
         return;
       }
       buildAndDownloadCsv(all);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal mengekspor kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.exportFailed"));
     }
   };
 
@@ -323,17 +326,17 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     try {
       const all = await fetchAllContacts();
       if (all.length === 0) {
-        toast.info("Tidak ada kontak untuk dihapus");
+        toast.info(t("contacts.nothingToDelete"));
         setShowClearAll(false);
         return;
       }
       await apiDeleteWithBody("/contacts/bulk", { ids: all.map((c) => c.id) });
-      toast.success(`${all.length} kontak dihapus`);
+      toast.success(t("contacts.bulkDeleted").replace("{count}", String(all.length)));
       setSelected(new Set());
       setShowClearAll(false);
       load(search);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus semua kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.clearAllFailed"));
     } finally {
       setClearingAll(false);
     }
@@ -341,7 +344,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
   const bulkAddToGroup = async () => {
     if (!bulkGroup || selected.size === 0) {
-      toast.error("Pilih grup tujuan dulu");
+      toast.error(t("contacts.selectGroupFirst"));
       return;
     }
     setBulkBusy(true);
@@ -350,11 +353,11 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
         contactIds: Array.from(selected),
       });
       const g = groups.find((x) => String(x.id) === bulkGroup);
-      toast.success(`${selected.size} kontak dipindah ke grup ${g?.name || ""}`);
+      toast.success(t("contacts.movedToGroup").replace("{count}", String(selected.size)).replace("{group}", g?.name || ""));
       setSelected(new Set());
       setBulkGroup("");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memindah kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.moveFailed"));
     } finally {
       setBulkBusy(false);
     }
@@ -392,7 +395,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       const text = typeof reader.result === "string" ? reader.result : "";
       setImportParsed(parseImportLines(text));
     };
-    reader.onerror = () => toast.error("Gagal membaca file");
+    reader.onerror = () => toast.error(t("contacts.readFileFailed"));
     reader.readAsText(file);
   };
 
@@ -407,7 +410,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
   const doImport = async () => {
     const parsed = importTab === "file" ? importParsed : parseImportLines(importText);
     if (parsed.length === 0) {
-      toast.error("Tidak ada baris valid. Format: nama,nomor[,email]");
+      toast.error(t("contacts.noValidRows"));
       return;
     }
     setSaving(true);
@@ -418,11 +421,11 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       );
       const ok = res.imported || 0;
       const failed = parsed.length - ok;
-      toast.success(`Import selesai: ${ok} berhasil, ${failed} gagal`);
+      toast.success(t("contacts.importDone").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
       resetImport();
       load(search);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal mengimpor kontak");
+      toast.error(e instanceof Error ? e.message : t("contacts.importFailed"));
     } finally {
       setSaving(false);
     }
@@ -433,9 +436,9 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
         {!embedded && (
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">Kontak</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">{t("title.contacts")}</h1>
             <p className="text-sm text-muted-foreground">
-              {total} kontak tersimpan
+              {t("contacts.totalStored").replace("{count}", String(total))}
             </p>
           </div>
         )}
@@ -443,11 +446,11 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
           <SyncWAButton kind="contacts" onDone={() => load(search)} />
           <Button variant="success" onClick={() => setShowImport(true)} className="gap-1.5">
             <Upload className="w-4 h-4" />
-            Import
+            {t("contacts.import")}
           </Button>
           <Button variant="warning" onClick={exportAllCsv} className="gap-1.5">
             <Download className="w-4 h-4" />
-            Export
+            {t("contacts.export")}
           </Button>
           <Button variant="destructive" onClick={() => setShowClearAll(true)} className="gap-1.5">
             <Trash2 className="w-4 h-4" />
@@ -455,7 +458,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
           </Button>
           <Button onClick={openAdd} className="gap-1.5">
             <Plus className="w-4 h-4" />
-            Tambah Kontak
+            {t("contacts.addContact")}
           </Button>
         </div>
       </div>
@@ -464,7 +467,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Cari nama atau nomor..."
+          placeholder={t("contacts.searchPlaceholder")}
           className="pl-9"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -474,12 +477,12 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       {/* Bulk toolbar */}
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-          <span className="text-sm font-medium">{selected.size} dipilih</span>
+          <span className="text-sm font-medium">{t("contacts.selectedCount").replace("{count}", String(selected.size))}</span>
           <button
             className="text-xs text-muted-foreground hover:text-foreground underline"
             onClick={() => setSelected(new Set())}
           >
-            Batalkan pilihan
+            {t("contacts.clearSelection")}
           </button>
           <div className="flex-1" />
           {groups.length > 0 && (
@@ -487,11 +490,11 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
               <Dropdown
                 value={bulkGroup}
                 onChange={setBulkGroup}
-                ariaLabel="Pindah ke grup"
+                ariaLabel={t("contacts.moveToGroup")}
                 className="w-auto min-w-[150px]"
-                placeholder="Pindah ke grup..."
+                placeholder={t("contacts.moveToGroupPlaceholder")}
                 options={[
-                  { value: "", label: "Pindah ke grup..." },
+                  { value: "", label: t("contacts.moveToGroupPlaceholder") },
                   ...groups.map((g) => ({ value: String(g.id), label: g.name })),
                 ]}
               />
@@ -501,7 +504,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                 disabled={!bulkGroup || bulkBusy}
                 onClick={bulkAddToGroup}
               >
-                Pindah
+                {t("contacts.move")}
               </Button>
             </>
           )}
@@ -511,7 +514,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
             onClick={exportCsv}
             className="gap-1.5"
           >
-            <Download className="w-3.5 h-3.5" /> Export CSV
+            <Download className="w-3.5 h-3.5" /> {t("contacts.exportCsv")}
           </Button>
           <Button
             size="sm"
@@ -519,7 +522,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
             onClick={() => setShowBulkDelete(true)}
             className="gap-1.5"
           >
-            <Trash2 className="w-3.5 h-3.5" /> Hapus terpilih
+            <Trash2 className="w-3.5 h-3.5" /> {t("contacts.deleteSelected")}
           </Button>
         </div>
       )}
@@ -539,7 +542,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
             <Button variant="outline" onClick={() => load(search)} className="gap-1.5">
               <RefreshCw className="w-4 h-4" />
-              Coba lagi
+              {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -548,21 +551,20 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
           <CardContent className="p-10 text-center">
             {search ? (
               <>
-                <p className="font-medium mb-1">Tidak ada kontak yang cocok</p>
+                <p className="font-medium mb-1">{t("contacts.noSearchResults")}</p>
                 <p className="text-sm text-muted-foreground">
-                  Coba kata kunci lain
+                  {t("contacts.tryOtherKeyword")}
                 </p>
               </>
             ) : (
               <div className="space-y-3">
                 <Users className="w-8 h-8 mx-auto text-muted-foreground" />
-                <p className="font-medium">Belum ada kontak</p>
+                <p className="font-medium">{t("contacts.noContacts")}</p>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  Tambahkan kontak pertama Anda untuk mulai mengirim pesan
-                  personal dan broadcast.
+                  {t("contacts.noContactsHint")}
                 </p>
                 <Button onClick={openAdd} className="gap-1.5">
-                  <Plus className="w-4 h-4" /> Tambah Kontak
+                  <Plus className="w-4 h-4" /> {t("contacts.addContact")}
                 </Button>
               </div>
             )}
@@ -580,21 +582,21 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleAll}
-                        aria-label="Pilih semua"
+                        aria-label={t("contacts.selectAll")}
                         className="w-4 h-4 accent-primary cursor-pointer"
                       />
                     </th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                      Nama
+                      {t("contacts.colName")}
                     </th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                      Nomor
+                      {t("contacts.colPhone")}
                     </th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                      Email
+                      {t("contacts.colEmail")}
                     </th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">
-                      Tag
+                      {t("contacts.colTag")}
                     </th>
                     <th className="w-24"></th>
                   </tr>
@@ -610,7 +612,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                           type="checkbox"
                           checked={selected.has(c.id)}
                           onChange={() => toggleOne(c.id)}
-                          aria-label={`Pilih ${c.name}`}
+                          aria-label={t("contacts.selectContact").replace("{name}", c.name)}
                           className="w-4 h-4 accent-primary cursor-pointer"
                         />
                       </td>
@@ -637,7 +639,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                             variant="ghost"
                             size="icon"
                             onClick={() => openEdit(c)}
-                            aria-label={`Edit ${c.name}`}
+                            aria-label={t("contacts.editContact").replace("{name}", c.name)}
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
@@ -645,7 +647,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                             variant="ghost"
                             size="icon"
                             onClick={() => setDeleting(c)}
-                            aria-label={`Hapus ${c.name}`}
+                            aria-label={t("contacts.deleteContact").replace("{name}", c.name)}
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
@@ -663,20 +665,20 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
       {/* Add/Edit dialog */}
       {showForm && (
         <Modal
-          title={editing ? "Edit Kontak" : "Tambah Kontak"}
+          title={editing ? t("contacts.editContactTitle") : t("contacts.addContact")}
           onClose={() => setShowForm(false)}
         >
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Nama *</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contacts.labelName")}</label>
               <Input
-                placeholder="Nama kontak"
+                placeholder={t("contacts.placeholderName")}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Nomor WhatsApp *</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contacts.labelPhone")}</label>
               <Input
                 placeholder="62812xxxxxxx"
                 value={form.phone}
@@ -684,7 +686,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Email</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contacts.colEmail")}</label>
               <Input
                 type="email"
                 placeholder="email@contoh.com"
@@ -694,28 +696,28 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">
-                Tag (pisahkan dengan koma)
+                {t("contacts.labelTags")}
               </label>
               <Input
-                placeholder="pelanggan, vip"
+                placeholder={t("contacts.placeholderTags")}
                 value={form.tags}
                 onChange={(e) => setForm({ ...form, tags: e.target.value })}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Catatan</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contacts.labelNotes")}</label>
               <Input
-                placeholder="Catatan tambahan"
+                placeholder={t("contacts.placeholderNotes")}
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setShowForm(false)}>
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button onClick={saveContact} disabled={saving}>
-                {saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Tambah"}
+                {saving ? t("contacts.saving") : editing ? t("contacts.saveChanges") : t("contacts.add")}
               </Button>
             </div>
           </div>
@@ -724,7 +726,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
       {/* Import dialog */}
       {showImport && (
-        <Modal title="Import Kontak" onClose={resetImport}>
+        <Modal title={t("contacts.importTitle")} onClose={resetImport}>
           <div className="space-y-4">
             {/* Tabs */}
             <div className="flex rounded-md border border-border p-0.5 bg-secondary/50">
@@ -734,7 +736,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                 }`}
                 onClick={() => setImportTab("file")}
               >
-                File CSV
+                {t("contacts.tabFile")}
               </button>
               <button
                 className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -742,12 +744,12 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                 }`}
                 onClick={() => setImportTab("text")}
               >
-                Tempel Teks
+                {t("contacts.tabText")}
               </button>
             </div>
 
             <p className="text-sm text-muted-foreground">
-              Format per baris:{" "}
+              {t("contacts.formatPerLine")}{" "}
               <code className="bg-secondary px-1.5 py-0.5 rounded text-xs">
                 nama,nomor[,email]
               </code>
@@ -758,7 +760,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                 <label className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-4 py-8 cursor-pointer hover:bg-secondary/50 transition-colors">
                   <Upload className="w-5 h-5 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
-                    {importFileName || "Pilih file CSV..."}
+                    {importFileName || t("contacts.chooseFile")}
                   </span>
                   <input
                     type="file"
@@ -770,15 +772,15 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                 {importParsed.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-foreground">
-                      Pratinjau ({importParsed.length} kontak ditemukan)
+                      {t("contacts.previewCount").replace("{count}", String(importParsed.length))}
                     </p>
                     <div className="overflow-x-auto rounded-md border border-border">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-border bg-secondary/50">
-                            <th className="text-left font-medium text-muted-foreground px-3 py-2">Nama</th>
-                            <th className="text-left font-medium text-muted-foreground px-3 py-2">Nomor</th>
-                            <th className="text-left font-medium text-muted-foreground px-3 py-2">Email</th>
+                            <th className="text-left font-medium text-muted-foreground px-3 py-2">{t("contacts.colName")}</th>
+                            <th className="text-left font-medium text-muted-foreground px-3 py-2">{t("contacts.colPhone")}</th>
+                            <th className="text-left font-medium text-muted-foreground px-3 py-2">{t("contacts.colEmail")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -794,7 +796,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
                     </div>
                     {importParsed.length > 5 && (
                       <p className="text-[11px] text-muted-foreground">
-                        ...dan {importParsed.length - 5} baris lainnya
+                        {t("contacts.moreRows").replace("{count}", String(importParsed.length - 5))}
                       </p>
                     )}
                   </div>
@@ -811,12 +813,12 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetImport}>
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button onClick={doImport} disabled={saving}>
                 {saving
-                  ? "Mengimpor..."
-                  : `Import ${importTab === "file" ? importParsed.length : parseImportLines(importText).length} kontak`}
+                  ? t("contacts.importing")
+                  : t("contacts.importCount").replace("{count}", String(importTab === "file" ? importParsed.length : parseImportLines(importText).length))}
               </Button>
             </div>
           </div>
@@ -825,17 +827,16 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
       {/* Delete confirm */}
       {deleting && (
-        <Modal title="Hapus Kontak" onClose={() => setDeleting(null)}>
+        <Modal title={t("contacts.deleteTitle")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground mb-5">
-            Hapus kontak <span className="font-medium text-foreground">{deleting.name}</span>{" "}
-            ({deleting.phone})? Tindakan ini tidak bisa dibatalkan.
+            {t("contacts.deleteConfirm").replace("{name}", deleting.name).replace("{phone}", deleting.phone)}
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Hapus
+              {t("common.delete")}
             </Button>
           </div>
         </Modal>
@@ -843,21 +844,20 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
       {/* Bulk delete confirm */}
       {showBulkDelete && (
-        <Modal title="Hapus Kontak Terpilih" onClose={() => setShowBulkDelete(false)}>
+        <Modal title={t("contacts.bulkDeleteTitle")} onClose={() => setShowBulkDelete(false)}>
           <p className="text-sm text-muted-foreground mb-5">
-            Hapus <span className="font-medium text-foreground">{selected.size} kontak</span>{" "}
-            yang dipilih? Tindakan ini tidak bisa dibatalkan.
+            {t("contacts.bulkDeleteConfirm").replace("{count}", String(selected.size))}
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={confirmBulkDelete}
               disabled={bulkBusy}
             >
-              {bulkBusy ? "Menghapus..." : "Hapus Semua"}
+              {bulkBusy ? t("contacts.deleting") : t("contacts.deleteAll")}
             </Button>
           </div>
         </Modal>
@@ -865,21 +865,20 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
 
       {/* Clear All confirm */}
       {showClearAll && (
-        <Modal title="Hapus Semua Kontak" onClose={() => setShowClearAll(false)}>
+        <Modal title={t("contacts.clearAllTitle")} onClose={() => setShowClearAll(false)}>
           <p className="text-sm text-muted-foreground mb-5">
-            Hapus <span className="font-medium text-foreground">seluruh kontak</span>{" "}
-            Anda? Tindakan ini tidak bisa dibatalkan.
+            {t("contacts.clearAllConfirm")}
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setShowClearAll(false)}>
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={confirmClearAll}
               disabled={clearingAll}
             >
-              {clearingAll ? "Menghapus..." : "Ya, hapus semua"}
+              {clearingAll ? t("contacts.deleting") : t("contacts.confirmClearAll")}
             </Button>
           </div>
         </Modal>

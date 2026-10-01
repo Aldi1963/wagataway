@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Printer, X, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLang } from "@/lib/i18n";
 
 export interface InvoiceTx {
   id: number;
@@ -30,10 +31,10 @@ export function rupiah(n: number) {
   return `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 }
 
-export function metodeLabel(m?: string): string {
+export function metodeLabel(m?: string, t?: (key: string) => string): string {
   if (!m) return "-";
   const map: Record<string, string> = {
-    clipkupay: "Clipku Pay (QRIS / VA / E-wallet)",
+    clipkupay: t ? t("invoiceModal.methodClipkupay") : "Clipku Pay (QRIS / VA / E-wallet)",
     qris: "QRIS",
   };
   return map[m.toLowerCase()] || m.charAt(0).toUpperCase() + m.slice(1);
@@ -101,8 +102,9 @@ interface Props {
 
 /** Invoice resmi: kop, tabel rincian, terbilang, stempel LUNAS, blok tanda tangan. */
 export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props) {
+  const { t } = useLang();
   const [downloading, setDownloading] = useState(false);
-  const planName = tx.Plan?.name || "Paket WaGataway";
+  const planName = tx.Plan?.name || t("invoiceModal.defaultPlanName");
   const durasi = tx.Plan?.duration || 30;
   const start = new Date(tx.paidAt || tx.createdAt);
   const end = new Date(start.getTime() + durasi * 24 * 60 * 60 * 1000);
@@ -126,7 +128,7 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      alert("Gagal mengunduh PDF. Coba lagi.");
+      alert(t("invoiceModal.pdfFail"));
     } finally {
       setDownloading(false);
     }
@@ -149,9 +151,9 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
             <p className="text-[11px] text-slate-500">wa.clipku.com</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-slate-800 tracking-wide">INVOICE</p>
-            <p className="text-xs text-slate-500 mt-1">No. {nomor}</p>
-            <p className="text-xs text-slate-500">Tanggal: {tglID(tx.paidAt || tx.createdAt)}</p>
+            <p className="text-2xl font-bold text-slate-800 tracking-wide">{t("invoiceModal.invoiceTitle")}</p>
+            <p className="text-xs text-slate-500 mt-1">{t("invoiceModal.invoiceNo").replace("{no}", nomor)}</p>
+            <p className="text-xs text-slate-500">{t("invoiceModal.invoiceDate").replace("{date}", tglID(tx.paidAt || tx.createdAt))}</p>
           </div>
         </div>
         <div className="h-[3px] bg-[#243370] mt-3 mb-4" />
@@ -159,13 +161,13 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
         {/* Ditagihkan kepada | Metode */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <p className="text-[10px] font-bold text-slate-500 tracking-wider">DITAGIHKAN KEPADA</p>
+            <p className="text-[10px] font-bold text-slate-500 tracking-wider">{t("invoiceModal.billedTo")}</p>
             <p className="text-sm font-bold text-slate-800 mt-1">{userName || "-"}</p>
             {userEmail && <p className="text-xs text-slate-500">{userEmail}</p>}
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-bold text-slate-500 tracking-wider">METODE PEMBAYARAN</p>
-            <p className="text-xs text-slate-700 mt-1">{metodeLabel(tx.paymentMethod)}</p>
+            <p className="text-[10px] font-bold text-slate-500 tracking-wider">{t("invoiceModal.paymentMethod")}</p>
+            <p className="text-xs text-slate-700 mt-1">{metodeLabel(tx.paymentMethod, t)}</p>
           </div>
         </div>
 
@@ -173,17 +175,17 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
         <table className="w-full border-collapse text-[12px] md:text-sm">
           <thead>
             <tr className="bg-[#243370] text-white">
-              <th className="text-left text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2">DESKRIPSI</th>
-              <th className="text-center text-[10px] md:text-[11px] font-bold px-1 py-2 w-9">QTY</th>
-              <th className="text-right text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2 w-20 md:w-28">HARGA</th>
-              <th className="text-right text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2 w-20 md:w-28">JUMLAH</th>
+              <th className="text-left text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2">{t("invoiceModal.colDesc")}</th>
+              <th className="text-center text-[10px] md:text-[11px] font-bold px-1 py-2 w-9">{t("invoiceModal.colQty")}</th>
+              <th className="text-right text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2 w-20 md:w-28">{t("invoiceModal.colPrice")}</th>
+              <th className="text-right text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2 w-20 md:w-28">{t("invoiceModal.colAmount")}</th>
             </tr>
           </thead>
           <tbody>
             <tr className="border-b border-slate-200">
               <td className="px-2 md:px-3 py-2">
-                <p className="font-semibold text-slate-800">Langganan Paket {planName} ({durasi} hari)</p>
-                <p className="text-[10px] md:text-[11px] text-slate-500 mt-0.5">Periode {tglID(start)} – {tglID(end)}</p>
+                <p className="font-semibold text-slate-800">{t("invoiceModal.planDesc").replace("{name}", planName).replace("{days}", String(durasi))}</p>
+                <p className="text-[10px] md:text-[11px] text-slate-500 mt-0.5">{t("invoiceModal.period").replace("{start}", tglID(start)).replace("{end}", tglID(end))}</p>
               </td>
               <td className="text-center text-slate-700 px-1 py-2">1</td>
               <td className="text-right text-slate-700 px-2 md:px-3 py-2 whitespace-nowrap">{rupiah(tx.amount)}</td>
@@ -191,11 +193,11 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
             </tr>
             <tr className="border-b border-slate-200">
               <td colSpan={4} className="px-2 md:px-3 py-2">
-                <p className="text-[10px] md:text-[11px] italic text-slate-500">Terbilang: &ldquo;{terbilang(tx.amount)} Rupiah&rdquo;</p>
+                <p className="text-[10px] md:text-[11px] italic text-slate-500">{t("invoiceModal.inWords").replace("{words}", terbilang(tx.amount))}</p>
               </td>
             </tr>
             <tr>
-              <td colSpan={3} className="px-2 md:px-3 py-2 text-right font-bold text-[#243370] bg-[#243370]/5">TOTAL</td>
+              <td colSpan={3} className="px-2 md:px-3 py-2 text-right font-bold text-[#243370] bg-[#243370]/5">{t("invoiceModal.total")}</td>
               <td className="px-2 md:px-3 py-2 text-right font-bold text-[#243370] bg-[#243370]/5 text-base md:text-lg whitespace-nowrap">{rupiah(tx.amount)}</td>
             </tr>
           </tbody>
@@ -208,24 +210,24 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
               className="w-20 h-20 md:w-28 md:h-28 rounded-full border-[3px] border-green-600 flex flex-col items-center justify-center -rotate-12 opacity-90 shrink-0"
               style={{ boxShadow: "inset 0 0 0 2px #fff, inset 0 0 0 4px #16a34a" }}
             >
-              <span className="text-green-700 font-bold text-sm md:text-lg tracking-widest">LUNAS</span>
+              <span className="text-green-700 font-bold text-sm md:text-lg tracking-widest">{t("invoiceModal.paid")}</span>
               <span className="text-green-700 text-[8px] md:text-[9px] font-bold tracking-wider mt-0.5">WAGATAWAY</span>
             </div>
           </div>
           <div className="w-36 md:w-44 text-[12px] md:text-[13px] text-slate-800 shrink-0">
-            <p>Jakarta, {tglID(tx.paidAt || tx.createdAt)}</p>
-            <p className="mt-1">Hormat kami,</p>
+            <p>{t("invoiceModal.signatureCity").replace("{date}", tglID(tx.paidAt || tx.createdAt))}</p>
+            <p className="mt-1">{t("invoiceModal.regards")}</p>
             <p className="text-[#243370] my-1 leading-none whitespace-nowrap overflow-hidden" style={{ fontFamily: "'GreatVibes', cursive", fontSize: "clamp(1.7rem, 9vw, 2.6rem)" }}>
               WaGataway
             </p>
-            <p className="font-bold">( Tim Finance )</p>
-            <p className="text-[10px] md:text-[11px] text-slate-500">Finance – WaGataway</p>
+            <p className="font-bold">{t("invoiceModal.financeTeamSign")}</p>
+            <p className="text-[10px] md:text-[11px] text-slate-500">{t("invoiceModal.financeTeam")}</p>
           </div>
         </div>
 
         <div className="border-t border-slate-200 mt-8 pt-3">
           <p className="text-[10px] text-slate-400 leading-relaxed">
-            Dokumen ini dibuat otomatis oleh sistem WaGataway. Simpan nomor invoice untuk keperluan administrasi.
+            {t("invoiceModal.footerNote")}
           </p>
         </div>
 
@@ -237,12 +239,12 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
             disabled={downloading}
           >
             {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-            Unduh PDF
+            {t("invoiceModal.downloadPdf")}
           </Button>
-          <Button variant="outline" onClick={() => window.print()} aria-label="Cetak">
+          <Button variant="outline" onClick={() => window.print()} aria-label={t("invoiceModal.print")}>
             <Printer className="w-4 h-4" />
           </Button>
-          <Button variant="outline" onClick={onClose} aria-label="Tutup">
+          <Button variant="outline" onClick={onClose} aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>

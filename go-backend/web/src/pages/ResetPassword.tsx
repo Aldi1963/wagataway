@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { apiPost } from "@/lib/api";
 import AuthLayout from "@/components/AuthLayout";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
+import { useLang } from "@/lib/i18n";
 
 function getToken(): string {
   if (typeof window === "undefined") return "";
@@ -12,6 +13,7 @@ function getToken(): string {
 }
 
 export default function ResetPassword() {
+  const { t } = useLang();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -23,11 +25,11 @@ export default function ResetPassword() {
     e.preventDefault();
     setError("");
     if (password.length < 6) {
-      setError("Password minimal 6 karakter.");
+      setError(t("resetPassword.errorPasswordShort"));
       return;
     }
     if (password !== confirm) {
-      setError("Konfirmasi password tidak sama.");
+      setError(t("resetPassword.errorConfirmMismatch"));
       return;
     }
     setLoading(true);
@@ -36,7 +38,7 @@ export default function ResetPassword() {
       setDone(true);
     } catch (err: any) {
       setError(
-        err.message || "Link tidak valid atau sudah kedaluwarsa."
+        err.message || t("resetPassword.errorInvalidLink")
       );
     } finally {
       setLoading(false);
@@ -45,18 +47,18 @@ export default function ResetPassword() {
 
   return (
     <AuthLayout
-      title="Buat password baru"
-      subtitle="Pilih password yang kuat dan mudah Anda ingat."
+      title={t("resetPassword.title")}
+      subtitle={t("resetPassword.subtitle")}
     >
       {!token ? (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30 px-3 py-2.5">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
           <p className="text-[13px] text-red-600 dark:text-red-400">
-            Link reset tidak valid. Minta link baru lewat halaman{" "}
+            {t("resetPassword.invalidLinkBefore")}{" "}
             <Link href="/forgot-password" className="font-medium underline">
-              lupa password
+              {t("resetPassword.invalidLinkAnchor")}
             </Link>
-            .
+            {t("resetPassword.invalidLinkAfter")}
           </p>
         </div>
       ) : done ? (
@@ -65,14 +67,14 @@ export default function ResetPassword() {
             <CheckCircle2 className="w-7 h-7 text-emerald-500" />
           </span>
           <h2 className="font-semibold text-foreground mt-4">
-            Password berhasil direset
+            {t("resetPassword.successTitle")}
           </h2>
           <p className="text-sm text-muted-foreground mt-2">
-            Silakan masuk dengan password baru Anda.
+            {t("resetPassword.successMessage")}
           </p>
           <Link href="/login">
             <Button className="mt-6 bg-[#243370] hover:bg-[#1c2a5c] text-white">
-              Masuk sekarang
+              {t("resetPassword.loginNow")}
             </Button>
           </Link>
         </div>
@@ -80,12 +82,12 @@ export default function ResetPassword() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-foreground">
-              Password baru
+              {t("resetPassword.newPassword")}
             </label>
             <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimal 6 karakter"
+              placeholder={t("resetPassword.passwordPlaceholder")}
               required
               minLength={6}
               autoComplete="new-password"
@@ -95,12 +97,12 @@ export default function ResetPassword() {
 
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-foreground">
-              Konfirmasi password baru
+              {t("resetPassword.confirmPassword")}
             </label>
             <PasswordInput
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Ulangi password baru"
+              placeholder={t("resetPassword.confirmPlaceholder")}
               required
               autoComplete="new-password"
             />
@@ -121,7 +123,7 @@ export default function ResetPassword() {
             disabled={loading}
           >
             {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {loading ? "Memproses..." : "Reset password"}
+            {loading ? t("resetPassword.processing") : t("resetPassword.submit")}
           </Button>
         </form>
       )}

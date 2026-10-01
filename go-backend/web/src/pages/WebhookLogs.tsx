@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface Delivery {
   id: number;
@@ -31,6 +32,7 @@ function fmtTime(s: string) {
 }
 
 export default function WebhookLogs({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [items, setItems] = useState<Delivery[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ export default function WebhookLogs({ embedded = false }: { embedded?: boolean }
       setItems(Array.isArray(r) ? r : r.deliveries ?? []);
       setDevices(d.devices ?? []);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat log webhook");
+      toast.error(e.message || t("webhookLogs.toastLoadFailed"));
     } finally {
       setLoading(false);
     }
@@ -61,10 +63,10 @@ export default function WebhookLogs({ embedded = false }: { embedded?: boolean }
     setRetrying(d.id);
     try {
       await apiPost(`/webhook-deliveries/${d.id}/retry`);
-      toast.success("Webhook dikirim ulang");
+      toast.success(t("webhookLogs.toastRetried"));
       load();
     } catch (e: any) {
-      toast.error(e.message || "Gagal retry webhook");
+      toast.error(e.message || t("webhookLogs.toastRetryFailed"));
     } finally {
       setRetrying(null);
     }
@@ -80,27 +82,27 @@ export default function WebhookLogs({ embedded = false }: { embedded?: boolean }
         {!embedded && (
           <div>
             <h1 className="text-xl font-bold text-foreground">Webhook Logs</h1>
-            <p className="text-sm text-muted-foreground">Riwayat pengiriman webhook per device.</p>
+            <p className="text-sm text-muted-foreground">{t("webhookLogs.subtitle")}</p>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2">
           <Dropdown
             value={filter}
             onChange={(v) => setFilter(v as any)}
-            ariaLabel="Filter status"
+            ariaLabel={t("webhookLogs.filterStatusAria")}
             className="w-auto min-w-[120px]"
             options={[
-              { value: "all", label: "Semua" },
-              { value: "success", label: "Sukses" },
-              { value: "failed", label: "Gagal" },
+              { value: "all", label: t("webhookLogs.filterAll") },
+              { value: "success", label: t("webhookLogs.filterSuccess") },
+              { value: "failed", label: t("webhookLogs.filterFailed") },
             ]}
           />
-          <Button variant="outline" size="sm" onClick={load}>Muat Ulang</Button>
+          <Button variant="outline" size="sm" onClick={load}>{t("webhookLogs.reload")}</Button>
         </div>
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("webhookLogs.loading")}</CardContent></Card>
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -108,20 +110,20 @@ export default function WebhookLogs({ embedded = false }: { embedded?: boolean }
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Waktu</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Device</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">URL</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Event</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">HTTP</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("webhookLogs.colTime")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("webhookLogs.colDevice")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("webhookLogs.colUrl")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("webhookLogs.colEvent")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("webhookLogs.colHttp")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("webhookLogs.colStatus")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("webhookLogs.colAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 && (
                     <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">
                       <Webhook className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      Belum ada log webhook.
+                      {t("webhookLogs.empty")}
                     </td></tr>
                   )}
                   {filtered.map((d) => (
@@ -132,7 +134,7 @@ export default function WebhookLogs({ embedded = false }: { embedded?: boolean }
                       <td className="py-3 px-4"><Badge variant="secondary">{d.event}</Badge></td>
                       <td className="py-3 px-4 font-mono text-[13px]">{d.statusCode ?? "-"}</td>
                       <td className="py-3 px-4">
-                        {d.success ? <Badge variant="success">Sukses</Badge> : <Badge variant="destructive">Gagal</Badge>}
+                        {d.success ? <Badge variant="success">{t("webhookLogs.statusSuccess")}</Badge> : <Badge variant="destructive">{t("webhookLogs.statusFailed")}</Badge>}
                       </td>
                       <td className="py-3 px-4 text-right">
                         {!d.success && (
@@ -144,7 +146,7 @@ export default function WebhookLogs({ embedded = false }: { embedded?: boolean }
                             onClick={() => retry(d)}
                           >
                             <RotateCcw className={`w-3.5 h-3.5 ${retrying === d.id ? "animate-spin" : ""}`} />
-                            {retrying === d.id ? "Mengirim..." : "Retry"}
+                            {retrying === d.id ? t("webhookLogs.sending") : "Retry"}
                           </Button>
                         )}
                       </td>

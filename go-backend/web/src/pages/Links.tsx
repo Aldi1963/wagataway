@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface ShortLink {
   id: number;
@@ -37,6 +38,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -52,7 +54,7 @@ function Modal({
             size="icon"
             className="h-8 w-8"
             onClick={onClose}
-            aria-label="Tutup"
+            aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -64,6 +66,7 @@ function Modal({
 }
 
 export default function Links() {
+  const { t } = useLang();
   const [links, setLinks] = useState<ShortLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +92,7 @@ export default function Links() {
     setError(null);
     apiGet<{ links: ShortLink[] }>("/links")
       .then((res) => setLinks(res.links || []))
-      .catch((e) => setError(e.message || "Gagal memuat link"))
+      .catch((e) => setError(e.message || t("links.loadFail")))
       .finally(() => setLoading(false));
   };
 
@@ -99,7 +102,7 @@ export default function Links() {
 
   const handleAdd = async () => {
     if (!validUrl(addTarget)) {
-      toast.error("URL tujuan harus diawali http:// atau https://");
+      toast.error(t("links.urlInvalid"));
       return;
     }
     setSavingAdd(true);
@@ -109,14 +112,14 @@ export default function Links() {
         title: addTitle.trim(),
         code: addCode.trim(),
       });
-      toast.success("Link dibuat");
+      toast.success(t("links.created"));
       setShowAdd(false);
       setAddTarget("");
       setAddTitle("");
       setAddCode("");
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal membuat link");
+      toast.error(e instanceof Error ? e.message : t("links.createFail"));
     } finally {
       setSavingAdd(false);
     }
@@ -133,11 +136,11 @@ export default function Links() {
   const handleEdit = async () => {
     if (!editing) return;
     if (!validUrl(editTarget)) {
-      toast.error("URL tujuan harus diawali http:// atau https://");
+      toast.error(t("links.urlInvalid"));
       return;
     }
     if (!editCode.trim()) {
-      toast.error("Kode link wajib diisi");
+      toast.error(t("links.codeRequired"));
       return;
     }
     setSavingEdit(true);
@@ -149,11 +152,11 @@ export default function Links() {
         code: editCode.trim(),
         is_active: editActive,
       });
-      toast.success("Link diperbarui");
+      toast.success(t("links.updated"));
       setEditing(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memperbarui link");
+      toast.error(e instanceof Error ? e.message : t("links.updateFail"));
     } finally {
       setSavingEdit(false);
     }
@@ -164,11 +167,11 @@ export default function Links() {
     setDeletingBusy(true);
     try {
       await apiDelete(`/links/${deleting.id}`);
-      toast.success("Link dihapus");
+      toast.success(t("links.deleted"));
       setDeleting(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus link");
+      toast.error(e instanceof Error ? e.message : t("links.deleteFail"));
     } finally {
       setDeletingBusy(false);
     }
@@ -177,9 +180,9 @@ export default function Links() {
   const handleCopy = async (code: string) => {
     try {
       await navigator.clipboard.writeText(shortUrl(code));
-      toast.success("URL pendek disalin");
+      toast.success(t("links.urlCopied"));
     } catch {
-      toast.error("Gagal menyalin");
+      toast.error(t("links.copyFail"));
     }
   };
 
@@ -187,15 +190,15 @@ export default function Links() {
     <div className="space-y-6"> <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">
-            Link Shortener
+            {t("links.title")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Buat short link + tracking klik
+            {t("links.subtitle")}
           </p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setShowAdd(true)}>
           <Plus className="w-3.5 h-3.5" />
-          Buat Link
+          {t("links.createLink")}
         </Button>
       </div>
 
@@ -219,7 +222,7 @@ export default function Links() {
           <CardContent className="p-6 text-center space-y-3">
             <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+              <RefreshCw className="w-3.5 h-3.5" /> {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -230,13 +233,13 @@ export default function Links() {
           <CardContent className="p-10 text-center space-y-3">
             <Link2 className="w-10 h-10 mx-auto text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">
-              Belum ada short link
+              {t("links.empty")}
             </p>
             <p className="text-xs text-muted-foreground">
-              Buat link pendek untuk URL panjang dan pantau jumlah kliknya.
+              {t("links.emptyHint")}
             </p>
             <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Buat Link
+              <Plus className="w-3.5 h-3.5" /> {t("links.createLink")}
             </Button>
           </CardContent>
         </Card>
@@ -259,7 +262,7 @@ export default function Links() {
                         </p>
                         {!link.isActive && (
                           <Badge variant="outline" className="text-[10px]">
-                            Nonaktif
+                            {t("links.inactive")}
                           </Badge>
                         )}
                       </div>
@@ -274,14 +277,14 @@ export default function Links() {
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <BarChart3 className="w-3 h-3" />
-                      {link.clickCount} klik
+                      {t("links.clicks").replace("{count}", String(link.clickCount))}
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
                       onClick={() => handleCopy(link.code)}
-                      aria-label="Salin URL pendek"
+                      aria-label={t("links.copyUrlAria")}
                     >
                       <Copy className="w-3.5 h-3.5" />
                     </Button>
@@ -290,7 +293,7 @@ export default function Links() {
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      aria-label="Buka link"
+                      aria-label={t("links.openLinkAria")}
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
@@ -299,7 +302,7 @@ export default function Links() {
                       size="icon"
                       className="h-7 w-7"
                       onClick={() => openEdit(link)}
-                      aria-label="Edit link"
+                      aria-label={t("links.editLinkAria")}
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
@@ -308,7 +311,7 @@ export default function Links() {
                       size="icon"
                       className="h-7 w-7 text-destructive"
                       onClick={() => setDeleting(link)}
-                      aria-label="Hapus link"
+                      aria-label={t("links.deleteLinkAria")}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
@@ -321,11 +324,11 @@ export default function Links() {
       )}
 
       {showAdd && (
-        <Modal title="Buat Short Link" onClose={() => setShowAdd(false)}>
+        <Modal title={t("links.modalCreate")} onClose={() => setShowAdd(false)}>
           <div className="space-y-4">
             <div>
               <label className="text-xs font-medium text-foreground">
-                URL tujuan
+                {t("links.targetUrl")}
               </label>
               <Input
                 className="mt-1"
@@ -336,22 +339,22 @@ export default function Links() {
             </div>
             <div>
               <label className="text-xs font-medium text-foreground">
-                Judul (opsional)
+                {t("links.titleOptional")}
               </label>
               <Input
                 className="mt-1"
-                placeholder="cth: Promo Juli"
+                placeholder={t("links.titlePlaceholder")}
                 value={addTitle}
                 onChange={(e) => setAddTitle(e.target.value)}
               />
             </div>
             <div>
               <label className="text-xs font-medium text-foreground">
-                Kode kustom (opsional)
+                {t("links.codeOptional")}
               </label>
               <Input
                 className="mt-1"
-                placeholder="otomatis jika dikosongkan"
+                placeholder={t("links.codePlaceholder")}
                 value={addCode}
                 onChange={(e) => setAddCode(e.target.value)}
               />
@@ -362,10 +365,10 @@ export default function Links() {
                 size="sm"
                 onClick={() => setShowAdd(false)}
               >
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button size="sm" onClick={handleAdd} disabled={savingAdd}>
-                {savingAdd ? "Menyimpan..." : "Simpan"}
+                {savingAdd ? t("links.saving") : t("common.save")}
               </Button>
             </div>
           </div>
@@ -373,11 +376,11 @@ export default function Links() {
       )}
 
       {editing && (
-        <Modal title="Edit Link" onClose={() => setEditing(null)}>
+        <Modal title={t("links.modalEdit")} onClose={() => setEditing(null)}>
           <div className="space-y-4">
             <div>
               <label className="text-xs font-medium text-foreground">
-                URL tujuan
+                {t("links.targetUrl")}
               </label>
               <Input
                 className="mt-1"
@@ -387,7 +390,7 @@ export default function Links() {
             </div>
             <div>
               <label className="text-xs font-medium text-foreground">
-                Judul (opsional)
+                {t("links.titleOptional")}
               </label>
               <Input
                 className="mt-1"
@@ -396,7 +399,7 @@ export default function Links() {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground">Kode</label>
+              <label className="text-xs font-medium text-foreground">{t("links.code")}</label>
               <Input
                 className="mt-1"
                 value={editCode}
@@ -410,7 +413,7 @@ export default function Links() {
                 onChange={(e) => setEditActive(e.target.checked)}
                 className="w-4 h-4 accent-primary"
               />
-              Link aktif
+              {t("links.linkActive")}
             </label>
             <div className="flex justify-end gap-2">
               <Button
@@ -418,10 +421,10 @@ export default function Links() {
                 size="sm"
                 onClick={() => setEditing(null)}
               >
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button size="sm" onClick={handleEdit} disabled={savingEdit}>
-                {savingEdit ? "Menyimpan..." : "Simpan"}
+                {savingEdit ? t("links.saving") : t("common.save")}
               </Button>
             </div>
           </div>
@@ -429,9 +432,9 @@ export default function Links() {
       )}
 
       {deleting && (
-        <Modal title="Hapus Link" onClose={() => setDeleting(null)}>
+        <Modal title={t("links.modalDelete")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground">
-            Hapus short link{" "}
+            {t("links.deleteConfirm")}{" "}
             <b className="text-foreground font-mono">
               {shortUrl(deleting.code)}
             </b>
@@ -443,7 +446,7 @@ export default function Links() {
               size="sm"
               onClick={() => setDeleting(null)}
             >
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -451,7 +454,7 @@ export default function Links() {
               onClick={handleDelete}
               disabled={deletingBusy}
             >
-              {deletingBusy ? "Menghapus..." : "Hapus"}
+              {deletingBusy ? t("links.deleting") : t("common.delete")}
             </Button>
           </div>
         </Modal>

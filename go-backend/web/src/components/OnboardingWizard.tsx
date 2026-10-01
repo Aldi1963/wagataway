@@ -4,6 +4,7 @@ import { X, Smartphone, QrCode, Send, CheckCircle2, RefreshCw } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 const DONE_KEY = "wg_onboard_done";
 
@@ -29,11 +30,16 @@ interface DeviceItem {
   name: string;
 }
 
-const stepLabels = ["Tambah Perangkat", "Pindai QR", "Kirim Pesan Tes"];
 const stepIcons = [Smartphone, QrCode, Send];
 
 export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
+  const { t } = useLang();
   const [step, setStep] = useState(1);
+  const stepLabels = [
+    t("onboardingWizard.step1"),
+    t("onboardingWizard.step2"),
+    t("onboardingWizard.step3"),
+  ];
 
   // Langkah 1
   const [deviceName, setDeviceName] = useState("");
@@ -71,7 +77,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const createDevice = async () => {
     const name = deviceName.trim();
     if (!name) {
-      toast.error("Nama perangkat wajib diisi");
+      toast.error(t("onboardingWizard.errDeviceNameRequired"));
       return;
     }
     setSaving(true);
@@ -85,11 +91,11 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         const list = await apiGet<{ devices: DeviceItem[] }>("/devices");
         id = (list.devices || []).filter((d) => d.name === name).pop()?.id;
       }
-      if (!id) throw new Error("ID perangkat tidak ditemukan, coba lagi");
+      if (!id) throw new Error(t("onboardingWizard.errDeviceIdNotFound"));
       setDeviceId(id);
       setStep(2);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menambah perangkat");
+      toast.error(e instanceof Error ? e.message : t("onboardingWizard.errAddDeviceFailed"));
     } finally {
       setSaving(false);
     }
@@ -106,9 +112,9 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
       await new Promise((r) => setTimeout(r, 1500));
       const q = await apiGet<{ qr: string }>(`/devices/${id}/qr`);
       if (q.qr) setQr(q.qr);
-      else setQrError("QR belum tersedia, coba muat ulang.");
+      else setQrError(t("onboardingWizard.errQrNotReady"));
     } catch (e) {
-      setQrError(e instanceof Error ? e.message : "Gagal memulai koneksi");
+      setQrError(e instanceof Error ? e.message : t("onboardingWizard.errConnectFailed"));
     } finally {
       setQrLoading(false);
     }
@@ -129,7 +135,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         );
         if (s.status === "connected") {
           clearInterval(iv);
-          toast.success("Perangkat terhubung!");
+          toast.success(t("onboardingWizard.deviceConnected"));
           setStep(3);
         } else {
           const q = await apiGet<{ qr: string }>(
@@ -153,13 +159,13 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         `/devices/${deviceId}/status`
       );
       if (s.status === "connected") {
-        toast.success("Perangkat terhubung!");
+        toast.success(t("onboardingWizard.deviceConnected"));
         setStep(3);
       } else {
-        toast.error("Perangkat belum terhubung, pindai QR dulu");
+        toast.error(t("onboardingWizard.errNotConnected"));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memeriksa status");
+      toast.error(e instanceof Error ? e.message : t("onboardingWizard.errCheckStatus"));
     } finally {
       setChecking(false);
     }
@@ -169,15 +175,15 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const sendTest = async () => {
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 9) {
-      toast.error("Nomor tujuan tidak valid, gunakan format 62812xxxxxxx");
+      toast.error(t("onboardingWizard.errInvalidPhone"));
       return;
     }
     if (!message.trim()) {
-      toast.error("Pesan tidak boleh kosong");
+      toast.error(t("onboardingWizard.errMessageEmpty"));
       return;
     }
     if (!deviceId) {
-      toast.error("Perangkat tidak ditemukan");
+      toast.error(t("onboardingWizard.errDeviceNotFound"));
       return;
     }
     setSending(true);
@@ -188,10 +194,10 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         content: message.trim(),
         type: "text",
       });
-      toast.success("Pesan tes terkirim!");
+      toast.success(t("onboardingWizard.testMessageSent"));
       finish();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal mengirim pesan tes");
+      toast.error(e instanceof Error ? e.message : t("onboardingWizard.errSendTest"));
     } finally {
       setSending(false);
     }
@@ -204,9 +210,9 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         {/* Header */}
         <div className="flex items-start justify-between mb-1">
           <div>
-            <h3 className="text-base font-semibold">Selamat datang di WaGataway</h3>
+            <h3 className="text-base font-semibold">{t("onboardingWizard.welcome")}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Selesaikan 3 langkah cepat untuk mulai mengirim pesan
+              {t("onboardingWizard.welcomeSub")}
             </p>
           </div>
           <Button
@@ -214,7 +220,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
             size="icon"
             className="h-8 w-8 shrink-0"
             onClick={skip}
-            aria-label="Lewati"
+            aria-label={t("onboardingWizard.skipAria")}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -228,7 +234,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
             const active = step === n;
             const done = step > n;
             return (
-              <div key={label} className="flex-1 flex flex-col items-center gap-1.5">
+              <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${
                     done
@@ -261,25 +267,25 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
           <div className="space-y-4">
             <div>
               <label className="text-xs font-medium text-foreground">
-                Nama perangkat
+                {t("onboardingWizard.deviceNameLabel")}
               </label>
               <Input
                 className="mt-1"
-                placeholder="cth: HP Utama"
+                placeholder={t("onboardingWizard.deviceNamePlaceholder")}
                 value={deviceName}
                 onChange={(e) => setDeviceName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createDevice()}
               />
               <p className="text-[11px] text-muted-foreground mt-1.5">
-                Perangkat adalah nomor WhatsApp yang akan dipakai mengirim pesan.
+                {t("onboardingWizard.deviceHint")}
               </p>
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" size="sm" onClick={skip}>
-                Lewati
+                {t("onboardingWizard.skip")}
               </Button>
               <Button size="sm" onClick={createDevice} disabled={saving}>
-                {saving ? "Menyimpan..." : "Lanjut"}
+                {saving ? t("onboardingWizard.saving") : t("onboardingWizard.next")}
               </Button>
             </div>
           </div>
@@ -290,7 +296,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
             <div className="flex flex-col items-center space-y-3">
               {qrLoading && (
                 <p className="text-sm text-muted-foreground py-8">
-                  Menyiapkan kode QR...
+                  {t("onboardingWizard.preparingQr")}
                 </p>
               )}
               {!qrLoading && qrError && (
@@ -302,7 +308,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
                     onClick={() => deviceId && startConnect(deviceId)}
                     className="gap-1.5"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> Muat ulang QR
+                    <RefreshCw className="w-3.5 h-3.5" /> {t("onboardingWizard.reloadQr")}
                   </Button>
                 </>
               )}
@@ -312,26 +318,25 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
                       qr
                     )}`}
-                    alt="Kode QR WhatsApp"
+                    alt={t("onboardingWizard.qrAlt")}
                     className="w-56 h-56 rounded-lg border border-border"
                   />
                   <p className="text-xs text-muted-foreground text-center">
-                    Pindai dengan WhatsApp di HP kamu
-                    (Pengaturan → Perangkat tertaut).
+                    {t("onboardingWizard.scanHint")}
                   </p>
                 </>
               )}
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" size="sm" onClick={skip}>
-                Lewati
+                {t("onboardingWizard.skip")}
               </Button>
               <Button
                 size="sm"
                 onClick={checkConnected}
                 disabled={checking}
               >
-                {checking ? "Memeriksa..." : "Sudah terhubung, lanjut"}
+                {checking ? t("onboardingWizard.checking") : t("onboardingWizard.alreadyConnected")}
               </Button>
             </div>
           </div>
@@ -341,7 +346,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
           <div className="space-y-4">
             <div>
               <label className="text-xs font-medium text-foreground">
-                Nomor tujuan
+                {t("onboardingWizard.phoneLabel")}
               </label>
               <Input
                 className="mt-1 font-mono"
@@ -352,7 +357,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
             </div>
             <div>
               <label className="text-xs font-medium text-foreground">
-                Pesan
+                {t("onboardingWizard.messageLabel")}
               </label>
               <textarea
                 className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-[90px] resize-y"
@@ -362,10 +367,10 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" size="sm" onClick={skip}>
-                Lewati
+                {t("onboardingWizard.skip")}
               </Button>
               <Button size="sm" onClick={sendTest} disabled={sending}>
-                {sending ? "Mengirim..." : "Kirim Pesan Tes"}
+                {sending ? t("onboardingWizard.sending") : t("onboardingWizard.sendTest")}
               </Button>
             </div>
           </div>

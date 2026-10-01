@@ -12,6 +12,7 @@ import { KeyManager } from "@/components/KeyManager";
 import TwoFASettings from "@/components/TwoFASettings";
 import SessionsSection from "@/components/SessionsSection";
 import Team from "./Team";
+import { useLang } from "@/lib/i18n";
 
 /** Judul seksi ala halaman profil: tebal + garis pembatas. */
 export function SectionHeader({ title, desc }: { title: string; desc?: string }) {
@@ -24,11 +25,7 @@ export function SectionHeader({ title, desc }: { title: string; desc?: string })
   );
 }
 
-const TABS = [
-  { id: "profil", label: "Profil", icon: UserRound },
-  { id: "api", label: "Pengaturan API", icon: KeyRound },
-  { id: "tim", label: "Tim", icon: Users },
-];
+const TAB_IDS = ["profil", "api", "tim"];
 
 /** Alias tab lama (?tab=keamanan dsb.) ke halaman baru yang digabung. */
 const TAB_ALIAS: Record<string, string> = {
@@ -45,7 +42,7 @@ const MOVED_TABS: Record<string, string> = {
   afiliasi: "/affiliate",
 };
 
-const VALID_TABS = new Set(TABS.map((t) => t.id));
+const VALID_TABS = new Set(TAB_IDS);
 const WIDE_TABS = new Set(["tim"]);
 
 function initialTab(): string {
@@ -67,6 +64,13 @@ function initialTab(): string {
 export default function Settings() {
   const { user, updateUser } = useAuth();
   const [, navigate] = useLocation();
+  const { t } = useLang();
+
+  const TABS = [
+    { id: "profil", label: t("settings.tabProfile"), icon: UserRound },
+    { id: "api", label: t("settings.tabApiSettings"), icon: KeyRound },
+    { id: "tim", label: t("settings.tabTeam"), icon: Users },
+  ];
 
   const [active, setActive] = useState<string>(initialTab);
 
@@ -104,7 +108,7 @@ export default function Settings() {
     // Validasi ringan nomor WA: digit saja, boleh diawali 08/62/+62; boleh kosong.
     const waDigits = waTrimmed.replace(/\D/g, "");
     if (waDigits && (waDigits.length < 9 || waDigits.length > 16)) {
-      toast.error("Nomor notifikasi WA tidak valid (9-16 digit)");
+      toast.error(t("settings.toastInvalidWaNumber"));
       return;
     }
     setSavingName(true);
@@ -114,9 +118,9 @@ export default function Settings() {
         { name: trimmed, notifyWa: waTrimmed }
       );
       if (user) updateUser({ ...user, name: trimmed, notifyWa: waTrimmed });
-      toast.success(data.message || "Informasi akun berhasil disimpan");
+      toast.success(data.message || t("settings.toastSaved"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal menyimpan perubahan");
+      toast.error(err instanceof Error ? err.message : t("settings.toastSaveFailed"));
     } finally {
       setSavingName(false);
     }
@@ -130,13 +134,13 @@ export default function Settings() {
         currentPassword,
         newPassword,
       });
-      toast.success(data.message || "Password berhasil diubah");
+      toast.success(data.message || t("settings.toastPasswordChanged"));
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Gagal mengubah password"
+        err instanceof Error ? err.message : t("settings.toastChangePasswordFailed")
       );
     } finally {
       setChangingPw(false);
@@ -192,10 +196,10 @@ export default function Settings() {
       {active === "profil" && (
         <div className="space-y-10">
           <div>
-          <SectionHeader title="Informasi Personal" desc="Kelola informasi akun Anda" />
+          <SectionHeader title={t("settings.personalInfo")} desc={t("settings.personalInfoDesc")} />
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium">Nama</label>
+              <label className="text-xs font-medium">{t("settings.labelName")}</label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -203,11 +207,11 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Email</label>
+              <label className="text-xs font-medium">{t("settings.labelEmail")}</label>
               <Input defaultValue={user?.email || ""} disabled />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Nomor Notifikasi WA</label>
+              <label className="text-xs font-medium">{t("settings.labelNotifyWa")}</label>
               <Input
                 value={notifyWa}
                 onChange={(e) => setNotifyWa(e.target.value)}
@@ -215,8 +219,7 @@ export default function Settings() {
                 inputMode="tel"
               />
               <p className="text-xs text-muted-foreground">
-                Notifikasi pembayaran &amp; pengingat expired dikirim ke nomor
-                ini via WhatsApp. Kosongkan bila tidak ingin menerima.
+                {t("settings.notifyWaDesc")}
               </p>
             </div>
 
@@ -225,16 +228,16 @@ export default function Settings() {
               onClick={handleSaveName}
               disabled={savingName || name.trim().length < 2}
             >
-              {savingName ? "Menyimpan…" : "Simpan Perubahan"}
+              {savingName ? t("settings.saving") : t("settings.saveChanges")}
             </Button>
           </div>
           </div>
 
           <div>
-          <SectionHeader title="Keamanan" desc="Perbarui password akun Anda" />
+          <SectionHeader title={t("settings.security")} desc={t("settings.securityDesc")} />
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium">Password Saat Ini</label>
+              <label className="text-xs font-medium">{t("settings.labelCurrentPassword")}</label>
               <PasswordInput
                 placeholder="••••••••"
                 value={currentPassword}
@@ -243,9 +246,9 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Password Baru</label>
+              <label className="text-xs font-medium">{t("settings.labelNewPassword")}</label>
               <PasswordInput
-                placeholder="Minimal 6 karakter"
+                placeholder={t("settings.placeholderNewPassword")}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 autoComplete="new-password"
@@ -253,10 +256,10 @@ export default function Settings() {
               <StrengthMeter password={newPassword} />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Konfirmasi Password Baru</label>
+              <label className="text-xs font-medium">{t("settings.labelConfirmPassword")}</label>
               <div className="relative">
                 <PasswordInput
-                  placeholder="Ulangi password baru"
+                  placeholder={t("settings.placeholderConfirmPassword")}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
@@ -272,7 +275,7 @@ export default function Settings() {
                 )}
               </div>
               {pwMismatch && (
-                <p className="text-[11px] text-red-500">Password tidak sama.</p>
+                <p className="text-[11px] text-red-500">{t("settings.passwordMismatch")}</p>
               )}
             </div>
 
@@ -281,22 +284,22 @@ export default function Settings() {
               onClick={handleChangePassword}
               disabled={!pwValid || changingPw}
             >
-              {changingPw ? "Mengubah…" : "Ubah Password"}
+              {changingPw ? t("settings.changing") : t("settings.changePassword")}
             </Button>
           </div>
 
           <div className="pt-2">
             <SectionHeader
-              title="Verifikasi 2 Langkah"
-              desc="Lapisan keamanan tambahan saat login"
+              title={t("settings.twoFactor")}
+              desc={t("settings.twoFactorDesc")}
             />
             <TwoFASettings />
           </div>
 
           <div className="pt-2">
             <SectionHeader
-              title="Sesi Aktif"
-              desc="Perangkat yang sedang login ke akun Anda"
+              title={t("settings.activeSessions")}
+              desc={t("settings.activeSessionsDesc")}
             />
             <SessionsSection />
           </div>
@@ -306,7 +309,7 @@ export default function Settings() {
 
       {active === "api" && (
         <div>
-          <SectionHeader title="Pengaturan API" desc="Kelola API key untuk integrasi" />
+          <SectionHeader title={t("settings.apiSettings")} desc={t("settings.apiSettingsDesc")} />
           <KeyManager
             onUseKey={(key) => {
               try {
@@ -314,7 +317,7 @@ export default function Settings() {
               } catch {
                 /* abaikan */
               }
-              toast.success("Key siap dipakai di panel Coba langsung");
+              toast.success(t("settings.toastKeyReady"));
               navigate("/developer");
             }}
           />

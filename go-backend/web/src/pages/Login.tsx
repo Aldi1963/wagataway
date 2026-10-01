@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import AuthLayout from "@/components/AuthLayout";
 import { PasswordInput } from "@/components/PasswordInput";
+import { useLang } from "@/lib/i18n";
 
 function GoogleIcon() {
   return (
@@ -39,6 +40,7 @@ function GithubIcon() {
 }
 
 export default function Login() {
+  const { t } = useLang();
   const { login, verify2FA } = useAuth();
   const [oauthProviders, setOauthProviders] = useState<Record<
     string,
@@ -92,7 +94,7 @@ export default function Login() {
         setTwofaCode("");
       }
     } catch (err: any) {
-      setError(err.message || "Email atau password salah. Coba lagi.");
+      setError(err.message || t("login.errorInvalid"));
     } finally {
       setLoading(false);
     }
@@ -106,22 +108,21 @@ export default function Login() {
 
   return (
     <AuthLayout
-      title="Selamat datang kembali"
-      subtitle="Masuk untuk mengelola WhatsApp gateway Anda."
+      title={t("login.title")}
+      subtitle={t("login.subtitle")}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {twofaToken ? (
           <>
             <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-[13px] text-muted-foreground">
-              Akun Anda dilindungi 2FA. Masukkan 6 digit kode dari aplikasi
-              authenticator (atau kode cadangan).
+              {t("login.twoFaNotice")}
             </div>
             <div className="space-y-1.5">
               <label className="text-[13px] font-medium text-foreground">
-                Kode 2FA
+                {t("login.twoFaCode")}
               </label>
               <Input
-                placeholder="123456 atau kode cadangan"
+                placeholder={t("login.twoFaPlaceholder")}
                 value={twofaCode}
                 onChange={(e) =>
                   setTwofaCode(
@@ -135,15 +136,14 @@ export default function Login() {
                 className="font-mono text-center text-xl tracking-[0.35em] h-12 uppercase"
               />
               <p className="text-xs text-muted-foreground">
-                6 digit dari aplikasi authenticator, atau 8 karakter kode
-                cadangan.
+                {t("login.twoFaHint")}
               </p>
             </div>
           </>
         ) : (
           <>
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-foreground">Email</label>
+          <label className="text-[13px] font-medium text-foreground">{t("login.emailLabel")}</label>
           <Input
             type="email"
             placeholder="nama@perusahaan.com"
@@ -156,7 +156,7 @@ export default function Login() {
 
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-foreground">
-            Password
+            {t("login.passwordLabel")}
           </label>
           <PasswordInput
             value={password}
@@ -174,13 +174,13 @@ export default function Login() {
               onChange={(e) => setRemember(e.target.checked)}
               className="w-4 h-4 rounded accent-[#243370] cursor-pointer"
             />
-            Ingat saya
+            {t("login.rememberMe")}
           </label>
           <Link
             href="/forgot-password"
             className="text-[13px] font-medium text-[#243370] dark:text-blue-400 hover:underline"
           >
-            Lupa password?
+            {t("login.forgotPassword")}
           </Link>
         </div>
           </>
@@ -199,7 +199,7 @@ export default function Login() {
           disabled={loading}
         >
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {loading ? "Memproses..." : twofaToken ? "Verifikasi" : "Masuk"}
+          {loading ? t("login.processing") : twofaToken ? t("login.verify") : t("login.submit")}
         </Button>
         {twofaToken && (
           <button
@@ -207,7 +207,7 @@ export default function Login() {
             onClick={cancel2FA}
             className="w-full text-center text-[13px] text-muted-foreground hover:underline"
           >
-            Kembali
+            {t("login.back")}
           </button>
         )}
       </form>
@@ -220,7 +220,7 @@ export default function Login() {
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">
-                atau lanjutkan dengan
+                {t("login.continueWith")}
               </span>
             </div>
           </div>
@@ -250,12 +250,12 @@ export default function Login() {
       )}
 
       <p className="text-center text-[13px] text-muted-foreground mt-6">
-        Belum punya akun?{" "}
+        {t("login.noAccount")}{" "}
         <Link
           href="/register"
           className="font-semibold text-[#243370] dark:text-blue-400 hover:underline"
         >
-          Daftar gratis
+          {t("login.registerLink")}
         </Link>
       </p>
     </AuthLayout>

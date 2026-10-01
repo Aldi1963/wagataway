@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface PollOptionResult {
@@ -63,6 +64,7 @@ function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -75,7 +77,7 @@ function Modal({
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card rounded-t-xl z-10">
           <h3 className="font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label={t("polls.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -86,6 +88,7 @@ function Modal({
 }
 
 function ResultBars({ poll }: { poll: PollResult }) {
+  const { t } = useLang();
   const max = Math.max(1, ...poll.options.map((o) => o.votes));
   return (
     <div className="space-y-3">
@@ -98,7 +101,7 @@ function ResultBars({ poll }: { poll: PollResult }) {
                 {i + 1}. {opt.text}
               </span>
               <span className="text-muted-foreground whitespace-nowrap">
-                {opt.votes} suara ({pct}%)
+                {t("polls.votesCount").replace("{votes}", String(opt.votes)).replace("{pct}", String(pct))}
               </span>
             </div>
             <div className="h-2.5 rounded-full bg-muted overflow-hidden">
@@ -111,7 +114,7 @@ function ResultBars({ poll }: { poll: PollResult }) {
         );
       })}
       <p className="text-xs text-muted-foreground pt-1">
-        🗳️ Total {poll.totalVotes} suara dari {poll.totalVoters} pemilih
+        {t("polls.totalSummary").replace("{votes}", String(poll.totalVotes)).replace("{voters}", String(poll.totalVoters))}
       </p>
     </div>
   );
@@ -121,6 +124,7 @@ const PAGE_SIZE = 20;
 
 /** Tab "Polling" di hub Kirim Pesan: daftar poll + hasil + kirim rekap. */
 export default function Polls({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [rows, setRows] = useState<PollResult[]>([]);
   const [devices, setDevices] = useState<Record<number, string>>({});
   const [page, setPage] = useState(1);
@@ -150,7 +154,7 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
       setDevices(map);
       setPage(p);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat daftar polling");
+      toast.error(e.message || t("polls.loadError"));
     } finally {
       setLoading(false);
     }
@@ -165,23 +169,23 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
       const res = await apiGet<{ data: PollResult }>(`/polls/${id}/results`);
       setViewing(res.data);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat hasil polling");
+      toast.error(e.message || t("polls.resultsLoadError"));
     }
   };
 
   const sendRecap = async () => {
     if (!recapping || !recapTo.trim()) {
-      toast.error("Isi nomor/grup tujuan rekap");
+      toast.error(t("polls.recapTargetRequired"));
       return;
     }
     setSendingRecap(true);
     try {
       await apiPost(`/polls/${recapping.id}/recap`, { to: recapTo.trim() });
-      toast.success("Rekap hasil polling terkirim");
+      toast.success(t("polls.recapSent"));
       setRecapping(null);
       setRecapTo("");
     } catch (e: any) {
-      toast.error(e.message || "Gagal mengirim rekap");
+      toast.error(e.message || t("polls.recapSendError"));
     } finally {
       setSendingRecap(false);
     }
@@ -191,11 +195,11 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
     setClosing(id);
     try {
       await apiPost(`/polls/${id}/close`);
-      toast.success("Polling ditutup");
+      toast.success(t("polls.pollClosed"));
       if (viewing?.id === id) openResults(id);
       load(page);
     } catch (e: any) {
-      toast.error(e.message || "Gagal menutup polling");
+      toast.error(e.message || t("polls.closeError"));
     } finally {
       setClosing(null);
     }
@@ -205,9 +209,9 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
     <div className={cn(!embedded && "space-y-4 sm:space-y-6")}>
       {!embedded && (
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Polling</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{t("polls.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            Hasil voting polling yang dikirim lewat API, plus kirim rekap otomatis
+            {t("polls.subtitle")}
           </p>
         </div>
       )}
@@ -216,16 +220,16 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
         {!embedded && (
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" /> Riwayat Polling
+              <BarChart3 className="w-4 h-4" /> {t("polls.historyTitle")}
             </CardTitle>
           </CardHeader>
         )}
         <CardContent className={cn(embedded && "pt-4")}>
           {loading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Memuat…</p>
+            <p className="text-sm text-muted-foreground py-8 text-center">{t("polls.loading")}</p>
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Belum ada polling. Kirim polling dari tab Kirim (tipe pesan: Polling).
+              {t("polls.empty")}
             </p>
           ) : (
             <>
@@ -233,12 +237,12 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
                 <table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="text-left text-muted-foreground border-b border-border">
-                      <th className="py-2 pr-3 font-medium">Pertanyaan</th>
-                      <th className="py-2 pr-3 font-medium">Tujuan</th>
-                      <th className="py-2 pr-3 font-medium">Suara</th>
-                      <th className="py-2 pr-3 font-medium">Status</th>
-                      <th className="py-2 pr-3 font-medium">Dikirim</th>
-                      <th className="py-2 font-medium text-right">Aksi</th>
+                      <th className="py-2 pr-3 font-medium">{t("polls.colQuestion")}</th>
+                      <th className="py-2 pr-3 font-medium">{t("polls.colTarget")}</th>
+                      <th className="py-2 pr-3 font-medium">{t("polls.colVotes")}</th>
+                      <th className="py-2 pr-3 font-medium">{t("polls.colStatus")}</th>
+                      <th className="py-2 pr-3 font-medium">{t("polls.colSent")}</th>
+                      <th className="py-2 font-medium text-right">{t("polls.colActions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -247,7 +251,7 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
                         <td className="py-2.5 pr-3 max-w-[240px]">
                           <div className="font-medium truncate">{p.question}</div>
                           <div className="text-xs text-muted-foreground">
-                            {p.options.length} opsi{p.isGroup ? " • grup" : ""}
+                            {t("polls.optionsCount").replace("{count}", String(p.options.length))}{p.isGroup ? t("polls.groupSuffix") : ""}
                           </div>
                         </td>
                         <td className="py-2.5 pr-3 whitespace-nowrap">
@@ -257,18 +261,18 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
                           </div>
                         </td>
                         <td className="py-2.5 pr-3 whitespace-nowrap">
-                          {p.totalVotes} suara
+                          {t("polls.votesSuffix").replace("{count}", String(p.totalVotes))}
                           <div className="text-xs text-muted-foreground">
-                            {p.totalVoters} pemilih
+                            {t("polls.votersSuffix").replace("{count}", String(p.totalVoters))}
                           </div>
                         </td>
                         <td className="py-2.5 pr-3">
                           {p.isClosed ? (
-                            <Badge variant="secondary">Ditutup</Badge>
+                            <Badge variant="secondary">{t("polls.closed")}</Badge>
                           ) : p.messageId ? (
-                            <Badge variant="default">Aktif</Badge>
+                            <Badge variant="default">{t("polls.active")}</Badge>
                           ) : (
-                            <Badge variant="secondary">Mengirim…</Badge>
+                            <Badge variant="secondary">{t("polls.sending")}</Badge>
                           )}
                         </td>
                         <td className="py-2.5 pr-3 whitespace-nowrap text-muted-foreground">
@@ -281,7 +285,7 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
                             className="mr-1.5"
                             onClick={() => openResults(p.id)}
                           >
-                            <Eye className="w-3.5 h-3.5 mr-1" /> Hasil
+                            <Eye className="w-3.5 h-3.5 mr-1" /> {t("polls.results")}
                           </Button>
                           <Button
                             variant="default"
@@ -291,7 +295,7 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
                               setRecapTo(p.to || "");
                             }}
                           >
-                            <Send className="w-3.5 h-3.5 mr-1" /> Rekap
+                            <Send className="w-3.5 h-3.5 mr-1" /> {t("polls.recap")}
                           </Button>
                         </td>
                       </tr>
@@ -301,7 +305,7 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
               </div>
               <div className="flex items-center justify-between pt-3">
                 <p className="text-xs text-muted-foreground">
-                  Halaman {page} dari {totalPages} • {total} polling
+                  {t("polls.pagination").replace("{page}", String(page)).replace("{totalPages}", String(totalPages)).replace("{total}", String(total))}
                 </p>
                 <div className="flex gap-1.5">
                   <Button
@@ -328,17 +332,17 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
       </Card>
 
       {viewing && (
-        <Modal wide title="Hasil Polling" onClose={() => setViewing(null)}>
+        <Modal wide title={t("polls.resultsTitle")} onClose={() => setViewing(null)}>
           <div className="space-y-4">
             <div>
               <p className="font-semibold">{viewing.question}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {viewing.isClosed ? (
-                  <Badge variant="secondary" className="mr-1.5">Ditutup</Badge>
+                  <Badge variant="secondary" className="mr-1.5">{t("polls.closed")}</Badge>
                 ) : (
-                  <Badge variant="default" className="mr-1.5">Aktif</Badge>
+                  <Badge variant="default" className="mr-1.5">{t("polls.active")}</Badge>
                 )}
-                Tujuan: {viewing.to || "-"} • {devices[viewing.deviceId] ?? `#${viewing.deviceId}`}
+                {t("polls.targetPrefix").replace("{to}", viewing.to || "-").replace("{device}", devices[viewing.deviceId] ?? `#${viewing.deviceId}`)}
               </p>
             </div>
             <ResultBars poll={viewing} />
@@ -350,7 +354,7 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
                 onClick={() => closePoll(viewing.id)}
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                {closing === viewing.id ? "Menutup…" : "Tutup polling"}
+                {closing === viewing.id ? t("polls.closing") : t("polls.closePoll")}
               </Button>
             )}
           </div>
@@ -358,18 +362,17 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {recapping && (
-        <Modal title="Kirim Rekap Hasil" onClose={() => setRecapping(null)}>
+        <Modal title={t("polls.recapTitle")} onClose={() => setRecapping(null)}>
           <div className="space-y-4">
             <p className="text-sm">
-              Ringkasan hasil <span className="font-semibold">“{recapping.question}”</span> akan
-              dikirim sebagai pesan teks via perangkat yang sama.
+              {t("polls.recapIntro").replace("{question}", recapping.question)}
             </p>
             <div className="rounded-lg bg-muted p-3">
               <ResultBars poll={recapping} />
             </div>
             <div>
               <label className="text-sm font-medium block mb-1.5">
-                Tujuan (nomor / JID grup)
+                {t("polls.recapTarget")}
               </label>
               <Input
                 value={recapTo}
@@ -379,11 +382,11 @@ export default function Polls({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setRecapping(null)}>
-                Batal
+                {t("polls.cancel")}
               </Button>
               <Button onClick={sendRecap} disabled={sendingRecap}>
                 <Send className="w-3.5 h-3.5 mr-1.5" />
-                {sendingRecap ? "Mengirim…" : "Kirim rekap"}
+                {sendingRecap ? t("polls.sending") : t("polls.sendRecap")}
               </Button>
             </div>
           </div>

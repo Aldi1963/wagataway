@@ -7,6 +7,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiGet, apiPost } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface SimpleContact {
@@ -54,6 +55,7 @@ interface BulkJobItem {
 }
 
 export default function BulkMessages({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const { activeDeviceId } = useActiveDevice();
   const [devices, setDevices] = useState<Device[]>([]);
   const [devicesLoading, setDevicesLoading] = useState(true);
@@ -142,13 +144,13 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
         .map((c) => (c.phone || "").trim())
         .filter(Boolean);
       if (phones.length === 0) {
-        toast.error("Belum ada kontak dengan nomor");
+        toast.error(t("bulkMessages.noContactNumbers"));
         return;
       }
       setRecipients(phones.join("\n"));
-      toast.success(`${phones.length} nomor diambil dari kontak`);
+      toast.success(t("bulkMessages.contactsLoaded").replace("{n}", String(phones.length)));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memuat kontak");
+      toast.error(e instanceof Error ? e.message : t("bulkMessages.loadContactsFailed"));
     } finally {
       setLoadingNumbers(false);
     }
@@ -156,7 +158,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
 
   const handleLoadGroup = async () => {
     if (!groupId) {
-      toast.error("Pilih grup terlebih dahulu");
+      toast.error(t("bulkMessages.selectGroupFirst"));
       return;
     }
     setLoadingNumbers(true);
@@ -177,14 +179,14 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
         .map((id) => phoneById.get(id) ?? "")
         .filter(Boolean);
       if (phones.length === 0) {
-        toast.error("Grup ini belum punya anggota dengan nomor");
+        toast.error(t("bulkMessages.groupNoMembers"));
         return;
       }
       setRecipients(phones.join("\n"));
-      toast.success(`${phones.length} nomor diambil dari grup`);
+      toast.success(t("bulkMessages.groupLoaded").replace("{n}", String(phones.length)));
     } catch (e) {
       toast.error(
-        e instanceof Error ? e.message : "Gagal memuat anggota grup"
+        e instanceof Error ? e.message : t("bulkMessages.loadGroupFailed")
       );
     } finally {
       setLoadingNumbers(false);
@@ -200,13 +202,13 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
         .map((s) => s.replace(/[^\d+]/g, "").trim())
         .filter((s) => s.length >= 8);
       if (phones.length === 0) {
-        toast.error("Tidak ada nomor valid di file CSV");
+        toast.error(t("bulkMessages.csvNoValid"));
         return;
       }
       setRecipients(phones.join("\n"));
-      toast.success(`${phones.length} nomor diimpor dari CSV`);
+      toast.success(t("bulkMessages.csvImported").replace("{n}", String(phones.length)));
     };
-    reader.onerror = () => toast.error("Gagal membaca file");
+    reader.onerror = () => toast.error(t("bulkMessages.csvReadFailed"));
     reader.readAsText(file);
   };
 
@@ -217,12 +219,12 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
       .filter(Boolean);
 
   const validateForm = (phones: string[], min: number, max: number): string | null => {
-    if (selectedDevices.length === 0) return "Pilih minimal satu perangkat pengirim";
-    if (phones.length === 0) return "Isi minimal satu nomor tujuan";
-    if (!message.trim()) return "Isi pesan blast";
+    if (selectedDevices.length === 0) return t("bulkMessages.errSelectDevice");
+    if (phones.length === 0) return t("bulkMessages.errNoRecipients");
+    if (!message.trim()) return t("bulkMessages.errNoMessage");
     if (Number.isNaN(min) || Number.isNaN(max) || min < 0 || max < 0 || min > 3600 || max > 3600)
-      return "Jeda harus angka 0–3600 detik";
-    if (max < min) return "Jeda maks tidak boleh lebih kecil dari jeda min";
+      return t("bulkMessages.errDelayRange");
+    if (max < min) return t("bulkMessages.errDelayOrder");
     return null;
   };
 
@@ -245,13 +247,13 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
           numbers: phones,
         });
         if (res.validCount === 0) {
-          toast.error("Semua nomor tidak terdaftar di WhatsApp — blast dibatalkan");
+          toast.error(t("bulkMessages.allInvalid"));
           return;
         }
         setCheckResult(res);
         setShowConfirm(true);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Gagal memeriksa nomor");
+        toast.error(e instanceof Error ? e.message : t("bulkMessages.checkFailed"));
       } finally {
         setChecking(false);
       }
@@ -279,11 +281,17 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
       const c = res.cleaned;
       if (c?.applied) {
         toast.success(
-          `Blast dijadwalkan: ${c.valid} nomor valid dikirim, ${c.excluded} nomor dicoret (tidak terdaftar di WA) — job #${res.job?.id}`
+          t("bulkMessages.blastScheduledCleaned")
+            .replace("{valid}", String(c.valid))
+            .replace("{excluded}", String(c.excluded))
+            .replace("{jobId}", String(res.job?.id))
         );
       } else {
         toast.success(
-          `Blast dijadwalkan ke ${phones.length} nomor via ${selectedDevices.length} perangkat (job #${res.job?.id})`
+          t("bulkMessages.blastScheduled")
+            .replace("{total}", String(phones.length))
+            .replace("{devices}", String(selectedDevices.length))
+            .replace("{jobId}", String(res.job?.id))
         );
       }
       setRecipients("");
@@ -291,7 +299,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
       setCheckResult(null);
       loadHistory();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menjadwalkan blast");
+      toast.error(e instanceof Error ? e.message : t("bulkMessages.scheduleFailed"));
     } finally {
       setSending(false);
     }
@@ -311,24 +319,24 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
     <div className="max-w-3xl space-y-6">
       {!embedded && (
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Blast Pesan</h2>
-          <p className="text-sm text-muted-foreground">Kirim pesan ke banyak nomor sekaligus</p>
+          <h2 className="text-lg font-semibold text-foreground">{t("bulkMessages.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("bulkMessages.subtitle")}</p>
         </div>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Kirim Blast</CardTitle>
+          <CardTitle className="text-sm font-semibold">{t("bulkMessages.cardTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-medium text-foreground">
-              Perangkat Pengirim <span className="text-muted-foreground font-normal">(bisa pilih lebih dari satu — pesan dibagi rata round-robin)</span>
+              {t("bulkMessages.labelDevices")} <span className="text-muted-foreground font-normal">{t("bulkMessages.devicesHint")}</span>
             </label>
             {devicesLoading ? (
-              <p className="text-xs text-muted-foreground">Memuat perangkat…</p>
+              <p className="text-xs text-muted-foreground">{t("bulkMessages.devicesLoading")}</p>
             ) : devices.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Belum ada perangkat. Tambahkan dulu di Dashboard.</p>
+              <p className="text-xs text-muted-foreground">{t("bulkMessages.noDevices")}</p>
             ) : (
               <div className="space-y-1.5">
                 {devices.map((d) => {
@@ -340,7 +348,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                       className={`flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm ${
                         isConnected ? "cursor-pointer hover:bg-muted/50" : "opacity-50 cursor-not-allowed"
                       } ${checked ? "border-[#243370] bg-[#243370]/5" : ""}`}
-                      title={isConnected ? undefined : "Perangkat tidak terhubung — tidak bisa dipilih"}
+                      title={isConnected ? undefined : t("bulkMessages.deviceOfflineTitle")}
                     >
                       <input
                         type="checkbox"
@@ -355,22 +363,22 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                         <span className="block text-xs text-muted-foreground font-mono">{d.phone || "-"}</span>
                       </span>
                       <Badge variant={isConnected ? "success" : "secondary"}>
-                        {isConnected ? "Terhubung" : "Terputus"}
+                        {isConnected ? t("bulkMessages.connectedBadge") : t("bulkMessages.disconnectedBadge")}
                       </Badge>
                     </label>
                   );
                 })}
                 <p className="text-[10px] text-muted-foreground pt-1">
                   {connectedCount === 0
-                    ? "Tidak ada perangkat yang terhubung — hubungkan dulu sebelum blast."
-                    : `${selectedDevices.length} perangkat dipilih. Bila satu perangkat terputus di tengah jalan, sisa pesannya otomatis dialihkan ke perangkat lain.`}
+                    ? t("bulkMessages.noConnected")
+                    : t("bulkMessages.devicesSelectedNote").replace("{n}", String(selectedDevices.length))}
                 </p>
               </div>
             )}
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-foreground">Nomor Tujuan</label>
+            <label className="text-xs font-medium text-foreground">{t("bulkMessages.labelRecipients")}</label>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
@@ -381,18 +389,18 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                 disabled={loadingNumbers}
               >
                 <Users className="w-3.5 h-3.5" />
-                Ambil dari Kontak
+                {t("bulkMessages.loadContacts")}
               </Button>
               <Dropdown
                 value={groupId}
                 onChange={setGroupId}
                 onOpen={ensureGroups}
                 disabled={loadingNumbers}
-                aria-label="Pilih grup"
+                aria-label={t("bulkMessages.ariaGroup")}
                 className="w-auto min-w-[140px]"
-                placeholder="Pilih grup…"
+                placeholder={t("bulkMessages.groupPlaceholder")}
                 options={[
-                  { value: "", label: "Pilih grup…" },
+                  { value: "", label: t("bulkMessages.groupPlaceholder") },
                   ...groups.map((g) => ({ value: String(g.id), label: `${g.name} (${g.memberCount})` })),
                 ]}
               />
@@ -405,7 +413,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                 disabled={loadingNumbers || !groupId}
               >
                 <UsersRound className="w-3.5 h-3.5" />
-                Ambil dari Grup
+                {t("bulkMessages.loadGroup")}
               </Button>
             </div>
             <textarea
@@ -415,15 +423,15 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
               onChange={(e) => setRecipients(e.target.value)}
             />
             <p className="text-[10px] text-muted-foreground">
-              {recipients.split("\n").filter(Boolean).length} nomor
+              {t("bulkMessages.recipientCount").replace("{n}", String(recipients.split("\n").filter(Boolean).length))}
             </p>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-foreground">Pesan</label>
+            <label className="text-xs font-medium text-foreground">{t("bulkMessages.labelMessage")}</label>
             <textarea
               className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-[100px] resize-y"
-              placeholder="Tulis pesan blast..."
+              placeholder={t("bulkMessages.messagePlaceholder")}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />
@@ -431,15 +439,15 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
 
           <div className="space-y-2">
             <label className="text-xs font-medium text-foreground">
-              Jeda antar pesan <span className="text-muted-foreground font-normal">(acak, detik, berlaku per perangkat)</span>
+              {t("bulkMessages.labelDelay")} <span className="text-muted-foreground font-normal">{t("bulkMessages.delayHint")}</span>
             </label>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <span className="text-[11px] text-muted-foreground">Min</span>
+                <span className="text-[11px] text-muted-foreground">{t("bulkMessages.minDelayLabel")}</span>
                 <Input value={minDelay} onChange={(e) => setMinDelay(e.target.value)} type="number" min={0} />
               </div>
               <div className="space-y-1">
-                <span className="text-[11px] text-muted-foreground">Maks</span>
+                <span className="text-[11px] text-muted-foreground">{t("bulkMessages.maxDelayLabel")}</span>
                 <Input value={maxDelay} onChange={(e) => setMaxDelay(e.target.value)} type="number" min={0} />
               </div>
             </div>
@@ -448,11 +456,11 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
           <div className="flex flex-wrap gap-2 pt-2">
             <Button className="gap-2" onClick={handleSend} disabled={sending || checking || devicesLoading}>
               {sending || checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {checking ? "Memeriksa nomor…" : sending ? "Menjadwalkan…" : "Kirim Blast"}
+              {checking ? t("bulkMessages.checkingLabel") : sending ? t("bulkMessages.schedulingLabel") : t("bulkMessages.sendBlast")}
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={loadingNumbers}>
               <Upload className="w-4 h-4" />
-              Import CSV
+              {t("bulkMessages.importCsv")}
             </Button>
             <input
               ref={fileRef}
@@ -481,11 +489,10 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5 font-medium">
                 <Filter className="w-3.5 h-3.5 text-[#243370]" />
-                Coret otomatis nomor tidak valid
+                {t("bulkMessages.autoCleanTitle")}
               </span>
               <span className="block text-xs text-muted-foreground mt-0.5">
-                Sebelum blast dikirim, semua nomor dicek ke WhatsApp — nomor yang tidak terdaftar otomatis
-                dikeluarkan dari daftar kirim. Minta konfirmasi dulu sebelum mengirim.
+                {t("bulkMessages.autoCleanDesc")}
               </span>
             </span>
           </label>
@@ -500,24 +507,24 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Konfirmasi Blast</h3>
-              <button onClick={() => setShowConfirm(false)} className="p-1.5 rounded-md hover:bg-secondary" aria-label="Tutup">
+              <h3 className="text-lg font-semibold">{t("bulkMessages.confirmTitle")}</h3>
+              <button onClick={() => setShowConfirm(false)} className="p-1.5 rounded-md hover:bg-secondary" aria-label={t("bulkMessages.closeLabel")}>
                 <X className="w-5 h-5" />
               </button>
             </div>
             <p className="text-sm">
-              <span className="font-semibold text-[#243370]">{checkResult.validCount} nomor valid</span>
+              <span className="font-semibold text-[#243370]">{t("bulkMessages.confirmSummary").replace("{valid}", String(checkResult.validCount))}</span>
               {checkResult.excludedCount > 0 && (
-                <span>, <span className="font-semibold text-red-600">{checkResult.excludedCount} nomor dicoret</span> (tidak terdaftar di WA)</span>
+                <span>, <span className="font-semibold text-red-600">{t("bulkMessages.confirmExcluded").replace("{excluded}", String(checkResult.excludedCount))}</span></span>
               )}
               {checkResult.duplicates > 0 && (
-                <span className="text-muted-foreground">, {checkResult.duplicates} duplikat dibuang</span>
+                <span className="text-muted-foreground">{t("bulkMessages.confirmDuplicates").replace("{duplicates}", String(checkResult.duplicates))}</span>
               )}
-              . Lanjutkan?
+              {t("bulkMessages.confirmAsk")}
             </p>
             {checkResult.excludedCount > 0 && (
               <div className="mt-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1">Nomor yang dicoret:</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">{t("bulkMessages.excludedNumbers")}</p>
                 <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-xs space-y-0.5">
                   {checkResult.excluded.map((n) => (
                     <div key={n} className="text-red-600">{n}</div>
@@ -527,11 +534,11 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
             )}
             <div className="flex justify-end gap-2 mt-5">
               <Button variant="outline" onClick={() => setShowConfirm(false)} disabled={sending}>
-                Batal
+                {t("bulkMessages.cancel")}
               </Button>
               <Button onClick={handleConfirmSend} disabled={sending} className="gap-2">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {sending ? "Menjadwalkan…" : "Lanjutkan kirim"}
+                {sending ? t("bulkMessages.schedulingLabel") : t("bulkMessages.confirmSend")}
               </Button>
             </div>
           </div>
@@ -542,26 +549,26 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
         <CardHeader>
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <History className="w-4 h-4" />
-            Riwayat Blast
+            {t("bulkMessages.historyTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {historyLoading ? (
-            <p className="text-xs text-muted-foreground">Memuat riwayat…</p>
+            <p className="text-xs text-muted-foreground">{t("bulkMessages.historyLoading")}</p>
           ) : history.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Belum ada blast yang pernah dikirim.</p>
+            <p className="text-xs text-muted-foreground">{t("bulkMessages.historyEmpty")}</p>
           ) : (
             <div className="overflow-x-auto -mx-5 px-5">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead>
                   <tr className="text-left text-muted-foreground border-b border-border">
-                    <th className="py-2 pr-3 font-medium">Job</th>
-                    <th className="py-2 pr-3 font-medium">Status</th>
-                    <th className="py-2 pr-3 font-medium text-right">Total</th>
-                    <th className="py-2 pr-3 font-medium text-right">Terkirim</th>
-                    <th className="py-2 pr-3 font-medium text-right">Gagal</th>
-                    <th className="py-2 pr-3 font-medium text-right">Dicoret</th>
-                    <th className="py-2 pr-3 font-medium">Dibuat</th>
+                    <th className="py-2 pr-3 font-medium">{t("bulkMessages.headerJob")}</th>
+                    <th className="py-2 pr-3 font-medium">{t("bulkMessages.headerStatus")}</th>
+                    <th className="py-2 pr-3 font-medium text-right">{t("bulkMessages.headerTotal")}</th>
+                    <th className="py-2 pr-3 font-medium text-right">{t("bulkMessages.headerSent")}</th>
+                    <th className="py-2 pr-3 font-medium text-right">{t("bulkMessages.headerFailed")}</th>
+                    <th className="py-2 pr-3 font-medium text-right">{t("bulkMessages.headerExcluded")}</th>
+                    <th className="py-2 pr-3 font-medium">{t("bulkMessages.headerCreated")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -599,7 +606,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                           <td colSpan={7} className="py-2 pr-3">
                             <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2">
                               <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-1">
-                                {j.skippedCount} nomor dicoret (tidak terdaftar di WA):
+                                {t("bulkMessages.excludedListTitle").replace("{n}", String(j.skippedCount))}
                               </p>
                               <div className="max-h-32 overflow-y-auto font-mono text-[11px] space-y-0.5 text-foreground whitespace-normal break-all">
                                 {j.skippedNumbers.join(", ")}

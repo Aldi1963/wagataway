@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
 import AuthLayout from "@/components/AuthLayout";
+import { useLang } from "@/lib/i18n";
 
 export default function ForgotPassword() {
+  const { t } = useLang();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ export default function ForgotPassword() {
       await apiPost("/auth/forgot-password", { email });
       setSent(true);
     } catch (err: any) {
-      setError(err.message || "Gagal mengirim link reset. Coba lagi.");
+      setError(err.message || t("forgotPassword.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -28,8 +30,8 @@ export default function ForgotPassword() {
 
   return (
     <AuthLayout
-      title="Lupa password?"
-      subtitle="Masukkan email akun Anda, kami kirimkan link reset."
+      title={t("forgotPassword.title")}
+      subtitle={t("forgotPassword.subtitle")}
     >
       {sent ? (
         <div className="text-center py-4">
@@ -37,11 +39,12 @@ export default function ForgotPassword() {
             <MailCheck className="w-7 h-7 text-[#243370] dark:text-blue-400" />
           </span>
           <h2 className="font-semibold text-foreground mt-4">
-            Cek email Anda
+            {t("forgotPassword.checkEmail")}
           </h2>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            Jika <span className="font-medium text-foreground">{email}</span>{" "}
-            terdaftar, link reset password telah dikirim. Link berlaku 30 menit.
+            {t("forgotPassword.sentBefore")}{" "}
+            <span className="font-medium text-foreground">{email}</span>{" "}
+            {t("forgotPassword.sentAfter")}
           </p>
           <Button
             variant="outline"
@@ -51,14 +54,14 @@ export default function ForgotPassword() {
               setEmail("");
             }}
           >
-            Kirim ulang
+            {t("forgotPassword.resend")}
           </Button>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-foreground">
-              Email
+              {t("forgotPassword.emailLabel")}
             </label>
             <Input
               type="email"
@@ -85,7 +88,7 @@ export default function ForgotPassword() {
             disabled={loading}
           >
             {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {loading ? "Mengirim..." : "Kirim link reset"}
+            {loading ? t("forgotPassword.sending") : t("forgotPassword.submit")}
           </Button>
         </form>
       )}
@@ -95,7 +98,7 @@ export default function ForgotPassword() {
         className="flex items-center justify-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground mt-6"
       >
         <ArrowLeft className="w-4 h-4" />
-        Kembali ke halaman masuk
+        {t("forgotPassword.backToLogin")}
       </Link>
     </AuthLayout>
   );

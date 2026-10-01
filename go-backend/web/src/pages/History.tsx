@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiGet, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface HistoryMessage {
   id: number;
@@ -24,14 +25,14 @@ interface Device {
   phone: string;
 }
 
-function statusBadge(status: string) {
+function statusBadge(status: string, t: (key: string) => string) {
   const s = (status || "").toLowerCase();
-  if (s === "read") return <Badge variant="success">Dibaca</Badge>;
-  if (s === "delivered") return <Badge variant="default">Terkirim</Badge>;
-  if (s === "sent") return <Badge variant="default">Terkirim</Badge>;
-  if (s === "failed") return <Badge variant="destructive">Gagal</Badge>;
-  if (s === "revoked") return <Badge variant="secondary">Ditarik</Badge>;
-  if (s === "pending") return <Badge variant="secondary">Menunggu</Badge>;
+  if (s === "read") return <Badge variant="success">{t("history.statusRead")}</Badge>;
+  if (s === "delivered") return <Badge variant="default">{t("history.statusDelivered")}</Badge>;
+  if (s === "sent") return <Badge variant="default">{t("history.statusDelivered")}</Badge>;
+  if (s === "failed") return <Badge variant="destructive">{t("history.statusFailed")}</Badge>;
+  if (s === "revoked") return <Badge variant="secondary">{t("history.statusRevoked")}</Badge>;
+  if (s === "pending") return <Badge variant="secondary">{t("history.statusPending")}</Badge>;
   return <Badge variant="secondary">{status || "-"}</Badge>;
 }
 
@@ -48,7 +49,19 @@ function formatDate(iso: string) {
 
 const PAGE_SIZE = 20;
 
+const HEADERS = [
+  "headerId",
+  "headerSender",
+  "headerNumber",
+  "headerMessage",
+  "headerStatus",
+  "headerVia",
+  "headerDate",
+  "headerAction",
+];
+
 export default function History() {
+  const { t } = useLang();
   const [rows, setRows] = useState<HistoryMessage[]>([]);
   const [devices, setDevices] = useState<Record<number, string>>({});
   const [page, setPage] = useState(1);
@@ -72,7 +85,7 @@ export default function History() {
       setDevices(map);
       setPage(p);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat riwayat pesan");
+      toast.error(e.message || t("history.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -86,14 +99,14 @@ export default function History() {
     ["sent", "delivered", "read"].includes((m.status || "").toLowerCase()) && !!m.messageId;
 
   const revoke = async (m: HistoryMessage) => {
-    if (!window.confirm(`Tarik pesan ke ${m.to}? Pesan akan dihapus dari HP penerima.`)) return;
+    if (!window.confirm(t("history.revokeConfirm").replace("{to}", m.to))) return;
     setRevoking(m.id);
     try {
       await apiDelete(`/messages/${m.id}`);
-      toast.success("Pesan ditarik");
+      toast.success(t("history.revoked"));
       setRows((rs) => rs.map((r) => (r.id === m.id ? { ...r, status: "revoked" } : r)));
     } catch (e: any) {
-      toast.error(e.message || "Gagal menarik pesan");
+      toast.error(e.message || t("history.revokeFailed"));
     } finally {
       setRevoking(null);
     }
@@ -101,24 +114,24 @@ export default function History() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-foreground">Riwayat Pesan</h1>
+      <h1 className="text-xl font-bold text-foreground">{t("history.title")}</h1>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <HistoryIcon className="w-4 h-4" /> Semua Pesan Terkirim
+            <HistoryIcon className="w-4 h-4" /> {t("history.allMessages")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Memuat...</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t("history.loading")}</p>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                 <MessageSquareOff className="h-5 w-5 text-muted-foreground" />
               </span>
-              <p className="text-sm font-medium text-foreground">No messages history</p>
-              <p className="text-xs text-muted-foreground">Sent messages will appear here</p>
+              <p className="text-sm font-medium text-foreground">{t("history.emptyTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("history.emptyHint")}</p>
             </div>
           ) : (
             <>
@@ -126,9 +139,9 @@ export default function History() {
                 <table className="w-full min-w-[860px] text-sm">
                   <thead>
                     <tr className="border-b border-border text-left">
-                      {["ID", "Sender", "Number", "Message", "Status", "Via", "Date", "Action"].map((h) => (
+                      {HEADERS.map((h) => (
                         <th key={h} className="py-2.5 pr-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground last:pr-0">
-                          {h}
+                          {t(`history.${h}`)}
                         </th>
                       ))}
                     </tr>
@@ -142,7 +155,7 @@ export default function History() {
                         <td className="py-3 pr-4 text-xs text-muted-foreground max-w-[280px] truncate" title={m.content}>
                           {m.content || "-"}
                         </td>
-                        <td className="py-3 pr-4">{statusBadge(m.status)}</td>
+                        <td className="py-3 pr-4">{statusBadge(m.status, t)}</td>
                         <td className="py-3 pr-4">
                           <Badge variant="secondary">{m.via || "-"}</Badge>
                         </td>
@@ -156,7 +169,7 @@ export default function History() {
                               onClick={() => revoke(m)}
                             >
                               <Undo2 className="w-3.5 h-3.5 mr-1" />
-                              {revoking === m.id ? "..." : "Tarik"}
+                              {revoking === m.id ? "..." : t("history.revokeButton")}
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
@@ -170,7 +183,10 @@ export default function History() {
 
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  Halaman {page} dari {totalPages} ({total.toLocaleString("id-ID")} pesan)
+                  {t("history.pageInfo")
+                    .replace("{page}", String(page))
+                    .replace("{totalPages}", String(totalPages))
+                    .replace("{total}", total.toLocaleString("id-ID"))}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="secondary" size="sm" disabled={page <= 1 || loading} onClick={() => load(page - 1)}>

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiFetch } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface Preset {
   label: string;
@@ -14,43 +15,43 @@ interface Preset {
   body: string;
 }
 
-const PRESETS: Preset[] = [
-  {
-    label: "Kirim Pesan",
-    method: "POST",
-    path: "/messages/send",
-    body: '{\n  "deviceId": 1,\n  "to": "62812xxxxxxx",\n  "content": "Halo dari playground!"\n}',
-  },
-  {
-    label: "Cek Device",
-    method: "GET",
-    path: "/devices",
-    body: "",
-  },
-  {
-    label: "Daftar Kontak",
-    method: "GET",
-    path: "/contacts",
-    body: "",
-  },
-  {
-    label: "Status Device",
-    method: "GET",
-    path: "/devices/1/status",
-    body: "",
-  },
-  {
-    label: "Kirim Gambar",
-    method: "POST",
-    path: "/messages/send",
-    body: '{\n  "deviceId": 1,\n  "to": "62812xxxxxxx",\n  "content": "Lihat gambar ini",\n  "mediaUrl": "https://example.com/gambar.jpg"\n}',
-  },
-];
-
 const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function ApiPlayground({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
+  const PRESETS: Preset[] = [
+    {
+      label: t("apiPlayground.presetSendMessage"),
+      method: "POST",
+      path: "/messages/send",
+      body: '{\n  "deviceId": 1,\n  "to": "62812xxxxxxx",\n  "content": "Halo dari playground!"\n}',
+    },
+    {
+      label: t("apiPlayground.presetCheckDevice"),
+      method: "GET",
+      path: "/devices",
+      body: "",
+    },
+    {
+      label: t("apiPlayground.presetContactList"),
+      method: "GET",
+      path: "/contacts",
+      body: "",
+    },
+    {
+      label: t("apiPlayground.presetDeviceStatus"),
+      method: "GET",
+      path: "/devices/1/status",
+      body: "",
+    },
+    {
+      label: t("apiPlayground.presetSendImage"),
+      method: "POST",
+      path: "/messages/send",
+      body: '{\n  "deviceId": 1,\n  "to": "62812xxxxxxx",\n  "content": "Lihat gambar ini",\n  "mediaUrl": "https://example.com/gambar.jpg"\n}',
+    },
+  ];
   const [method, setMethod] = useState<"GET" | "POST">("POST");
   const [path, setPath] = useState("/messages/send");
   const [body, setBody] = useState(PRESETS[0].body);
@@ -66,13 +67,13 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
   };
 
   const send = async () => {
-    if (!path.trim()) { toast.error("Path endpoint wajib diisi"); return; }
+    if (!path.trim()) { toast.error(t("apiPlayground.toastPathRequired")); return; }
     let parsed: unknown = undefined;
     if (method === "POST" && body.trim()) {
       try {
         parsed = JSON.parse(body);
       } catch {
-        toast.error("Body bukan JSON valid");
+        toast.error(t("apiPlayground.toastInvalidJsonBody"));
         return;
       }
     }
@@ -88,8 +89,8 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
       let pretty = text;
       try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { /* biarkan mentah */ }
       setResponse({ status: res.status, body: pretty });
-      if (!res.ok) toast.error(`HTTP ${res.status}`);
-      else toast.success("Berhasil");
+      if (!res.ok) toast.error(t("apiPlayground.toastHttpError").replace("{status}", String(res.status)));
+      else toast.success(t("apiPlayground.toastSuccess"));
     } catch (e: any) {
       toast.error(e.message || "Request gagal");
       setResponse({ status: 0, body: e.message || "Network error" });
@@ -101,8 +102,8 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
   const copyResponse = () => {
     if (!response) return;
     navigator.clipboard.writeText(response.body)
-      .then(() => toast.success("Response disalin"))
-      .catch(() => toast.error("Gagal menyalin"));
+      .then(() => toast.success(t("apiPlayground.toastResponseCopied")))
+      .catch(() => toast.error(t("apiPlayground.toastCopyFailed")));
   };
 
   return (
@@ -110,7 +111,7 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
       {!embedded && (
         <div>
           <h1 className="text-xl font-bold text-foreground">API Playground</h1>
-          <p className="text-sm text-muted-foreground">Coba endpoint API langsung dari dashboard.</p>
+          <p className="text-sm text-muted-foreground">{t("apiPlayground.subtitle")}</p>
         </div>
       )}
 
@@ -136,7 +137,7 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
               <Dropdown
                 value={method}
                 onChange={(v) => setMethod(v as "GET" | "POST")}
-                ariaLabel="Metode HTTP"
+                ariaLabel={t("apiPlayground.httpMethodAria")}
                 options={[
                   { value: "GET", label: "GET" },
                   { value: "POST", label: "POST" },
@@ -145,7 +146,7 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
               <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/messages/send" className="font-mono" />
             </div>
             <div>
-              <label className="text-sm font-medium">API Key <span className="text-muted-foreground font-normal">(opsional, X-API-Key)</span></label>
+              <label className="text-sm font-medium">API Key <span className="text-muted-foreground font-normal">({t("apiPlayground.optional")})</span></label>
               <Input
                 type="password"
                 className="mt-1.5 font-mono"
@@ -170,7 +171,7 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
               </div>
             )}
             <Button onClick={send} disabled={loading} className="w-full gap-2">
-              <Play className="w-4 h-4" /> {loading ? "Mengirim..." : "Kirim Request"}
+              <Play className="w-4 h-4" /> {loading ? t("apiPlayground.sending") : t("apiPlayground.sendRequest")}
             </Button>
           </CardContent>
         </Card>
@@ -178,17 +179,17 @@ export default function ApiPlayground({ embedded = false }: { embedded?: boolean
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between text-base">
-              <span>Response</span>
+              <span>{t("apiPlayground.responseTitle")}</span>
               {response && (
                 <Button variant="ghost" size="sm" onClick={copyResponse} className="gap-1.5">
-                  <Copy className="w-3.5 h-3.5" /> Salin
+                  <Copy className="w-3.5 h-3.5" /> {t("apiPlayground.copy")}
                 </Button>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {!response ? (
-              <p className="text-sm text-muted-foreground">Belum ada request. Hasil akan tampil di sini.</p>
+              <p className="text-sm text-muted-foreground">{t("apiPlayground.emptyState")}</p>
             ) : (
               <div className="space-y-2">
                 <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${

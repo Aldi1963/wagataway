@@ -4,6 +4,7 @@ import { AlertTriangle, Ban } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiGet } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 // Status langganan terpusat dari GET /api/quota (Fitur 5: grace period).
 // subState: "active" | "grace" | "expired".
@@ -20,6 +21,7 @@ export interface GraceInfo {
  * user sadar sebelum mengirim.
  */
 export default function GraceBanner() {
+  const { t } = useLang();
   const [, navigate] = useLocation();
   const [info, setInfo] = useState<GraceInfo | null>(null);
 
@@ -38,17 +40,17 @@ export default function GraceBanner() {
           <Ban className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-destructive">
-              Langganan berakhir
+              {t("graceBanner.expiredTitle")}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Pengiriman pesan diblokir. Perpanjang paket untuk mengaktifkan kembali layanan.
+              {t("graceBanner.expiredBody")}
             </p>
             <Button
               size="sm"
               className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
               onClick={() => navigate("/billing?perpanjang=1")}
             >
-              Perpanjang Sekarang
+              {t("graceBanner.renewNow")}
             </Button>
           </div>
         </CardContent>
@@ -65,19 +67,20 @@ export default function GraceBanner() {
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-amber-700 dark:text-amber-500">
-              Masa tenggang, segera perpanjang
+              {t("graceBanner.graceTitle")}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Sisa {info.graceDaysLeft ?? 0} hari masa tenggang. Selama masa
-              tenggang Anda dibatasi {limit} pesan/hari ({used}/{limit} terpakai
-              hari ini). Perpanjang sebelum masa tenggang habis agar tidak terblokir.
+              {t("graceBanner.graceBody")
+                .replace("{days}", String(info.graceDaysLeft ?? 0))
+                .replace("{limit}", String(limit))
+                .replace("{used}", String(used))}
             </p>
             <Button
               size="sm"
               className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
               onClick={() => navigate("/billing?perpanjang=1")}
             >
-              Perpanjang Sekarang
+              {t("graceBanner.renewNow")}
             </Button>
           </div>
         </CardContent>

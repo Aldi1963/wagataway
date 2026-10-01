@@ -4,6 +4,7 @@ import { MonitorSmartphone, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiDelete, apiPost } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useLang, timeAgo } from "@/lib/i18n";
 
 interface Session {
   id: number;
@@ -14,8 +15,8 @@ interface Session {
   current: boolean;
 }
 
-function deviceLabel(ua: string): string {
-  if (!ua) return "Perangkat tidak dikenal";
+function deviceLabel(t: (k: string) => string, ua: string): string {
+  if (!ua) return t("sessionsSection.unknownDevice");
   if (/android/i.test(ua)) return "Android";
   if (/iphone|ipad/i.test(ua)) return "iPhone/iPad";
   if (/windows/i.test(ua)) return "Windows";
@@ -25,15 +26,8 @@ function deviceLabel(ua: string): string {
   return m ? m[1].slice(0, 40) : "Browser";
 }
 
-function relTime(iso: string): string {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "baru saja";
-  if (s < 3600) return `${Math.floor(s / 60)} mnt lalu`;
-  if (s < 86400) return `${Math.floor(s / 3600)} jam lalu`;
-  return `${Math.floor(s / 86400)} hari lalu`;
-}
-
 export default function SessionsSection() {
+  const { t, lang } = useLang();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +35,7 @@ export default function SessionsSection() {
     setLoading(true);
     apiGet<{ sessions: Session[] }>("/sessions")
       .then((d) => setSessions(d.sessions || []))
-      .catch(() => toast.error("Gagal memuat sesi"))
+      .catch(() => toast.error(t("sessionsSection.errLoad")))
       .finally(() => setLoading(false));
   };
 
@@ -51,14 +45,14 @@ export default function SessionsSection() {
     if (
       !confirm(
         current
-          ? "Cabut sesi ini? Anda akan logout dari perangkat ini."
-          : "Cabut sesi ini?"
+          ? t("sessionsSection.confirmRevokeCurrent")
+          : t("sessionsSection.confirmRevoke")
       )
     )
       return;
     try {
       await apiDelete(`/sessions/${id}`);
-      toast.success("Sesi dicabut");
+      toast.success(t("sessionsSection.revoked"));
       if (current) {
         localStorage.removeItem("token");
         window.location.href = "/login";
@@ -66,30 +60,30 @@ export default function SessionsSection() {
       }
       load();
     } catch (e: any) {
-      toast.error(e.message || "Gagal mencabut sesi");
+      toast.error(e.message || t("sessionsSection.errRevoke"));
     }
   };
 
   const revokeOthers = async () => {
-    if (!confirm("Cabut semua sesi lain? Perangkat lain akan logout.")) return;
+    if (!confirm(t("sessionsSection.confirmRevokeOthers"))) return;
     try {
       const d = await apiPost<{ revoked: number }>("/sessions/revoke-others");
-      toast.success(`${d.revoked || 0} sesi lain dicabut`);
+      toast.success(t("sessionsSection.othersRevoked").replace("{count}", String(d.revoked || 0)));
       load();
     } catch (e: any) {
-      toast.error(e.message || "Gagal mencabut sesi");
+      toast.error(e.message || t("sessionsSection.errRevoke"));
     }
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Memuat sesi…</p>;
+    return <p className="text-sm text-muted-foreground">{t("sessionsSection.loading")}</p>;
   }
 
   return (
     <div className="space-y-3">
       {sessions.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          Tidak ada sesi aktif tercatat.
+          {t("sessionsSection.empty")}
         </p>
       )}
       {sessions.map((s) => (
@@ -105,15 +99,15 @@ export default function SessionsSection() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium flex items-center gap-2">
-              <span className="truncate">{deviceLabel(s.userAgent)}</span>
+              <span className="truncate">{deviceLabel(t, s.userAgent)}</span>
               {s.current && (
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#243370]/10 text-[#243370] dark:text-blue-300 shrink-0">
-                  Perangkat ini
+                  {t("sessionsSection.thisDevice")}
                 </span>
               )}
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              {s.ip} · aktif {relTime(s.lastSeen)}
+              {s.ip} · {t("sessionsSection.activeAgo").replace("{time}", timeAgo(s.lastSeen, lang))}
             </p>
           </div>
           <Button
@@ -121,7 +115,7 @@ export default function SessionsSection() {
             variant="ghost"
             className="text-red-500 hover:text-red-600 shrink-0"
             onClick={() => revoke(s.id, s.current)}
-            title="Cabut sesi"
+            title={t("sessionsSection.revokeTitle")}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -129,7 +123,7 @@ export default function SessionsSection() {
       ))}
       {sessions.length > 1 && (
         <Button size="sm" variant="outline" onClick={revokeOthers}>
-          Cabut semua sesi lain
+          {t("sessionsSection.revokeOthers")}
         </Button>
       )}
     </div>

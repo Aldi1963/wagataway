@@ -8,6 +8,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { Badge } from "@/components/ui/badge";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 interface Member {
   id: number;
@@ -18,13 +19,14 @@ interface Member {
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label={t("team.closeModal")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -35,6 +37,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 export default function Team({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
@@ -51,7 +54,7 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
       const r = await apiGet<{ members: Member[] } | Member[]>("/team");
       setMembers(Array.isArray(r) ? r : r.members ?? []);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat tim");
+      toast.error(e.message || t("team.toastLoadFailed"));
     } finally {
       setLoading(false);
     }
@@ -60,41 +63,41 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => { load(); }, []);
 
   const invite = async () => {
-    if (!name.trim() || !email.trim()) { toast.error("Nama dan email wajib diisi"); return; }
+    if (!name.trim() || !email.trim()) { toast.error(t("team.toastNameEmailRequired")); return; }
     try {
       const r = await apiPost<{ password?: string; member?: Member }>("/team", {
         name: name.trim(), email: email.trim(), role,
       });
       setNewPassword(r.password ?? null);
-      toast.success("Anggota ditambahkan");
+      toast.success(t("team.toastMemberAdded"));
       setName(""); setEmail(""); setRole("member");
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal mengundang"); }
+    } catch (e: any) { toast.error(e.message || t("team.toastInviteFailed")); }
   };
 
   const toggleActive = async (m: Member, v: boolean) => {
     try {
       await apiPost(`/team/${m.id}/toggle`, {});
       setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, isActive: v } : x)));
-      toast.success(v ? "Anggota diaktifkan" : "Anggota dinonaktifkan");
-    } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
+      toast.success(v ? t("team.toastActivated") : t("team.toastDeactivated"));
+    } catch (e: any) { toast.error(e.message || t("team.toastStatusFailed")); }
   };
 
   const confirmDelete = async () => {
     if (deleting == null) return;
     try {
       await apiDelete(`/team/${deleting}`);
-      toast.success("Anggota dihapus");
+      toast.success(t("team.toastDeleted"));
       setDeleting(null);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menghapus"); }
+    } catch (e: any) { toast.error(e.message || t("team.toastDeleteFailed")); }
   };
 
   const copyPw = () => {
     if (!newPassword) return;
     navigator.clipboard.writeText(newPassword)
-      .then(() => toast.success("Password disalin"))
-      .catch(() => toast.error("Gagal menyalin"));
+      .then(() => toast.success(t("team.toastPasswordCopied")))
+      .catch(() => toast.error(t("team.toastCopyFailed")));
   };
 
   return (
@@ -102,17 +105,17 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         {!embedded && (
           <div>
-            <h1 className="text-xl font-bold text-foreground">Tim</h1>
-            <p className="text-sm text-muted-foreground">Kelola anggota tim / CS yang bisa akses akun ini.</p>
+            <h1 className="text-xl font-bold text-foreground">{t("team.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("team.subtitle")}</p>
           </div>
         )}
         <Button size="sm" onClick={() => { setShowInvite(true); setNewPassword(null); }} className="gap-1.5">
-          <Plus className="w-4 h-4" /> Undang Anggota
+          <Plus className="w-4 h-4" /> {t("team.inviteMember")}
         </Button>
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("team.loading")}</CardContent></Card>
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -120,18 +123,18 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
               <table className="w-full min-w-[600px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nama</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Email</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Role</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Aktif</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("team.colName")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("team.colEmail")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("team.colRole")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("team.colActive")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("team.colAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {members.length === 0 && (
                     <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">
                       <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      Belum ada anggota tim.
+                      {t("team.empty")}
                     </td></tr>
                   )}
                   {members.map((m) => (
@@ -140,10 +143,10 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
                       <td className="py-3 px-4 text-muted-foreground">{m.email}</td>
                       <td className="py-3 px-4"><Badge variant="secondary" className="capitalize">{m.role}</Badge></td>
                       <td className="py-3 px-4">
-                        <Toggle checked={m.isActive} label={`Aktif ${m.name}`} onToggle={(v) => toggleActive(m, v)} />
+                        <Toggle checked={m.isActive} label={t("team.toggleLabel").replace("{name}", m.name)} onToggle={(v) => toggleActive(m, v)} />
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(m.id)} aria-label="Hapus">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(m.id)} aria-label={t("team.deleteAria")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
@@ -157,55 +160,55 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {showInvite && (
-        <Modal title="Undang Anggota Tim" onClose={() => setShowInvite(false)}>
+        <Modal title={t("team.inviteModalTitle")} onClose={() => setShowInvite(false)}>
           {newPassword ? (
             <div className="space-y-4">
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Password sementara — hanya tampil sekali!</p>
-                <p className="text-xs text-muted-foreground mt-1">Salin dan kirim ke anggota. Mereka wajib ganti setelah login pertama.</p>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{t("team.tempPasswordTitle")}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t("team.tempPasswordDesc")}</p>
               </div>
               <div className="flex items-center gap-2">
                 <code className="flex-1 rounded-md bg-muted px-3 py-2.5 font-mono text-sm">
                   {showPw ? newPassword : "••••••••••••"}
                 </code>
-                <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => setShowPw(!showPw)} aria-label="Tampilkan">
+                <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => setShowPw(!showPw)} aria-label={t("team.showAria")}>
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </Button>
-                <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={copyPw} aria-label="Salin">
+                <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={copyPw} aria-label={t("team.copyAria")}>
                   <Copy className="w-4 h-4" />
                 </Button>
               </div>
               <div className="flex justify-end">
-                <Button onClick={() => { setShowInvite(false); setNewPassword(null); }}>Selesai</Button>
+                <Button onClick={() => { setShowInvite(false); setNewPassword(null); }}>{t("team.done")}</Button>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Nama</label>
-                <Input className="mt-1.5" placeholder="Nama anggota" value={name} onChange={(e) => setName(e.target.value)} />
+                <label className="text-sm font-medium">{t("team.labelName")}</label>
+                <Input className="mt-1.5" placeholder={t("team.placeholderName")} value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <label className="text-sm font-medium">Email</label>
+                <label className="text-sm font-medium">{t("team.labelEmail")}</label>
                 <Input type="email" className="mt-1.5" placeholder="cs@perusahaan.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
               <div>
-                <label className="text-sm font-medium">Role</label>
+                <label className="text-sm font-medium">{t("team.labelRole")}</label>
                 <Dropdown
                   value={role}
                   onChange={setRole}
                   ariaLabel="Role"
                   className="mt-1.5"
                   options={[
-                    { value: "member", label: "Member — balas chat & kirim pesan" },
-                    { value: "admin", label: "Admin — kelola semua kecuali billing" },
-                    { value: "viewer", label: "Viewer — hanya lihat" },
+                    { value: "member", label: t("team.roleMember") },
+                    { value: "admin", label: t("team.roleAdmin") },
+                    { value: "viewer", label: t("team.roleViewer") },
                   ]}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setShowInvite(false)}>Batal</Button>
-                <Button onClick={invite}>Undang</Button>
+                <Button variant="outline" onClick={() => setShowInvite(false)}>{t("team.cancel")}</Button>
+                <Button onClick={invite}>{t("team.invite")}</Button>
               </div>
             </div>
           )}
@@ -213,11 +216,11 @@ export default function Team({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {deleting != null && (
-        <Modal title="Hapus anggota?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-muted-foreground">Akses anggota ini akan dicabut permanen.</p>
+        <Modal title={t("team.deleteModalTitle")} onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground">{t("team.deleteModalDesc")}</p>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Hapus</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>{t("team.cancel")}</Button>
+            <Button variant="destructive" onClick={confirmDelete}>{t("team.delete")}</Button>
           </div>
         </Modal>
       )}

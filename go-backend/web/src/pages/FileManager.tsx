@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiDelete } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 const MAX_SIZE = 16 * 1024 * 1024; // 16MB
 
@@ -39,6 +40,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -54,7 +56,7 @@ function Modal({
             size="icon"
             className="h-8 w-8"
             onClick={onClose}
-            aria-label="Tutup"
+            aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -96,6 +98,7 @@ function iconFor(mime: string) {
 }
 
 export default function FileManager() {
+  const { t } = useLang();
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +133,7 @@ export default function FileManager() {
         setPreviewUrl(objectUrl);
       })
       .catch(() => {
-        if (!cancelled) toast.error("Gagal memuat preview gambar");
+        if (!cancelled) toast.error(t("fileManager.previewFail"));
       });
     return () => {
       cancelled = true;
@@ -143,7 +146,7 @@ export default function FileManager() {
     setError(null);
     apiGet<{ files: MediaFile[] }>("/files")
       .then((res) => setFiles(res.files || []))
-      .catch((e) => setError(e.message || "Gagal memuat file"))
+      .catch((e) => setError(e.message || t("fileManager.loadFail")))
       .finally(() => setLoading(false));
   };
 
@@ -155,7 +158,7 @@ export default function FileManager() {
     const tooBig = arr.find((f) => f.size > MAX_SIZE);
     if (tooBig) {
       toast.error(
-        `File "${tooBig.name}" melebihi batas 16MB`
+        t("fileManager.tooBig").replace("{name}", tooBig.name)
       );
       return;
     }
@@ -177,15 +180,15 @@ export default function FileManager() {
         }
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || `Gagal mengunggah ${f.name}`);
+          throw new Error(data.message || t("fileManager.uploadFailName").replace("{name}", f.name));
         }
       }
       toast.success(
-        arr.length === 1 ? "File berhasil diunggah" : `${arr.length} file berhasil diunggah`
+        arr.length === 1 ? t("fileManager.uploadedOne") : t("fileManager.uploadedMany").replace("{count}", String(arr.length))
       );
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal mengunggah file");
+      toast.error(e instanceof Error ? e.message : t("fileManager.uploadFail"));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -197,11 +200,11 @@ export default function FileManager() {
     setDeletingBusy(true);
     try {
       await apiDelete(`/files/${deleting.id}`);
-      toast.success("File dihapus");
+      toast.success(t("fileManager.deleted"));
       setDeleting(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus file");
+      toast.error(e instanceof Error ? e.message : t("fileManager.deleteFail"));
     } finally {
       setDeletingBusy(false);
     }
@@ -213,7 +216,7 @@ export default function FileManager() {
       const res = await fetch(`/api/files/${f.id}/content`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error("Gagal mengunduh file");
+      if (!res.ok) throw new Error(t("fileManager.downloadFail"));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -224,7 +227,7 @@ export default function FileManager() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal mengunduh file");
+      toast.error(e instanceof Error ? e.message : t("fileManager.downloadFail"));
     }
   };
 
@@ -236,9 +239,9 @@ export default function FileManager() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">File Manager</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("fileManager.title")}</h2>
           <p className="text-sm text-muted-foreground">
-            Kelola file media untuk pesan WhatsApp
+            {t("fileManager.subtitle")}
           </p>
         </div>
         <Button
@@ -248,7 +251,7 @@ export default function FileManager() {
           disabled={uploading}
         >
           <Upload className="w-3.5 h-3.5" />
-          {uploading ? "Mengunggah..." : "Upload File"}
+          {uploading ? t("fileManager.uploading") : t("fileManager.uploadFile")}
         </Button>
       </div>
 
@@ -281,17 +284,17 @@ export default function FileManager() {
         >
           <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm font-medium text-foreground">
-            Seret & letakkan file di sini, atau{" "}
+            {t("fileManager.dropHint")}{" "}
             <button
               type="button"
               className="text-primary underline underline-offset-2"
               onClick={() => inputRef.current?.click()}
             >
-              pilih file
+              {t("fileManager.chooseFile")}
             </button>
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Maksimal 16MB per file
+            {t("fileManager.maxSize")}
           </p>
         </CardContent>
       </Card>
@@ -301,7 +304,7 @@ export default function FileManager() {
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Cari file..."
+          placeholder={t("fileManager.searchPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -330,7 +333,7 @@ export default function FileManager() {
           <CardContent className="p-6 text-center space-y-3">
             <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" variant="outline" onClick={load} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+              <RefreshCw className="w-3.5 h-3.5" /> {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -341,12 +344,12 @@ export default function FileManager() {
           <CardContent className="p-10 text-center space-y-3">
             <FolderOpen className="w-8 h-8 mx-auto text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">
-              {query ? "Tidak ada file yang cocok" : "Belum ada file"}
+              {query ? t("fileManager.noMatch") : t("fileManager.empty")}
             </p>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
               {query
-                ? "Coba kata kunci lain."
-                : "Unggah gambar, dokumen, audio, atau video untuk dipakai di pesan WhatsApp."}
+                ? t("fileManager.tryOther")
+                : t("fileManager.emptyHint")}
             </p>
             {!query && (
               <Button
@@ -354,7 +357,7 @@ export default function FileManager() {
                 onClick={() => inputRef.current?.click()}
                 className="gap-1.5"
               >
-                <Plus className="w-3.5 h-3.5" /> Upload File
+                <Plus className="w-3.5 h-3.5" /> {t("fileManager.uploadFile")}
               </Button>
             )}
           </CardContent>
@@ -376,8 +379,8 @@ export default function FileManager() {
                     disabled={!f.mime.startsWith("image/")}
                     aria-label={
                       f.mime.startsWith("image/")
-                        ? "Preview gambar"
-                        : "Ikon file"
+                        ? t("fileManager.previewImage")
+                        : t("fileManager.fileIcon")
                     }
                   >
                     {iconFor(f.mime)}
@@ -396,7 +399,7 @@ export default function FileManager() {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => handleDownload(f)}
-                      aria-label="Unduh file"
+                      aria-label={t("fileManager.downloadFile")}
                     >
                       <Download className="w-4 h-4" />
                     </Button>
@@ -405,7 +408,7 @@ export default function FileManager() {
                       size="icon"
                       className="h-8 w-8 text-destructive"
                       onClick={() => setDeleting(f)}
-                      aria-label="Hapus file"
+                      aria-label={t("fileManager.deleteFile")}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -431,7 +434,7 @@ export default function FileManager() {
               />
             ) : (
               <p className="text-xs text-muted-foreground p-8">
-                Memuat preview...
+                {t("fileManager.loadingPreview")}
               </p>
             )}
           </div>
@@ -442,23 +445,23 @@ export default function FileManager() {
               className="gap-1.5"
               onClick={() => handleDownload(previewing)}
             >
-              <Download className="w-3.5 h-3.5" /> Unduh
+              <Download className="w-3.5 h-3.5" /> {t("fileManager.download")}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setPreviewing(null)}
             >
-              Tutup
+              {t("common.close")}
             </Button>
           </div>
         </Modal>
       )}
 
       {deleting && (
-        <Modal title="Hapus File" onClose={() => setDeleting(null)}>
+        <Modal title={t("fileManager.deleteModal")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground">
-            Hapus file <b className="text-foreground">{deleting.originalName}</b>?
+            {t("fileManager.deleteConfirm")} <b className="text-foreground">{deleting.originalName}</b>?
           </p>
           <div className="flex justify-end gap-2 mt-5">
             <Button
@@ -466,7 +469,7 @@ export default function FileManager() {
               size="sm"
               onClick={() => setDeleting(null)}
             >
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -474,7 +477,7 @@ export default function FileManager() {
               onClick={handleDelete}
               disabled={deletingBusy}
             >
-              {deletingBusy ? "Menghapus..." : "Hapus"}
+              {deletingBusy ? t("fileManager.deleting") : t("common.delete")}
             </Button>
           </div>
         </Modal>

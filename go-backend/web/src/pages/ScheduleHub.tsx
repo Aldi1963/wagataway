@@ -4,13 +4,7 @@ import Schedule from "./Schedule";
 import DripCampaign from "./DripCampaign";
 import RecurringSchedules from "./RecurringSchedules";
 import { PageTabs } from "@/components/ui/tabs";
-
-const TABS = [
-  { id: "terjadwal", label: "Terjadwal", href: "/schedule" },
-  { id: "kalender", label: "Kalender", href: "/schedule" },
-  { id: "drip", label: "Drip Campaign", href: "/drip" },
-  { id: "berulang", label: "Berulang", href: "/recurring" },
-];
+import { useLang } from "@/lib/i18n";
 
 /**
  * Halaman gabungan "Jadwal" — satu lapis tab: Terjadwal, Kalender, Drip Campaign, Berulang.
@@ -18,8 +12,17 @@ const TABS = [
  * URL lama (/schedule, /drip, /recurring) tetap valid.
  */
 export default function ScheduleHub() {
+  const { t } = useLang();
   const [location, navigate] = useLocation();
   const [tab, setTab] = useState<"terjadwal" | "kalender">("terjadwal");
+
+  const TABS = [
+    { id: "terjadwal", label: t("scheduleHub.tabScheduled"), href: "/schedule" },
+    { id: "kalender", label: t("scheduleHub.tabCalendar"), href: "/schedule" },
+    { id: "drip", label: t("scheduleHub.tabDrip"), href: "/drip" },
+    { id: "berulang", label: t("scheduleHub.tabRecurring"), href: "/recurring" },
+  ];
+
   const active =
     location === "/drip" ? "drip" : location === "/recurring" ? "berulang" : tab;
 
@@ -39,9 +42,9 @@ export default function ScheduleHub() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold">Jadwal</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{t("scheduleHub.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Pesan terjadwal, berulang, dan drip campaign otomatis
+          {t("scheduleHub.subtitle")}
         </p>
       </div>
       <PageTabs tabs={TABS} active={active} onSelect={(t) => select(t.id)} />

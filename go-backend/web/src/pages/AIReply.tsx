@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 import { useActiveDevice } from "@/hooks/use-active-device";
 
 interface AIReplyConfig {
@@ -25,13 +26,14 @@ interface AIStatus {
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Tutup">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label={t("aiReply.close")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -45,6 +47,7 @@ const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function AIReply({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const { activeDeviceId, activeDevice } = useActiveDevice();
   const [items, setItems] = useState<AIReplyConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +70,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
       setItems(r.configs ?? []);
       if (s) setStatus(s);
     } catch (e: any) {
-      toast.error(e.message || "Gagal memuat config AI");
+      toast.error(e.message || t("aiReply.loadError"));
     } finally {
       setLoading(false);
     }
@@ -81,7 +84,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
 
   const openModal = (c?: AIReplyConfig) => {
     if (activeDeviceId == null && !c) {
-      toast.error("Pilih perangkat aktif di sidebar dulu");
+      toast.error(t("aiReply.selectDeviceFirst"));
       return;
     }
     setEditing(c ?? null);
@@ -94,7 +97,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
 
   const save = async () => {
     const targetDeviceId = editing ? editing.deviceId : activeDeviceId;
-    if (targetDeviceId == null) { toast.error("Pilih perangkat aktif di sidebar dulu"); return; }
+    if (targetDeviceId == null) { toast.error(t("aiReply.selectDeviceFirst")); return; }
     try {
       const payload = {
         deviceId: targetDeviceId,
@@ -103,11 +106,11 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
         ignoreGroups,
         ...(editing ? { isEnabled } : {}),
       };
-      if (editing) { await apiPut(`/ai-reply/${editing.id}`, payload); toast.success("Config AI diperbarui"); }
-      else { await apiPost("/ai-reply", payload); toast.success("Config AI ditambahkan"); }
+      if (editing) { await apiPut(`/ai-reply/${editing.id}`, payload); toast.success(t("aiReply.configUpdated")); }
+      else { await apiPost("/ai-reply", payload); toast.success(t("aiReply.configAdded")); }
       setShowModal(false);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menyimpan"); }
+    } catch (e: any) { toast.error(e.message || t("aiReply.saveError")); }
   };
 
   const toggleActive = async (c: AIReplyConfig) => {
@@ -115,18 +118,18 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
       // Backend PATCH /:id/toggle membalik nilai, jadi pakai nilai dari respons.
       const r = await apiPatch<{ isEnabled: boolean }>(`/ai-reply/${c.id}/toggle`, {});
       setItems((prev) => prev.map((x) => (x.id === c.id ? { ...x, isEnabled: r.isEnabled } : x)));
-      toast.success(r.isEnabled ? "AI auto-reply diaktifkan" : "AI auto-reply dinonaktifkan");
-    } catch (e: any) { toast.error(e.message || "Gagal mengubah status"); }
+      toast.success(r.isEnabled ? t("aiReply.aiEnabled") : t("aiReply.aiDisabled"));
+    } catch (e: any) { toast.error(e.message || t("aiReply.toggleError")); }
   };
 
   const confirmDelete = async () => {
     if (deleting == null) return;
     try {
       await apiDelete(`/ai-reply/${deleting}`);
-      toast.success("Config AI dihapus");
+      toast.success(t("aiReply.configDeleted"));
       setDeleting(null);
       load();
-    } catch (e: any) { toast.error(e.message || "Gagal menghapus"); }
+    } catch (e: any) { toast.error(e.message || t("aiReply.deleteError")); }
   };
 
   return (
@@ -135,33 +138,33 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
         {!embedded && (
           <div>
             <h1 className="text-xl sm:text-2xl font-bold">AI Auto-Reply</h1>
-            <p className="text-sm text-muted-foreground">Balas pesan masuk otomatis dengan AI.</p>
+            <p className="text-sm text-muted-foreground">{t("aiReply.subtitle")}</p>
           </div>
         )}
         <div className="flex items-center gap-2 self-start sm:self-auto">
           {status == null ? (
-            <Badge variant="secondary">Memeriksa AI...</Badge>
+            <Badge variant="secondary">{t("aiReply.checkingAI")}</Badge>
           ) : status.reachable ? (
-            <Badge variant="success">AI Terhubung</Badge>
+            <Badge variant="success">{t("aiReply.aiConnected")}</Badge>
           ) : (
             <Badge variant="destructive" className="max-w-[260px] text-left whitespace-normal">
-              AI Tidak Terjangkau{status.detail ? `: ${status.detail}` : ""}
+              {t("aiReply.aiUnreachable")}{status.detail ? `: ${status.detail}` : ""}
             </Badge>
           )}
           <Button size="sm" onClick={() => openModal()} className="gap-1.5">
-            <Plus className="w-4 h-4" /> Tambah Config
+            <Plus className="w-4 h-4" /> {t("aiReply.addConfig")}
           </Button>
         </div>
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Memuat...</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("aiReply.loading")}</CardContent></Card>
       ) : activeDeviceId == null ? (
         <Card>
           <CardContent className="p-8 text-center">
             <Bot className="w-8 h-8 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium mt-2">Belum ada perangkat aktif</p>
-            <p className="text-xs text-muted-foreground mt-1">Pilih perangkat aktif di sidebar untuk mengelola AI reply</p>
+            <p className="text-sm font-medium mt-2">{t("aiReply.noDevice")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("aiReply.noDeviceHint")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -173,14 +176,14 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
                   <tr className="border-b border-border text-left">
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">System Prompt</th>
                     <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Trigger</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Grup</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Aktif</th>
-                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">Aksi</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("aiReply.colGroup")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("aiReply.colActive")}</th>
+                    <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("aiReply.colActions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleItems.length === 0 && (
-                    <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Belum ada config AI untuk perangkat {activeDevice?.name || `#${activeDeviceId}`}.</td></tr>
+                    <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">{t("aiReply.emptyForDevice").replace("{device}", activeDevice?.name || `#${activeDeviceId}`)}</td></tr>
                   )}
                   {visibleItems.map((c) => (
                     <tr key={c.id} className="border-b border-border last:border-0">
@@ -188,17 +191,17 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
                         {c.systemPrompt || <span className="italic">Default</span>}
                       </td>
                       <td className="py-3 px-4 text-xs text-muted-foreground max-w-[160px] truncate" title={c.triggerKeywords || undefined}>
-                        {c.triggerKeywords ? c.triggerKeywords : <Badge variant="outline">Semua pesan</Badge>}
+                        {c.triggerKeywords ? c.triggerKeywords : <Badge variant="outline">{t("aiReply.allMessages")}</Badge>}
                       </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-xs">{c.ignoreGroups ? "Abaikan" : "Ikut"}</td>
+                      <td className="py-3 px-4 whitespace-nowrap text-xs">{c.ignoreGroups ? t("aiReply.ignore") : t("aiReply.include")}</td>
                       <td className="py-3 px-4">
-                        <Toggle checked={c.isEnabled} label={`Aktif ${activeDevice?.name || `#${activeDeviceId}`}`} onToggle={() => toggleActive(c)} />
+                        <Toggle checked={c.isEnabled} label={t("aiReply.enableForDevice").replace("{device}", activeDevice?.name || `#${activeDeviceId}`)} onToggle={() => toggleActive(c)} />
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(c)} aria-label="Ubah">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openModal(c)} aria-label={t("aiReply.edit")}>
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(c.id)} aria-label="Hapus">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(c.id)} aria-label={t("aiReply.delete")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
@@ -212,10 +215,10 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {showModal && (
-        <Modal title={editing ? "Ubah Config AI" : "Tambah Config AI"} onClose={() => setShowModal(false)}>
+        <Modal title={editing ? t("aiReply.editConfig") : t("aiReply.addConfigTitle")} onClose={() => setShowModal(false)}>
           <div className="space-y-4">
             <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Config berlaku untuk perangkat{" "}
+              {t("aiReply.configForDevice")}{" "}
               <span className="font-medium text-foreground">
                 {activeDevice?.name || (editing ? `#${editing.deviceId}` : "")}
               </span>
@@ -241,34 +244,34 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-medium">Abaikan Grup</p>
-                <p className="text-xs text-muted-foreground">AI tidak membalas pesan dari grup WhatsApp</p>
+                <p className="text-sm font-medium">{t("aiReply.ignoreGroups")}</p>
+                <p className="text-xs text-muted-foreground">{t("aiReply.ignoreGroupsHint")}</p>
               </div>
-              <Toggle checked={ignoreGroups} label="Abaikan grup" onToggle={setIgnoreGroups} />
+              <Toggle checked={ignoreGroups} label={t("aiReply.ignoreGroupsAria")} onToggle={setIgnoreGroups} />
             </div>
             {editing && (
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium">Aktif</p>
-                  <p className="text-xs text-muted-foreground">Matikan tanpa menghapus config</p>
+                  <p className="text-sm font-medium">{t("aiReply.active")}</p>
+                  <p className="text-xs text-muted-foreground">{t("aiReply.activeHint")}</p>
                 </div>
-                <Toggle checked={isEnabled} label="Aktif" onToggle={setIsEnabled} />
+                <Toggle checked={isEnabled} label={t("aiReply.active")} onToggle={setIsEnabled} />
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowModal(false)}>Batal</Button>
-              <Button onClick={save}>Simpan</Button>
+              <Button variant="outline" onClick={() => setShowModal(false)}>{t("aiReply.cancel")}</Button>
+              <Button onClick={save}>{t("aiReply.save")}</Button>
             </div>
           </div>
         </Modal>
       )}
 
       {deleting != null && (
-        <Modal title="Hapus?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-muted-foreground">Config AI yang dihapus tidak bisa dikembalikan.</p>
+        <Modal title={t("aiReply.deleteTitle")} onClose={() => setDeleting(null)}>
+          <p className="text-sm text-muted-foreground">{t("aiReply.deleteConfirm")}</p>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Hapus</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>{t("aiReply.cancel")}</Button>
+            <Button variant="destructive" onClick={confirmDelete}>{t("aiReply.delete")}</Button>
           </div>
         </Modal>
       )}

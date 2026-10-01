@@ -8,6 +8,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import SyncWAButton from "@/components/contacts/SyncWAButton";
+import { useLang } from "@/lib/i18n";
 
 interface Group {
   id: number;
@@ -47,6 +48,7 @@ function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -61,7 +63,7 @@ function Modal({
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-secondary"
-            aria-label="Tutup"
+            aria-label={t("common.close")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -73,6 +75,7 @@ function Modal({
 }
 
 export default function ContactGroups({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useLang();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +117,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
   const saveWelcomeDM = async () => {
     if (!welcomeGroup) return;
     if (welcomeEnabled && !welcomeTemplate.trim()) {
-      toast.error("Template wajib diisi bila welcome DM diaktifkan");
+      toast.error(t("contactGroups.welcomeTemplateRequired"));
       return;
     }
     setWelcomeSaving(true);
@@ -123,11 +126,11 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
         enabled: welcomeEnabled,
         template: welcomeTemplate,
       });
-      toast.success("Pengaturan welcome DM disimpan");
+      toast.success(t("contactGroups.welcomeSaved"));
       setWelcomeGroup(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
+      toast.error(e instanceof Error ? e.message : t("contactGroups.saveFailed"));
     } finally {
       setWelcomeSaving(false);
     }
@@ -140,7 +143,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       const res = await apiGet<{ groups: Group[] }>("/contact-groups");
       setGroups(res.groups || []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal memuat grup");
+      setError(e instanceof Error ? e.message : t("contactGroups.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -168,24 +171,24 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
 
   const saveGroup = async () => {
     if (!form.name.trim()) {
-      toast.error("Nama grup wajib diisi");
+      toast.error(t("contactGroups.nameRequired"));
       return;
     }
     setSaving(true);
     try {
       if (editing) {
         await apiPut(`/contact-groups/${editing.id}`, form);
-        toast.success("Grup diperbarui");
+        toast.success(t("contactGroups.updated"));
       } else {
         await apiPost("/contact-groups", form);
-        toast.success("Grup dibuat");
+        toast.success(t("contactGroups.created"));
       }
       setShowForm(false);
       setEditing(null);
       setForm(emptyForm);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menyimpan grup");
+      toast.error(e instanceof Error ? e.message : t("contactGroups.saveGroupFailed"));
     } finally {
       setSaving(false);
     }
@@ -195,11 +198,11 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
     if (!deleting) return;
     try {
       await apiDelete(`/contact-groups/${deleting.id}`);
-      toast.success("Grup dihapus");
+      toast.success(t("contactGroups.deleted"));
       setDeleting(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus grup");
+      toast.error(e instanceof Error ? e.message : t("contactGroups.deleteFailed"));
     }
   };
 
@@ -219,7 +222,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       });
       setContactMap(map);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal memuat anggota");
+      toast.error(e instanceof Error ? e.message : t("contactGroups.membersLoadFailed"));
     } finally {
       setMembersLoading(false);
     }
@@ -231,12 +234,12 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       await apiPost(`/contact-groups/${activeGroup.id}/members`, {
         contactIds: [Number(pickContact)],
       });
-      toast.success("Anggota ditambahkan");
+      toast.success(t("contactGroups.memberAdded"));
       setPickContact("");
       openMembers(activeGroup);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menambah anggota");
+      toast.error(e instanceof Error ? e.message : t("contactGroups.memberAddFailed"));
     }
   };
 
@@ -244,11 +247,11 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
     if (!activeGroup) return;
     try {
       await apiDelete(`/contact-groups/${activeGroup.id}/members/${memberId}`);
-      toast.success("Anggota dihapus dari grup");
+      toast.success(t("contactGroups.memberRemoved"));
       openMembers(activeGroup);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghapus anggota");
+      toast.error(e instanceof Error ? e.message : t("contactGroups.memberRemoveFailed"));
     }
   };
 
@@ -262,9 +265,9 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
         {!embedded && (
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">Grup Kontak</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">{t("title.contactGroups")}</h1>
             <p className="text-sm text-muted-foreground">
-              Kelompokkan kontak untuk broadcast yang lebih tepat sasaran
+              {t("contactGroups.description")}
             </p>
           </div>
         )}
@@ -272,7 +275,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
           <SyncWAButton kind="groups" onDone={load} />
           <Button onClick={openAdd} className="gap-1.5">
             <Plus className="w-4 h-4" />
-            Buat Grup
+            {t("contactGroups.createGroup")}
           </Button>
         </div>
       </div>
@@ -295,7 +298,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
             <Button variant="outline" onClick={load} className="gap-1.5">
               <RefreshCw className="w-4 h-4" />
-              Coba lagi
+              {t("common.retry")}
             </Button>
           </CardContent>
         </Card>
@@ -303,9 +306,9 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
         <Card>
           <CardContent className="p-10 text-center">
             <Users className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium mb-1">Belum ada grup</p>
+            <p className="font-medium mb-1">{t("contactGroups.noGroups")}</p>
             <p className="text-sm text-muted-foreground">
-              Buat grup pertama Anda dengan tombol di atas
+              {t("contactGroups.noGroupsHint")}
             </p>
           </CardContent>
         </Card>
@@ -328,7 +331,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => openEdit(g)}
-                      aria-label={`Edit ${g.name}`}
+                      aria-label={t("contactGroups.editGroup").replace("{name}", g.name)}
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -337,7 +340,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => setDeleting(g)}
-                      aria-label={`Hapus ${g.name}`}
+                      aria-label={t("contactGroups.deleteGroup").replace("{name}", g.name)}
                     >
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
@@ -354,10 +357,10 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                 >
                   <span className="flex items-center gap-2 text-muted-foreground">
                     <Users className="w-4 h-4" />
-                    {g.memberCount} anggota
+                    {t("contactGroups.memberCount").replace("{count}", String(g.memberCount))}
                   </span>
                   <span className="flex items-center gap-1 text-foreground font-medium">
-                    Kelola
+                    {t("contactGroups.manage")}
                     <ChevronRight className="w-4 h-4" />
                   </span>
                 </button>
@@ -371,7 +374,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                       Welcome DM
                     </span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${g.welcomeDmEnabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
-                      {g.welcomeDmEnabled ? "Aktif" : "Mati"}
+                      {g.welcomeDmEnabled ? t("contactGroups.active") : t("contactGroups.inactive")}
                     </span>
                   </button>
                 )}
@@ -383,33 +386,33 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
 
       {/* Add/Edit dialog */}
       {showForm && (
-        <Modal title={editing ? "Edit Grup" : "Buat Grup"} onClose={() => setShowForm(false)}>
+        <Modal title={editing ? t("contactGroups.editTitle") : t("contactGroups.createGroup")} onClose={() => setShowForm(false)}>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Nama Grup *</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contactGroups.labelName")}</label>
               <Input
-                placeholder="Contoh: Pelanggan VIP"
+                placeholder={t("contactGroups.placeholderName")}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Deskripsi</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contactGroups.labelDescription")}</label>
               <Input
-                placeholder="Keterangan grup (opsional)"
+                placeholder={t("contactGroups.placeholderDescription")}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Warna</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contactGroups.labelColor")}</label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
                   value={form.color}
                   onChange={(e) => setForm({ ...form, color: e.target.value })}
                   className="w-10 h-10 rounded-md cursor-pointer bg-transparent"
-                  aria-label="Pilih warna grup"
+                  aria-label={t("contactGroups.pickColor")}
                 />
                 <Input
                   value={form.color}
@@ -421,10 +424,10 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setShowForm(false)}>
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button onClick={saveGroup} disabled={saving}>
-                {saving ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Buat Grup"}
+                {saving ? t("contactGroups.saving") : editing ? t("contactGroups.saveChanges") : t("contactGroups.createGroup")}
               </Button>
             </div>
           </div>
@@ -434,7 +437,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       {/* Members dialog */}
       {activeGroup && (
         <Modal
-          title={`Anggota — ${activeGroup.name}`}
+          title={t("contactGroups.membersTitle").replace("{name}", activeGroup.name)}
           onClose={() => setActiveGroup(null)}
           wide
         >
@@ -443,17 +446,17 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
             <Dropdown
               value={pickContact}
               onChange={setPickContact}
-              ariaLabel="Pilih kontak untuk ditambahkan"
-              placeholder="Pilih kontak untuk ditambahkan..."
+              ariaLabel={t("contactGroups.pickContact")}
+              placeholder={t("contactGroups.pickContactPlaceholder")}
               className="flex-1"
               options={[
-                { value: "", label: "Pilih kontak untuk ditambahkan..." },
+                { value: "", label: t("contactGroups.pickContactPlaceholder") },
                 ...availableContacts.map((c) => ({ value: String(c.id), label: `${c.name} — ${c.phone}` })),
               ]}
             />
             <Button onClick={addMember} disabled={!pickContact} className="gap-1.5">
               <UserPlus className="w-4 h-4" />
-              Tambah
+              {t("contactGroups.add")}
             </Button>
           </div>
 
@@ -466,7 +469,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
             </div>
           ) : members.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              Belum ada anggota di grup ini
+              {t("contactGroups.noMembers")}
             </p>
           ) : (
             <div className="space-y-2 max-h-[40vh] overflow-y-auto">
@@ -479,10 +482,10 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                   >
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">
-                        {c ? c.name : `Kontak #${m.contactId}`}
+                        {c ? c.name : t("contactGroups.contactHash").replace("{id}", String(m.contactId))}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {c ? c.phone : "kontak tidak ditemukan"}
+                        {c ? c.phone : t("contactGroups.contactNotFound")}
                       </p>
                     </div>
                     <Button
@@ -490,7 +493,7 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
                       size="icon"
                       className="h-8 w-8 shrink-0"
                       onClick={() => removeMember(m.id)}
-                      aria-label="Hapus anggota"
+                      aria-label={t("contactGroups.removeMember")}
                     >
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
@@ -505,46 +508,46 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       {/* Welcome DM dialog (Fitur 5) */}
       {welcomeGroup && (
         <Modal
-          title={`Welcome DM — ${welcomeGroup.name}`}
+          title={t("contactGroups.welcomeTitle").replace("{name}", welcomeGroup.name)}
           onClose={() => setWelcomeGroup(null)}
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
-                <p className="text-sm font-medium">Kirim DM sambutan otomatis</p>
+                <p className="text-sm font-medium">{t("contactGroups.welcomeHeading")}</p>
                 <p className="text-xs text-muted-foreground">
-                  Kirim chat pribadi ke anggota baru yang join grup ini (bukan ke grup). Dibatasi 1 DM per nomor per 24 jam, dengan jeda 4 detik antar DM.
+                  {t("contactGroups.welcomeDesc")}
                 </p>
               </div>
               <Toggle checked={welcomeEnabled} label="Welcome DM" onToggle={setWelcomeEnabled} />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Template pesan</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contactGroups.templateLabel")}</label>
               <textarea
                 value={welcomeTemplate}
                 onChange={(e) => setWelcomeTemplate(e.target.value)}
                 rows={4}
-                placeholder="Halo {nama}, selamat datang di {grup}! 🙏"
+                placeholder={t("contactGroups.templatePlaceholder")}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
               />
               <p className="text-xs text-muted-foreground mt-1.5">
-                Variabel: <code className="font-mono bg-secondary px-1 rounded">{"{nama}"}</code> = nama anggota baru, <code className="font-mono bg-secondary px-1 rounded">{"{grup}"}</code> = nama grup.
+                {t("contactGroups.variables")}{" "}<code className="font-mono bg-secondary px-1 rounded">{"{nama}"}</code> = {t("contactGroups.variablesNameHint")}, <code className="font-mono bg-secondary px-1 rounded">{"{grup}"}</code> = {t("contactGroups.variablesGroupHint")}.
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Pratinjau</label>
+              <label className="text-sm font-medium mb-1.5 block">{t("contactGroups.preview")}</label>
               <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm whitespace-pre-wrap">
                 {welcomeTemplate.trim() ? renderPreview(welcomeTemplate, welcomeGroup.name) : (
-                  <span className="text-muted-foreground">Isi template untuk melihat pratinjau…</span>
+                  <span className="text-muted-foreground">{t("contactGroups.previewEmpty")}</span>
                 )}
               </div>
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setWelcomeGroup(null)}>
-                Batal
+                {t("common.cancel")}
               </Button>
               <Button onClick={saveWelcomeDM} disabled={welcomeSaving}>
-                {welcomeSaving ? "Menyimpan..." : "Simpan"}
+                {welcomeSaving ? t("contactGroups.saving") : t("common.save")}
               </Button>
             </div>
           </div>
@@ -553,17 +556,16 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
 
       {/* Delete confirm */}
       {deleting && (
-        <Modal title="Hapus Grup" onClose={() => setDeleting(null)}>
+        <Modal title={t("contactGroups.deleteTitle")} onClose={() => setDeleting(null)}>
           <p className="text-sm text-muted-foreground mb-5">
-            Hapus grup <span className="font-medium text-foreground">{deleting.name}</span>?
-            Anggota tidak ikut terhapus, hanya grupnya.
+            {t("contactGroups.deleteConfirm").replace("{name}", deleting.name)}
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              Batal
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Hapus
+              {t("common.delete")}
             </Button>
           </div>
         </Modal>

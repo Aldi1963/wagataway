@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 interface Usage {
   planName: string;
@@ -15,6 +16,7 @@ interface Usage {
  * atau sidebar dalam keadaan collapsed.
  */
 export default function QuotaMeter({ collapsed }: { collapsed: boolean }) {
+  const { t } = useLang();
   const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export default function QuotaMeter({ collapsed }: { collapsed: boolean }) {
     <div className="rounded-lg border border-border bg-muted p-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-foreground">
-          Paket {usage.planName}
+          {t("quotaMeter.planLabel").replace("{plan}", usage.planName)}
         </p>
         <Link
           href="/billing"
@@ -62,7 +64,7 @@ export default function QuotaMeter({ collapsed }: { collapsed: boolean }) {
         />
       </div>
       <p className="mt-1.5 text-[11px] text-muted-foreground">
-        {usage.remaining.toLocaleString("id-ID")} pesan tersisa
+        {t("quotaMeter.remaining").replace("{count}", usage.remaining.toLocaleString("id-ID"))}
       </p>
     </div>
   );
