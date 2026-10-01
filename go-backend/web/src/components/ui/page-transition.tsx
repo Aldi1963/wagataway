@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-import { Lottie } from "lottie-react";
 import { cn } from "@/lib/utils";
-import planeLoader from "@/assets/paper-plane-loader.json";
 
-// Animasi loading WaGataway — pesawat kertas navy muter (Lottie,
-// "Paper plane Loader" oleh Rana Adeel Farrukh, Lottie Simple License,
-// warna di-tint ke navy brand).
+// Animasi loading WaGataway — tiga titik navy memantul (CSS murni,
+// pilihan user 2026-10-01 menggantikan paper-plane Lottie).
 export function PageTransitionLoader({ className }: { className?: string }) {
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -19,14 +16,19 @@ export function PageTransitionLoader({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex flex-col items-center justify-center gap-4", className)}>
-      <Lottie
-        src={planeLoader}
-        loop={!reducedMotion}
-        autoplay={!reducedMotion}
-        className="w-48 h-32"
-        aria-label="Memuat"
-      />
-      <p className="text-sm font-medium text-muted-foreground animate-pulse-soft">
+      <div className="flex items-center gap-2.5" role="status" aria-label="Memuat">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className={cn(
+              "h-3.5 w-3.5 rounded-full bg-[#243370] dark:bg-[#4c63d2]",
+              !reducedMotion && "animate-bounce-dot"
+            )}
+            style={reducedMotion ? undefined : { animationDelay: `${i * 0.15}s` }}
+          />
+        ))}
+      </div>
+      <p className={cn("text-sm font-medium text-muted-foreground", !reducedMotion && "animate-pulse-soft")}>
         Memuat...
       </p>
     </div>
