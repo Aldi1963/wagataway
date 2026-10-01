@@ -14,6 +14,7 @@ import (
 
 func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
 	contacts := rg.Group("/contacts")
+	contacts.Use(middleware.RequireScope("contacts"))
 	{
 		contacts.GET("", listContacts(db))
 		contacts.POST("", createContact(db))

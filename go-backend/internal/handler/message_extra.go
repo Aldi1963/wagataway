@@ -17,13 +17,13 @@ import (
 // registerMessageExtraRoutes mendaftarkan endpoint pesan lanjutan.
 // Dipanggil dari registerMessageRoutes di message.go.
 func registerMessageExtraRoutes(msgs *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
-	msgs.GET("/:id/status", getMessageStatus(db))
-	msgs.DELETE("/:id", revokeMessage(db, wm))
-	msgs.POST("/send-poll", sendPollMessageHandler(db, wm))
-	msgs.POST("/send-interactive", sendInteractiveMessageHandler(db, wm))
-	msgs.POST("/send-sticker", sendStickerMessageHandler(db, wm))
-	msgs.POST("/send-voice-note", sendVoiceNoteMessageHandler(db, wm))
-	msgs.POST("/send-location", sendLocationMessageHandler(db, wm))
+	msgs.GET("/:id/status", middleware.RequireScope("messages:read"), getMessageStatus(db))
+	msgs.DELETE("/:id", middleware.RequireScope("messages:send"), revokeMessage(db, wm))
+	msgs.POST("/send-poll", middleware.RequireScope("messages:send"), sendPollMessageHandler(db, wm))
+	msgs.POST("/send-interactive", middleware.RequireScope("messages:send"), sendInteractiveMessageHandler(db, wm))
+	msgs.POST("/send-sticker", middleware.RequireScope("messages:send"), sendStickerMessageHandler(db, wm))
+	msgs.POST("/send-voice-note", middleware.RequireScope("messages:send"), sendVoiceNoteMessageHandler(db, wm))
+	msgs.POST("/send-location", middleware.RequireScope("messages:send"), sendLocationMessageHandler(db, wm))
 }
 
 // checkDeviceOwnership memastikan device milik user; 404 bila bukan.

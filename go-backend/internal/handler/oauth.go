@@ -329,11 +329,12 @@ func handleOAuthCallback(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		token, err := generateToken(cfg, user)
+		token, jti, err := generateToken(cfg, user)
 		if err != nil {
 			oauthFail(c, cfg, "Gagal membuat sesi")
 			return
 		}
+		issueSession(db, user.ID, jti, c)
 
 		base := strings.TrimRight(strings.TrimSpace(cfg.AppURL), "/")
 		if base == "" {

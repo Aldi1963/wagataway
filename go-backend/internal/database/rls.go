@@ -15,10 +15,10 @@ var userScopedTables = []string{
 	"canned_responses", "chat_assignments", "chat_conversations",
 	"chat_inboxes", "chat_labels", "contact_groups", "contacts",
 	"cs_bots", "devices", "drip_campaigns", "files", "followups",
-	"group_rules", "integrations", "menu_bot_sessions", "menu_bots",
+	"group_rules", "integrations", "login_histories", "menu_bot_sessions", "menu_bots",
 	"message_reports", "message_templates", "messages", "notifications",
 	"password_reset_tokens", "polls", "recurring_schedules",
-	"scheduled_messages", "short_links", "subscriptions", "transactions",
+	"scheduled_messages", "sessions", "short_links", "subscriptions", "transactions",
 	"voucher_redemptions", "wa_otp_codes", "wallet_transactions",
 	"webhook_delivery_logs", "webhooks", "welcome_dm_sents",
 }

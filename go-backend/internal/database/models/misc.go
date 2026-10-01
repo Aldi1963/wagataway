@@ -26,6 +26,8 @@ type ApiKey struct {
 	IsActive  bool           `gorm:"default:true" json:"isActive"`
 	LastUsed  *time.Time     `json:"lastUsed"`
 	ExpiresAt *time.Time     `json:"expiresAt"`
+	// Scopes: array JSON, mis. ["messages:send","messages:read"]. Kosong = full.
+	Scopes    string         `gorm:"type:text" json:"-"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
@@ -136,6 +138,29 @@ type Notification struct {
 	Message   string    `gorm:"type:text;not null" json:"message"`
 	Link      string    `gorm:"size:500" json:"link"`
 	IsRead    bool      `gorm:"default:false" json:"isRead"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ── Sessions (manajemen sesi login, bisa dicabut) ─────────────────────────────
+
+type Session struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserID    uint       `gorm:"index;not null" json:"userId"`
+	JTI       string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
+	IP        string     `gorm:"size:45" json:"ip"`
+	UserAgent string     `gorm:"size:500" json:"userAgent"`
+	CreatedAt time.Time  `json:"createdAt"`
+	LastSeen  time.Time  `json:"lastSeen"`
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+}
+
+// ── Login History (deteksi login dari IP/perangkat baru) ─────────────────────
+
+type LoginHistory struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index;not null" json:"userId"`
+	IP        string    `gorm:"size:45;index" json:"ip"`
+	UserAgent string    `gorm:"size:500" json:"userAgent"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

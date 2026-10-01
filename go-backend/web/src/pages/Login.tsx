@@ -39,7 +39,7 @@ function GithubIcon() {
 }
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, verify2FA } = useAuth();
   const [oauthProviders, setOauthProviders] = useState<Record<
     string,
     { enabled: boolean }
@@ -53,6 +53,9 @@ export default function Login() {
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Tahap 2FA: token sementara dari /auth/login saat akun ber-2FA.
+  const [twofaToken, setTwofaToken] = useState<string | null>(null);
+  const [twofaCode, setTwofaCode] = useState("");
 
   useEffect(() => {
     // Error dari callback OAuth.
@@ -77,14 +80,28 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
+      if (twofaToken) {
+        await verify2FA(twofaToken, twofaCode.trim());
+        return;
+      }
       if (remember) localStorage.setItem("wag-remember-email", email);
       else localStorage.removeItem("wag-remember-email");
-      await login(email, password);
+      const res = await login(email, password);
+      if (res.requires2FA && res.twofaToken) {
+        setTwofaToken(res.twofaToken);
+        setTwofaCode("");
+      }
     } catch (err: any) {
       setError(err.message || "Email atau password salah. Coba lagi.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const cancel2FA = () => {
+    setTwofaToken(null);
+    setTwofaCode("");
+    setError("");
   };
 
   return (
@@ -93,6 +110,32 @@ export default function Login() {
       subtitle="Masuk untuk mengelola WhatsApp gateway Anda."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {twofaToken ? (
+          <>
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-[13px] text-muted-foreground">
+              Akun Anda dilindungi 2FA. Masukkan 6 digit kode dari aplikasi
+              authenticator (atau kode cadangan).
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[13px] font-medium text-foreground">
+                Kode 2FA
+              </label>
+              <Input
+                placeholder="123456"
+                value={twofaCode}
+                onChange={(e) =>
+                  setTwofaCode(e.target.value.replace(/\D/g, "").slice(0, 8))
+                }
+                required
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="font-mono text-center text-xl tracking-[0.35em] h-12"
+              />
+            </div>
+          </>
+        ) : (
+          <>
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-foreground">Email</label>
           <Input
@@ -134,6 +177,8 @@ export default function Login() {
             Lupa password?
           </Link>
         </div>
+          </>
+        )}
 
         {error && (
           <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30 px-3 py-2.5">
@@ -148,8 +193,17 @@ export default function Login() {
           disabled={loading}
         >
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {loading ? "Memproses..." : "Masuk"}
+          {loading ? "Memproses..." : twofaToken ? "Verifikasi" : "Masuk"}
         </Button>
+        {twofaToken && (
+          <button
+            type="button"
+            onClick={cancel2FA}
+            className="w-full text-center text-[13px] text-muted-foreground hover:underline"
+          >
+            Kembali
+          </button>
+        )}
       </form>
 
       {(oauthProviders?.google?.enabled || oauthProviders?.github?.enabled) && (

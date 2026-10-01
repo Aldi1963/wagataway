@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -26,6 +27,9 @@ type Claims struct {
 	UserID uint   `json:"userId"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
+	// Purpose membedakan token penuh ("") vs token sementara 2FA ("2fa_pending").
+	// Token sementara TIDAK boleh dipakai untuk route terproteksi.
+	Purpose string `json:"purpose,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -59,6 +63,7 @@ func AuthRequired(cfg *config.Config) gin.HandlerFunc {
 			c.Set("userID", ak.UserID)
 			c.Set("email", email)
 			c.Set("role", role)
+			c.Set("apiKeyScopes", ParseAPIKeyScopes(ak.Scopes))
 			c.Next()
 			return
 		}
@@ -117,6 +122,34 @@ func AuthRequired(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
+		// Token sementara 2FA (pending) tidak boleh mengakses route terproteksi.
+		if claims.Purpose == "2fa_pending" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "Verifikasi 2FA belum selesai",
+				"code":    "2FA_REQUIRED",
+			})
+			return
+		}
+
+		// Sesi yang dicabut tidak boleh dipakai lagi. Token lama tanpa jti
+		// (terbit sebelum fitur sesi) dilewati agar tetap valid sampai expired.
+		if apiKeyDB != nil && claims.ID != "" {
+			var sess models.Session
+			if err := apiKeyDB.Where("jti = ? AND revoked_at IS NULL", claims.ID).First(&sess).Error; err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"message": "Sesi telah dicabut, silakan login ulang",
+					"code":    "SESSION_REVOKED",
+				})
+				return
+			}
+			// Update last_seen secukupnya (maks 1x per 5 menit) agar tidak
+			// membebani DB di tiap request.
+			if time.Since(sess.LastSeen) > 5*time.Minute {
+				apiKeyDB.Model(&sess).Update("last_seen", time.Now())
+			}
+			c.Set("sessionJTI", claims.ID)
+		}
+
 		// Set user context
 		c.Set("userID", claims.UserID)
 		c.Set("email", claims.Email)
@@ -137,6 +170,66 @@ func AdminRequired() gin.HandlerFunc {
 			return
 		}
 		c.Next()
+	}
+}
+
+// ── API key scopes ────────────────────────────────────────────────────────────
+
+// AvailableAPIScopes adalah daftar scope yang bisa dipilih saat membuat API key.
+var AvailableAPIScopes = []struct {
+	Value string
+	Label string
+}{
+	{"full", "Akses penuh"},
+	{"messages:send", "Kirim pesan"},
+	{"messages:read", "Baca riwayat pesan"},
+	{"contacts", "Kelola kontak & grup"},
+	{"devices:read", "Lihat perangkat"},
+	{"devices:write", "Kelola perangkat"},
+}
+
+func ValidAPIScope(s string) bool {
+	for _, sc := range AvailableAPIScopes {
+		if sc.Value == s {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseAPIKeyScopes mengubah JSON scopes menjadi slice; kosong = ["full"]
+// agar key lama tetap berfungsi penuh.
+func ParseAPIKeyScopes(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return []string{"full"}
+	}
+	var scopes []string
+	if err := json.Unmarshal([]byte(raw), &scopes); err != nil || len(scopes) == 0 {
+		return []string{"full"}
+	}
+	return scopes
+}
+
+// RequireScope menolak request berbasis X-API-Key yang tidak punya scope.
+// Request JWT (dashboard) tidak dibatasi scope.
+func RequireScope(scope string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		v, ok := c.Get("apiKeyScopes")
+		if !ok {
+			c.Next()
+			return
+		}
+		scopes, _ := v.([]string)
+		for _, s := range scopes {
+			if s == "full" || s == scope {
+				c.Next()
+				return
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"message": "API key tidak memiliki akses: " + scope,
+			"code":    "INSUFFICIENT_SCOPE",
+		})
 	}
 }
 

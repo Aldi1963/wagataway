@@ -18,12 +18,12 @@ import (
 func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
 	msgs := rg.Group("/messages")
 	{
-		msgs.GET("", listMessages(db))
-		msgs.POST("/send", sendMessage(db, wm))
-		msgs.POST("/send-bulk", sendBulkMessage(db, wm))
-		msgs.POST("/check-recipients", checkRecipients(db, wm))
-		msgs.GET("/bulk-jobs", listBulkJobs(db))
-		msgs.GET("/bulk-stats", bulkStats(db))
+		msgs.GET("", middleware.RequireScope("messages:read"), listMessages(db))
+		msgs.POST("/send", middleware.RequireScope("messages:send"), sendMessage(db, wm))
+		msgs.POST("/send-bulk", middleware.RequireScope("messages:send"), sendBulkMessage(db, wm))
+		msgs.POST("/check-recipients", middleware.RequireScope("messages:send"), checkRecipients(db, wm))
+		msgs.GET("/bulk-jobs", middleware.RequireScope("messages:read"), listBulkJobs(db))
+		msgs.GET("/bulk-stats", middleware.RequireScope("messages:read"), bulkStats(db))
 		registerMessageExtraRoutes(msgs, db, wm)
 		registerPollRoutes(rg, db, wm)
 	}

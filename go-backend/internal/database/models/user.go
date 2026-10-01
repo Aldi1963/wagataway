@@ -25,6 +25,12 @@ type User struct {
 	NotifyWA  string         `gorm:"size:20" json:"notifyWa"`
 	TwoFASecret string      `gorm:"size:255" json:"-"`
 	TwoFAEnabled bool        `gorm:"default:false" json:"twoFaEnabled"`
+	// Kode cadangan 2FA: array JSON berisi hash bcrypt, plaintext hanya
+	// ditampilkan sekali saat dibuat.
+	TwoFABackupCodes string `gorm:"type:text" json:"-"`
+	// Proteksi brute-force: dikunci sementara setelah 5x salah password.
+	FailedAttempts int        `gorm:"default:0" json:"-"`
+	LockedUntil    *time.Time `json:"-"`
 	Timezone  string         `gorm:"size:50;default:Asia/Jakarta" json:"timezone"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`

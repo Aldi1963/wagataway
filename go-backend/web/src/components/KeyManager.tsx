@@ -21,10 +21,31 @@ import { toast } from "sonner";
 export interface ApiKey {
   id: number;
   name: string;
-  keyPrefix: string;
+  keyPreview: string;
   isActive: boolean;
+  scopes: string[];
   lastUsed: string | null;
+  expiresAt: string | null;
+  expired: boolean;
   createdAt: string;
+}
+
+interface ScopeDef {
+  Value: string;
+  Label: string;
+}
+
+const SCOPE_LABELS: Record<string, string> = {
+  full: "Penuh",
+  "messages:send": "Kirim pesan",
+  "messages:read": "Baca pesan",
+  contacts: "Kontak",
+  "devices:read": "Lihat perangkat",
+  "devices:write": "Kelola perangkat",
+};
+
+function scopeLabel(s: string): string {
+  return SCOPE_LABELS[s] || s;
 }
 
 function Modal({
@@ -63,11 +84,16 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<ScopeDef[]>([]);
+  const [selScopes, setSelScopes] = useState<string[]>(["full"]);
+  const [expiry, setExpiry] = useState<string>("never");
   const [saving, setSaving] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState("");
   const [showNewKey, setShowNewKey] = useState(true);
   const [deleting, setDeleting] = useState<ApiKey | null>(null);
+  const [rotating, setRotating] = useState<ApiKey | null>(null);
+  const [rotatingBusy, setRotatingBusy] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -76,32 +102,77 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
       .then((d) => setKeys(d.apiKeys || []))
       .catch((e) => setError(e.message || "Gagal memuat API key"))
       .finally(() => setLoading(false));
+    apiGet<{ scopes: ScopeDef[] }>("/api-keys/scopes")
+      .then((d) => setScopes(d.scopes || []))
+      .catch(() => {});
   };
 
   useEffect(load, []);
+
+  const toggleScope = (v: string) => {
+    setSelScopes((prev) => {
+      if (v === "full") return prev.includes("full") ? [] : ["full"];
+      const without = prev.filter((s) => s !== "full");
+      return without.includes(v)
+        ? without.filter((s) => s !== v)
+        : [...without, v];
+    });
+  };
 
   const createKey = async () => {
     if (!name.trim()) {
       toast.error("Nama API key wajib diisi");
       return;
     }
+    if (selScopes.length === 0) {
+      toast.error("Pilih minimal satu scope");
+      return;
+    }
     setSaving(true);
     try {
+      const expiresInDays =
+        expiry === "never" ? undefined : parseInt(expiry, 10);
       // Backend mengembalikan: { apiKey: "<key penuh>", key: <objek metadata> }
       const res = await apiPost<{ apiKey: string; key: ApiKey }>("/api-keys", {
         name: name.trim(),
+        scopes: selScopes,
+        expiresInDays,
       });
       setKeys((prev) => [res.key, ...prev]);
       setNewKey(res.apiKey);
       setNewKeyName(name.trim());
       setShowNewKey(true);
       setName("");
+      setSelScopes(["full"]);
+      setExpiry("never");
       setShowForm(false);
       toast.success("API key dibuat");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gagal membuat API key");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const rotateKey = async () => {
+    if (!rotating) return;
+    setRotatingBusy(true);
+    try {
+      const res = await apiPost<{ apiKey: string; key: ApiKey }>(
+        `/api-keys/${rotating.id}/rotate`
+      );
+      setKeys((prev) =>
+        prev.map((k) => (k.id === rotating.id ? res.key : k))
+      );
+      setNewKey(res.apiKey);
+      setNewKeyName(rotating.name);
+      setShowNewKey(true);
+      setRotating(null);
+      toast.success("Key dirotasi — key lama sudah mati");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal merotasi key");
+    } finally {
+      setRotatingBusy(false);
     }
   };
 
@@ -160,13 +231,31 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{k.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">
-                    {k.keyPrefix}... {k.isActive ? "" : "· nonaktif"}
+                    {k.keyPreview}
                     {k.lastUsed ? ` · terakhir dipakai ${new Date(k.lastUsed).toLocaleDateString("id-ID")}` : " · belum pernah dipakai"}
+                    {k.expiresAt ? ` · kedaluwarsa ${new Date(k.expiresAt).toLocaleDateString("id-ID")}` : ""}
                   </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(k.scopes || ["full"]).map((s) => (
+                      <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">
+                        {scopeLabel(s)}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
                 <Badge variant={k.isActive ? "default" : "secondary"} className="text-[10px]">
-                  {k.isActive ? "Aktif" : "Nonaktif"}
+                  {k.expired ? "Kedaluwarsa" : k.isActive ? "Aktif" : "Nonaktif"}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setRotating(k)}
+                  aria-label={`Rotasi ${k.name}`}
+                  title="Rotasi key"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -193,6 +282,44 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && createKey()}
                 />
+              </div>
+              <div>
+                <label className="text-xs">Scope akses</label>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {scopes.map((s) => {
+                    const active = selScopes.includes(s.Value);
+                    return (
+                      <button
+                        key={s.Value}
+                        type="button"
+                        onClick={() => toggleScope(s.Value)}
+                        className={`text-xs px-2.5 py-1.5 rounded-full border transition-colors ${
+                          active
+                            ? "bg-[#243370] text-white border-[#243370]"
+                            : "border-border text-muted-foreground hover:border-[#243370]/50"
+                        }`}
+                      >
+                        {s.Label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  "Akses penuh" tidak bisa digabung scope lain.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs">Masa berlaku</label>
+                <select
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  value={expiry}
+                  onChange={(e) => setExpiry(e.target.value)}
+                >
+                  <option value="never">Tanpa batas waktu</option>
+                  <option value="30">30 hari</option>
+                  <option value="90">90 hari</option>
+                  <option value="365">1 tahun</option>
+                </select>
               </div>
               <p className="text-xs text-muted-foreground">
                 Key penuh hanya ditampilkan sekali setelah dibuat. Simpan di tempat aman.
@@ -238,6 +365,21 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
                 )}
                 <Button onClick={() => setNewKey(null)}>Selesai</Button>
               </div>
+            </div>
+          </Modal>
+        )}
+
+        {rotating && (
+          <Modal title="Rotasi API Key" onClose={() => setRotating(null)}>
+            <p className="text-sm mb-4">
+              Buat key baru untuk <strong>{rotating.name}</strong>? Key lama
+              langsung mati dan integrasi yang memakainya harus diganti.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRotating(null)}>Batal</Button>
+              <Button onClick={rotateKey} disabled={rotatingBusy}>
+                {rotatingBusy ? "Merotasi..." : "Rotasi Sekarang"}
+              </Button>
             </div>
           </Modal>
         )}

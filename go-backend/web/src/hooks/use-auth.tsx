@@ -21,7 +21,11 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ requires2FA?: boolean; twofaToken?: string }>;
+  verify2FA: (token: string, code: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   updateUser: (user: User) => void;
@@ -48,10 +52,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const data = await apiPost<{ token: string; user: User }>("/auth/login", {
+    const data = await apiPost<{
+      token?: string;
+      user?: User;
+      requires2FA?: boolean;
+      twofaToken?: string;
+    }>("/auth/login", {
       email,
       password,
     });
+    if (data.requires2FA) {
+      return { requires2FA: true, twofaToken: data.twofaToken };
+    }
+    localStorage.setItem("token", data.token!);
+    setUser(data.user!);
+    return {};
+  };
+
+  const verify2FA = async (token: string, code: string) => {
+    const data = await apiPost<{ token: string; user: User }>(
+      "/auth/2fa/verify",
+      { token, code }
+    );
     localStorage.setItem("token", data.token);
     setUser(data.user);
   };
@@ -66,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // Best-effort: cabut sesi di server agar token tak bisa dipakai lagi.
+    apiPost("/auth/logout").catch(() => {});
     localStorage.removeItem("token");
     setUser(null);
     window.location.href = "/login";
@@ -82,7 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, login, register, logout, updateUser, setTokenFromOAuth }}
+      value={{
+        user,
+        isLoading,
+        login,
+        verify2FA,
+        register,
+        logout,
+        updateUser,
+        setTokenFromOAuth,
+      }}
     >
       {children}
     </AuthContext.Provider>

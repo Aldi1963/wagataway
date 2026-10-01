@@ -52,7 +52,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 	api.Use(middleware.MaintenanceGuard())
 	{
 		// ── Public routes (no auth) ────────────────────────────────────────
-		registerAuthRoutes(api, cfg, db)
+		registerAuthRoutes(api, cfg, db, waManager)
 		registerOAuthRoutes(api, cfg, db)
 		registerTeamLoginRoute(api, cfg, db) // POST /api/auth/team-login
 		registerPublicRoutes(api, cfg, db)
@@ -115,6 +115,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerTeamMemberRoutes(protected, cfg, db)
 			registerAffiliateRoutes(protected, db)
 			registerTwoFARoutes(protected, cfg, db)
+			registerSessionRoutes(protected, db)
 			registerSSERoutes(protected)
 			registerSSETicketRoutes(protected)
 

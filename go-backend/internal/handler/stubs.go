@@ -95,11 +95,4 @@ func registerBotOrderRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
 	}
 }
 
-func registerTwoFARoutes(rg *gin.RouterGroup, _ *config.Config, _ *gorm.DB) {
-	twofa := rg.Group("/2fa")
-	{
-		twofa.POST("/enable", stubHandler("enable-2fa"))
-		twofa.POST("/verify", stubHandler("verify-2fa"))
-		twofa.POST("/disable", stubHandler("disable-2fa"))
-	}
-}
+		// 2FA: implementasi nyata ada di twofa.go (registerTwoFARoutes di router.go).

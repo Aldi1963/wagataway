@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -10,8 +11,10 @@ import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/rls"
+	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -28,22 +31,23 @@ type registerRequest struct {
 	Password string `json:"password" binding:"required,min=6"`
 }
 
-func registerAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+func registerAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) {
 	auth := rg.Group("/auth")
 	auth.Use(middleware.AuthRateLimit.Middleware())
 	{
-		auth.POST("/login", handleLogin(cfg, db))
+		auth.POST("/login", handleLogin(cfg, db, waManager))
 		auth.POST("/register", handleRegister(cfg, db))
 		auth.GET("/me", middleware.AuthRequired(cfg), handleGetMe(db))
 		auth.PATCH("/me", middleware.AuthRequired(cfg), handleUpdateMe(db))
 		auth.POST("/change-password", middleware.AuthRequired(cfg), handleChangePassword(db))
-		auth.POST("/logout", handleLogout())
+		auth.POST("/logout", middleware.AuthRequired(cfg), handleLogout(db))
 		auth.POST("/forgot-password", handleForgotPassword(cfg, db))
 		auth.POST("/reset-password", handleResetPassword(cfg, db))
+		auth.POST("/2fa/verify", handleTwoFAVerify(cfg, db, waManager))
 	}
 }
 
-func handleLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+func handleLogin(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req loginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -64,25 +68,52 @@ func handleLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Email atau password salah", "code": "INVALID_CREDENTIALS"})
-			return
-		}
-
-		// Check 2FA
-		if user.TwoFAEnabled {
-			c.JSON(http.StatusOK, gin.H{
-				"requires2FA": true,
-				"userId":      user.ID,
+		// Proteksi brute-force: tolak login selama masa kunci.
+		if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+			sisa := int(time.Until(*user.LockedUntil).Minutes()) + 1
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"message": fmt.Sprintf("Akun dikunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam %d menit.", sisa),
+				"code":    "ACCOUNT_LOCKED",
 			})
 			return
 		}
 
-		token, err := generateToken(cfg, &user)
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+			registerFailedAttempt(db, &user)
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Email atau password salah", "code": "INVALID_CREDENTIALS"})
+			return
+		}
+
+		// Login berhasil: reset hitungan gagal.
+		if user.FailedAttempts != 0 || user.LockedUntil != nil {
+			user.FailedAttempts = 0
+			user.LockedUntil = nil
+			db.Save(&user)
+		}
+
+		// Check 2FA — bila aktif, keluarkan token sementara 5 menit untuk
+		// tahap verifikasi kode, bukan token penuh.
+		if user.TwoFAEnabled {
+			pending, err := generateTwoFAPendingToken(cfg, user.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat token", "code": "TOKEN_ERROR"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"requires2FA": true,
+				"twofaToken":  pending,
+			})
+			return
+		}
+
+		token, jti, err := generateToken(cfg, &user)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat token", "code": "TOKEN_ERROR"})
 			return
 		}
+		issueSession(db, user.ID, jti, c)
+
+		trackLogin(db, waManager, &user, c)
 
 		c.JSON(http.StatusOK, gin.H{
 			"token": token,
@@ -143,11 +174,12 @@ func handleRegister(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			user.Plan = trialPlanSlug
 		}
 
-		token, err := generateToken(cfg, &user)
+		token, jti, err := generateToken(cfg, &user)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat token", "code": "TOKEN_ERROR"})
 			return
 		}
+		issueSession(db, user.ID, jti, c)
 
 		c.JSON(http.StatusCreated, gin.H{
 			"token": token,
@@ -259,9 +291,12 @@ func handleGetMe(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func handleLogout() gin.HandlerFunc {
+func handleLogout(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// JWT is stateless — client just discards the token
+		// Cabut sesi saat ini agar token tidak bisa dipakai lagi.
+		if jti := currentJTI(c); jti != "" {
+			db.Model(&models.Session{}).Where("jti = ?", jti).Update("revoked_at", time.Now())
+		}
 		c.JSON(http.StatusOK, gin.H{"message": "Berhasil logout"})
 	}
 }
@@ -377,17 +412,38 @@ func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func generateToken(cfg *config.Config, user *models.User) (string, error) {
+const (
+	maxFailedAttempts   = 5
+	accountLockDuration = 15 * time.Minute
+)
+
+// registerFailedAttempt menaikkan hitungan gagal login; mengunci akun
+// 15 menit setelah 5x gagal beruntun.
+func registerFailedAttempt(db *gorm.DB, user *models.User) {
+	user.FailedAttempts++
+	if user.FailedAttempts >= maxFailedAttempts {
+		until := time.Now().Add(accountLockDuration)
+		user.LockedUntil = &until
+		user.FailedAttempts = 0
+		log.Warn().Uint("user", user.ID).Msg("akun dikunci sementara (brute-force)")
+	}
+	db.Save(user)
+}
+
+func generateToken(cfg *config.Config, user *models.User) (token string, jti string, err error) {
+	jti = uuid.NewString()
 	claims := &middleware.Claims{
 		UserID: user.ID,
 		Email:  user.Email,
 		Role:   user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(cfg.JWTExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(cfg.JWTSecret))
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token, err = t.SignedString([]byte(cfg.JWTSecret))
+	return token, jti, err
 }

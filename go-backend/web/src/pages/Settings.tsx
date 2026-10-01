@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/api";
 import { KeyManager } from "@/components/KeyManager";
+import TwoFASettings from "@/components/TwoFASettings";
+import SessionsSection from "@/components/SessionsSection";
 import Team from "./Team";
 
 /** Judul seksi ala halaman profil: tebal + garis pembatas. */
@@ -281,6 +283,22 @@ export default function Settings() {
             >
               {changingPw ? "Mengubah…" : "Ubah Password"}
             </Button>
+          </div>
+
+          <div className="pt-2">
+            <SectionHeader
+              title="Verifikasi 2 Langkah"
+              desc="Lapisan keamanan tambahan saat login"
+            />
+            <TwoFASettings />
+          </div>
+
+          <div className="pt-2">
+            <SectionHeader
+              title="Sesi Aktif"
+              desc="Perangkat yang sedang login ke akun Anda"
+            />
+            <SessionsSection />
           </div>
         </div>
         </div>

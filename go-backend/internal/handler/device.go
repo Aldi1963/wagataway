@@ -17,18 +17,20 @@ import (
 func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
 	devices := rg.Group("/devices")
 	{
-		devices.GET("", listDevices(db))
-		devices.POST("", createDevice(db))
-		devices.GET("/:id", getDevice(db))
-		devices.PUT("/:id", updateDevice(db, wm))
-		devices.DELETE("/:id", deleteDevice(db, wm))
-		devices.POST("/:id/connect", connectDevice(db, wm))
-		devices.POST("/:id/disconnect", disconnectDevice(db, wm))
-		devices.GET("/:id/qr", getDeviceQR(db, wm))
-		devices.POST("/:id/pair-code", requestPairCode(db, wm))
-		devices.GET("/:id/status", getDeviceStatus(db, wm))
-		devices.GET("/:id/bot-deliveries", listBotDeliveries(db))
-		devices.POST("/:id/webhook-secret/regenerate", regenerateWebhookSecret(db))
+		read := middleware.RequireScope("devices:read")
+		write := middleware.RequireScope("devices:write")
+		devices.GET("", read, listDevices(db))
+		devices.POST("", write, createDevice(db))
+		devices.GET("/:id", read, getDevice(db))
+		devices.PUT("/:id", write, updateDevice(db, wm))
+		devices.DELETE("/:id", write, deleteDevice(db, wm))
+		devices.POST("/:id/connect", write, connectDevice(db, wm))
+		devices.POST("/:id/disconnect", write, disconnectDevice(db, wm))
+		devices.GET("/:id/qr", read, getDeviceQR(db, wm))
+		devices.POST("/:id/pair-code", write, requestPairCode(db, wm))
+		devices.GET("/:id/status", read, getDeviceStatus(db, wm))
+		devices.GET("/:id/bot-deliveries", read, listBotDeliveries(db))
+		devices.POST("/:id/webhook-secret/regenerate", write, regenerateWebhookSecret(db))
 	}
 }
 
