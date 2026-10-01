@@ -173,15 +173,17 @@ function StatCard({
   tile,
   loading,
   children,
+  className,
 }: {
   label: string;
   icon: typeof Smartphone;
   tile: string;
   loading: boolean;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <Card className="min-w-0">
+    <Card className={cn("min-w-0", className)}>
       <CardContent className="p-5">
         <div className="flex items-center gap-4">
           <div
@@ -595,8 +597,8 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Empat kartu statistik — lebih lebar di HP mengikuti kotak merah */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 -mx-2 md:mx-0">
+      {/* Empat kartu statistik */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Total Devices" icon={Smartphone} tile={NAVY} loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {devices.length}
@@ -626,7 +628,8 @@ export default function Dashboard() {
           </p>
         </StatCard>
 
-        <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading}>
+        {/* Kartu Subscription lebih lebar dari 3 kartu lain di HP (kotak merah user) */}
+        <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading} className="-mx-2 md:mx-0">
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {subPlanName}
             {/* Fitur 7: label Trial */}
