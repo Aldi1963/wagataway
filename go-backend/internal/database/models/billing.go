@@ -64,7 +64,7 @@ type Transaction struct {
 	InvoiceNumber string `gorm:"-" json:"invoiceNumber"`
 
 	User User  `gorm:"foreignKey:UserID" json:"-"`
-	Plan *Plan `gorm:"foreignKey:PlanID" json:"-"`
+	Plan *Plan `gorm:"foreignKey:PlanID" json:"Plan,omitempty"`
 }
 
 type Voucher struct {
