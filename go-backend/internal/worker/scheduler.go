@@ -126,5 +126,9 @@ func (s *Scheduler) cleanupExpiredSessions() {
 	// Clean up OTP codes older than 1 hour
 	s.db.Where("expires_at < ? AND used = ?", time.Now(), false).Delete(&models.EmailOtp{})
 
+	// Hapus kode OTP WA yang sudah lama (expired > 24 jam) agar tabel tidak membengkak.
+	// Kode aktif/yang masih dalam masa berlaku tidak disentuh.
+	s.db.Where("expires_at < ?", time.Now().Add(-24*time.Hour)).Delete(&models.WaOtpCode{})
+
 	log.Debug().Msg("Cleanup: expired OTPs removed")
 }
