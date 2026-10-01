@@ -30,6 +30,10 @@ type ContactGroup struct {
 	MemberCount int            `gorm:"default:0" json:"memberCount"`
 	// WAJID: JID grup WhatsApp sumber sync (unik per user). Kosong untuk grup manual.
 	WAJID       string         `gorm:"size:64;index" json:"waJid"`
+	// WelcomeDM: kirim DM pribadi otomatis ke anggota baru yang join grup WA
+	// ini. Hanya berlaku untuk grup hasil sync (WAJID terisi).
+	WelcomeDMEnabled  bool   `gorm:"default:false" json:"welcomeDmEnabled"`
+	WelcomeDMTemplate string `gorm:"type:text" json:"welcomeDmTemplate"`
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`

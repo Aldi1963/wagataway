@@ -62,6 +62,12 @@ type Manager struct {
 	// manualStop menandai device yang sengaja diputus / logout (jangan di-retry).
 	retryGen   map[uint]int
 	manualStop map[uint]bool
+	// Welcome DM: antrean pengiriman (jeda 4 detik antar DM agar tidak kena
+	// rate limit) + klaim anti-duplikat per (device, grup, nomor) 24 jam.
+	welcomeDMCh     chan welcomeDMJob
+	welcomeDMClaims map[string]time.Time
+	welcomeDMMu     sync.Mutex
+	welcomeDMOnce   sync.Once
 }
 
 // NewManager creates a new WhatsApp session manager

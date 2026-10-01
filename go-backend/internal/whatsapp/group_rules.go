@@ -60,10 +60,21 @@ func buildWelcomeText(welcomeMsg string, join []types.JID, selfUser string) stri
 }
 
 // handleGroupParticipantChange menangani event *events.GroupInfo.
-// Bila ada anggota baru yang join (evt.Join), cari GroupRule aktif untuk
-// device+grup ini dan kirim WelcomeMsg dengan mention teks polos
-// (@nomor, gaya yang sama dengan peringatan anti-link).
+// Bila ada anggota baru yang join (evt.Join), kirim WelcomeMsg ke grup
+// (GroupRule, alur lama — JANGAN diubah) dan, bila grup ini punya setting
+// welcome DM (ContactGroup), antrekan DM pribadi ke tiap anggota baru.
 func (m *Manager) handleGroupParticipantChange(sess *SessionState, evt *events.GroupInfo) {
+	// Alur lama: welcome message ke grup (GroupRule) — dibiarkan apa adanya.
+	if len(evt.Join) > 0 {
+		m.sendGroupWelcomeMessage(sess, evt)
+	}
+	// Fitur 5: welcome DM pribadi ke anggota baru (per-grup, via antrean).
+	m.handleWelcomeDM(sess, evt)
+}
+
+// sendGroupWelcomeMessage adalah alur welcome-to-group yang sudah ada
+// (dipindah dari handleGroupParticipantChange tanpa perubahan logika).
+func (m *Manager) sendGroupWelcomeMessage(sess *SessionState, evt *events.GroupInfo) {
 	if len(evt.Join) == 0 {
 		return
 	}

@@ -40,6 +40,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.BulkJobRecipient{},
 		&models.Contact{},
 		&models.ContactGroup{},
+		&models.WelcomeDMSent{},
 		&models.ContactGroupMember{},
 		&models.AutoReply{},
 		&models.AIReplyConfig{},
