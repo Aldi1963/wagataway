@@ -165,7 +165,7 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 
 			var grp models.ContactGroup
-			err := db.Where("user_id = ? AND wa_jid = ?", userID, waJID).First(&grp).Error
+			err := db.Where("user_id = ? AND waj_id = ?", userID, waJID).First(&grp).Error
 			if err == gorm.ErrRecordNotFound {
 				grp = models.ContactGroup{
 					UserID:      userID,

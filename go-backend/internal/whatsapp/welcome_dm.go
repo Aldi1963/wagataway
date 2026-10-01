@@ -221,7 +221,7 @@ func (m *Manager) handleWelcomeDM(sess *SessionState, evt *events.GroupInfo) {
 	}
 
 	var cg models.ContactGroup
-	if err := m.db.Where("user_id = ? AND wa_jid = ? AND welcome_dm_enabled = ?",
+	if err := m.db.Where("user_id = ? AND waj_id = ? AND welcome_dm_enabled = ?",
 		sess.UserID, groupJID, true).First(&cg).Error; err != nil {
 		return // tidak ada setting welcome DM untuk grup ini
 	}
