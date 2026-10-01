@@ -11,6 +11,7 @@ import (
 	waBinary "go.mau.fi/whatsmeow/binary"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/util/random"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -327,6 +328,13 @@ func (m *Manager) sendPollMessage(ctx context.Context, client *whatsmeow.Client,
 			Name:                   proto.String(opts.Content),
 			Options:                options,
 			SelectableOptionsCount: proto.Uint32(selectable),
+		},
+		// MessageSecret WAJIB ada agar vote yang masuk bisa didekripsi
+		// (whatsmeow menyimpannya di store saat kirim; tanpa ini
+		// DecryptPollVote gagal dengan ErrOriginalMessageSecretNotFound).
+		// Sama seperti whatsmeow.BuildPollCreation.
+		MessageContextInfo: &waE2E.MessageContextInfo{
+			MessageSecret: random.Bytes(32),
 		},
 	}
 

@@ -708,6 +708,12 @@ func (m *Manager) reconnectWithBackoff(deviceID, userID uint) {
 func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
+		// Vote polling ditangkap di sini (SEBELUM handleIncomingMessage)
+		// agar tidak masuk ke alur bot/menu/AI/webhook termasuk webhook bot PPOB.
+		if v.Message.GetPollUpdateMessage() != nil {
+			go m.handlePollVote(sess, v)
+			return
+		}
 		m.handleIncomingMessage(sess, v)
 
 	case *events.Connected:

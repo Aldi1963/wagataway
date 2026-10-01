@@ -24,6 +24,7 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 		msgs.GET("/bulk-jobs", listBulkJobs(db))
 		msgs.GET("/bulk-stats", bulkStats(db))
 		registerMessageExtraRoutes(msgs, db, wm)
+		registerPollRoutes(rg, db, wm)
 	}
 }
 

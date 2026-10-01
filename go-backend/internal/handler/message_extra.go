@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -35,8 +36,9 @@ func checkDeviceOwnership(c *gin.Context, db *gorm.DB, userID, deviceID uint) bo
 }
 
 // queueSend menyimpan record lalu mengirim via goroutine (pola async),
-// mengisi WA message ID + sentAt saat sukses.
-func queueSend(db *gorm.DB, wm *whatsapp.Manager, userID uint, msg *models.Message, opts whatsapp.SendOptions) {
+// mengisi WA message ID + sentAt saat sukses. onSent dipanggil dengan WA
+// message ID bila pengiriman sukses (boleh nil).
+func queueSend(db *gorm.DB, wm *whatsapp.Manager, userID uint, msg *models.Message, opts whatsapp.SendOptions, onSent func(waID string)) {
 	if err := db.Create(msg).Error; err != nil {
 		return
 	}
@@ -50,6 +52,9 @@ func queueSend(db *gorm.DB, wm *whatsapp.Manager, userID uint, msg *models.Messa
 			now := time.Now()
 			db.Model(msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
 			recordReport(db, userID, msg.DeviceID, campaignID, msg.To, waID, "sent", "")
+			if onSent != nil {
+				onSent(waID)
+			}
 		}
 	}()
 }
@@ -135,14 +140,32 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
+		// Metadata poll (Fitur 6): WA message ID diisi saat pengiriman sukses.
+		poll := &models.Poll{
+			UserID:        userID,
+			DeviceID:      req.DeviceID,
+			Question:      req.Question,
+			To:            req.To,
+			IsGroup:       strings.Contains(req.To, "@g.us"),
+			AllowMultiple: req.AllowMultiple,
+		}
+		poll.SetOptions(req.Options)
+		if err := db.Create(poll).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan metadata poll", "code": "DB_ERROR"})
+			return
+		}
+
 		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
 			Type:                 "poll",
 			Content:              req.Question,
 			PollOptions:          req.Options,
 			AllowMultipleAnswers: req.AllowMultiple,
+		}, func(waID string) {
+			now := time.Now()
+			db.Model(poll).Updates(map[string]interface{}{"message_id": waID, "sent_at": &now})
 		})
 
-		c.JSON(http.StatusOK, gin.H{"message": "Poll sedang dikirim", "data": msg})
+		c.JSON(http.StatusOK, gin.H{"message": "Poll sedang dikirim", "data": msg, "pollId": poll.ID})
 	}
 }
 
@@ -197,7 +220,7 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 			Content: req.Body,
 			Buttons: buttons,
 			Footer:  req.Footer,
-		})
+		}, nil)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Pesan interaktif sedang dikirim", "data": msg})
 	}
@@ -231,7 +254,7 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "sticker", MediaURL: req.MediaURL})
+		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "sticker", MediaURL: req.MediaURL}, nil)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Stiker sedang dikirim", "data": msg})
 	}
@@ -265,7 +288,7 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "voicenote", MediaURL: req.MediaURL})
+		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "voicenote", MediaURL: req.MediaURL}, nil)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Voice note sedang dikirim", "data": msg})
 	}
@@ -314,7 +337,7 @@ func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFu
 			LocName:      req.Name,
 			LocAddress:   req.Address,
 			LiveLocation: req.Live,
-		})
+		}, nil)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Lokasi sedang dikirim", "data": msg})
 	}

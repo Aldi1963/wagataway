@@ -91,6 +91,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.MenuBotItem{},
 		&models.MenuBotSession{},
 		&models.WaOtpCode{},
+		&models.Poll{},
+		&models.PollVote{},
 	); err != nil {
 		return err
 	}
