@@ -11,6 +11,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/quota"
+	"github.com/Aldi1963/wagataway/internal/subscription"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -45,15 +46,31 @@ func listPlans(db *gorm.DB) gin.HandlerFunc {
 func getSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		// BONUS (tanggal expired asli di dashboard): sertakan status langganan
+		// terpusat (active | grace | expired) dari subscription.Check, agar kartu
+		// dashboard bisa menampilkan badge "Masa Tenggang" / "Berakhir".
+		subState := string(subscription.StateActive)
+		if st, err := subscription.Check(db, userID); err == nil && st != nil {
+			subState = string(st.State)
+		}
 		var sub models.Subscription
 		err := db.Where("user_id = ? AND status = ?", userID, "active").
 			Preload("Plan").First(&sub).Error
 		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"subscription": nil})
+			c.JSON(http.StatusOK, gin.H{"subscription": nil, "subState": subState})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"subscription": sub})
+		c.JSON(http.StatusOK, gin.H{"subscription": subscriptionWithState{
+			Subscription: sub,
+			SubState:      subState,
+		}})
 	}
+}
+
+// subscriptionWithState: langganan + status terpusat untuk kartu dashboard.
+type subscriptionWithState struct {
+	models.Subscription
+	SubState string `json:"subState"`
 }
 
 // GET /api/billing/usage — kuota paket & pemakaian pesan bulan ini (Fitur 3).

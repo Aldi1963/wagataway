@@ -30,6 +30,8 @@ interface Subscription {
   endDate: string;
   // Fitur 7: penanda trial otomatis 7 hari.
   isTrial?: boolean;
+  // BONUS: status langganan terpusat (active | grace | expired) dari endpoint.
+  subState?: string;
   Plan: Plan;
 }
 
@@ -262,6 +264,17 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
   const currentPlanName = sub?.Plan?.name || "Free";
   const paid = txStatus === "paid";
   const dead = ["expired", "failed", "cancelled"].includes(txStatus);
+  // BONUS: badge & teks tanggal mengikuti status langganan terpusat.
+  const subState = sub?.subState || "active";
+  const subStateMeta: Record<string, { label: string; className: string }> = {
+    active: { label: "Aktif", className: "" },
+    grace: { label: "Masa Tenggang", className: "bg-amber-500/15 text-amber-700 border-amber-500/30" },
+    expired: { label: "Berakhir", className: "bg-red-500/15 text-red-600 border-red-500/30" },
+  };
+  const subMeta = subStateMeta[subState] || subStateMeta.active;
+  const endDateLabel = sub
+    ? new Date(sub.endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    : "";
 
   return (
     <div className="space-y-6">
@@ -287,8 +300,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
             </p>
             <p className="text-xs text-muted-foreground">
               {sub
-                ? `Aktif sampai ${new Date(sub.endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
-                : "Paket dasar gratis"}
+                ? subState === "active"
+                  ? `Aktif sampai ${endDateLabel}`
+                  : `Berakhir ${endDateLabel}`
+                : "Tidak ada langganan aktif"}
             </p>
             {/* Fitur 7: ajakan upgrade untuk user trial */}
             {sub?.isTrial && (
@@ -305,7 +320,9 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
               </Button>
             )}
           </div>
-          <Badge variant="outline" className="shrink-0">Aktif</Badge>
+          <Badge variant="outline" className={`shrink-0 ${subMeta.className}`}>
+            {subMeta.label}
+          </Badge>
         </CardContent>
       </Card>
 

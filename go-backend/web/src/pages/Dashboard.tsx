@@ -53,6 +53,8 @@ interface BillingSubscription {
   endDate: string;
   // Fitur 7: penanda trial otomatis 7 hari.
   isTrial?: boolean;
+  // BONUS: status langganan terpusat (active | grace | expired) dari endpoint.
+  subState?: string;
   Plan?: { name: string; price: number };
 }
 
@@ -538,13 +540,17 @@ export default function Dashboard() {
   const canRenew = !!subscription?.Plan && subscription.Plan.price > 0;
   // Fitur 7: user dalam masa trial otomatis 7 hari.
   const isTrialSub = !!subscription?.isTrial;
+  // BONUS: status grace/expired di kartu (selaras dengan banner GraceBanner).
+  const subState = subscription?.subState || "active";
+  const isGraceSub = subState === "grace";
+  const isExpiredSub = subState === "expired";
   const subEndLabel = subscription
     ? `Berakhir ${new Date(subscription.endDate).toLocaleDateString("id-ID", {
         day: "numeric",
         month: "short",
         year: "numeric",
       })}`
-    : "Paket dasar gratis";
+    : "Tidak ada langganan aktif";
 
   return (
     <div className="space-y-6">
@@ -629,6 +635,17 @@ export default function Dashboard() {
                 Trial
               </span>
             )}
+            {/* BONUS: badge status grace/expired di kartu, selaras banner */}
+            {isGraceSub && (
+              <span className="ml-2 align-middle inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-500 text-[11px] font-semibold px-2 py-0.5">
+                Masa Tenggang
+              </span>
+            )}
+            {isExpiredSub && (
+              <span className="ml-2 align-middle inline-flex items-center rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-semibold px-2 py-0.5">
+                Berakhir
+              </span>
+            )}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">{subEndLabel}</p>
           {/* Meter kuota pesan bulanan (Fitur 3) */}
@@ -674,7 +691,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar */}
+          {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar;
+              BONUS: tombol Pilih Paket bila belum ada langganan aktif */}
           {isTrialSub ? (
             <Button
               size="sm"
@@ -682,6 +700,14 @@ export default function Dashboard() {
               onClick={() => navigate("/billing")}
             >
               Upgrade sekarang
+            </Button>
+          ) : !subscription ? (
+            <Button
+              size="sm"
+              className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+              onClick={() => navigate("/billing")}
+            >
+              Pilih Paket
             </Button>
           ) : (
             canRenew && (
