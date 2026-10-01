@@ -754,6 +754,15 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	// balasan tidak perlu lookup PN→LID yang bisa gagal ("no LID found").
 	senderJID := msg.Info.Sender.String()
 
+	// Nomor telepon asli pengirim untuk webhook/integrasi (mis. bot PPOB
+	// mencocokkan `from` dengan nomor WA user). Bila pengirim berupa LID,
+	// pakai SenderAlt (PN) agar bukan ID LID yang dikirim.
+	senderPhone := sender
+	if msg.Info.Sender.Server == types.HiddenUserServer && msg.Info.SenderAlt.User != "" &&
+		msg.Info.SenderAlt.Server == types.DefaultUserServer {
+		senderPhone = msg.Info.SenderAlt.User
+	}
+
 	// AI auto-reply hook — non-blocking, gagal diam-diam (hanya log).
 	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
 	go m.checkAIReply(sess, senderJID, text, msg.Info.IsGroup)
@@ -793,7 +802,8 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 
 	// Fire webhook
 	go m.fireWebhooks(sess.UserID, sess.DeviceID, "message.received", map[string]interface{}{
-		"from":      sender,
+		"from":      senderPhone,
+		"senderJID": senderJID,
 		"pushName":  msg.Info.PushName,
 		"text":      text,
 		"type":      getMessageType(msg),
@@ -963,7 +973,13 @@ func (m *Manager) deliverDeviceWebhook(deviceID uint, url, event string, payload
 		if replyText == "" {
 			return
 		}
-		if err := m.SendMessage(deviceID, from, "text", replyText, ""); err != nil {
+		// Balas via JID asli pengirim bila ada (aman untuk pengirim LID),
+		// fallback ke nomor `from`.
+		replyTo, _ := payload["senderJID"].(string)
+		if replyTo == "" {
+			replyTo = from
+		}
+		if err := m.SendMessage(deviceID, replyTo, "text", replyText, ""); err != nil {
 			log.Warn().Err(err).Uint("deviceID", deviceID).Str("to", from).Msg("WAMP bot reply failed")
 			return
 		}
