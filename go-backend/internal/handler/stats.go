@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -17,6 +18,7 @@ func registerStatsRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func statsOverview(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		// ── Pesan per hari (14 hari terakhir, hari kosong = 0) ──
 		type dayCount struct {

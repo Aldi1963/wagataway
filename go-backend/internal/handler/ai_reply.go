@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -35,6 +36,7 @@ func verifyDeviceOwner(db *gorm.DB, deviceID uint, userID uint) bool {
 func listAIReplyConfigs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var cfgs []models.AIReplyConfig
 		query := db.Where("user_id = ?", userID).Order("created_at DESC")
 		if deviceID := c.Query("deviceId"); deviceID != "" {
@@ -48,6 +50,7 @@ func listAIReplyConfigs(db *gorm.DB) gin.HandlerFunc {
 func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			DeviceID        uint   `json:"deviceId" binding:"required"`
 			SystemPrompt    string `json:"systemPrompt"`
@@ -86,6 +89,7 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 func updateAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var cfg models.AIReplyConfig
@@ -121,6 +125,7 @@ func updateAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 func deleteAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.AIReplyConfig{})
 		if result.RowsAffected == 0 {
@@ -134,6 +139,7 @@ func deleteAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 func toggleAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var cfg models.AIReplyConfig

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -28,6 +29,7 @@ func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 func listContacts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		search := c.Query("search")
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -61,6 +63,7 @@ func listContacts(db *gorm.DB) gin.HandlerFunc {
 func createContact(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name  string `json:"name" binding:"required"`
 			Phone string `json:"phone" binding:"required"`
@@ -92,6 +95,7 @@ func createContact(db *gorm.DB) gin.HandlerFunc {
 func updateContact(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var contact models.Contact
@@ -137,6 +141,7 @@ func updateContact(db *gorm.DB) gin.HandlerFunc {
 func deleteContact(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Contact{})
@@ -152,6 +157,7 @@ func deleteContact(db *gorm.DB) gin.HandlerFunc {
 func bulkDeleteContacts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			IDs []uint `json:"ids" binding:"required"`
@@ -173,6 +179,7 @@ func bulkDeleteContacts(db *gorm.DB) gin.HandlerFunc {
 func importContacts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Contacts []struct {
 				Name  string `json:"name"`
@@ -205,6 +212,7 @@ func importContacts(db *gorm.DB) gin.HandlerFunc {
 func validateNumbers(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint     `json:"deviceId" binding:"required"`

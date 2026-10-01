@@ -8,6 +8,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -34,6 +35,7 @@ func registerTeamLoginRoute(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB
 func listTeamMembers(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
 		query := db.Where("owner_id = ?", userID)
 		var total int64
@@ -53,6 +55,7 @@ func listTeamMembers(db *gorm.DB) gin.HandlerFunc {
 func inviteTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Email string `json:"email" binding:"required"`
 			Name  string `json:"name" binding:"required"`
@@ -107,6 +110,7 @@ func inviteTeamMember(db *gorm.DB) gin.HandlerFunc {
 func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var member models.TeamMember
 		if err := db.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})
@@ -147,6 +151,7 @@ func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 func deleteTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		res := db.Where("id = ? AND owner_id = ?", c.Param("id"), userID).Delete(&models.TeamMember{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})
@@ -159,6 +164,7 @@ func deleteTeamMember(db *gorm.DB) gin.HandlerFunc {
 func toggleTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var member models.TeamMember
 		if err := db.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})

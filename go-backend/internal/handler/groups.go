@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -26,6 +27,7 @@ func registerGroupRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager)
 func listWAGroups(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var deviceID uint
 		if n, err := strconv.ParseUint(c.Query("deviceId"), 10, 32); err != nil || n == 0 {
@@ -61,6 +63,7 @@ func listWAGroups(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func createWAGroup(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID     uint     `json:"deviceId" binding:"required"`
@@ -104,6 +107,7 @@ func createWAGroup(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func updateGroupParticipants(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID     uint     `json:"deviceId" binding:"required"`
@@ -139,6 +143,7 @@ func updateGroupParticipants(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc 
 func updateGroupMeta(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`

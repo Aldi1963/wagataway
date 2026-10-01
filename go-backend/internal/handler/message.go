@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -40,6 +41,7 @@ func viaSource(c *gin.Context) string {
 func listMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		page := 1
 		limit := 20
@@ -76,6 +78,7 @@ func listMessages(db *gorm.DB) gin.HandlerFunc {
 func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID       uint   `json:"deviceId" binding:"required"`
@@ -181,6 +184,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID   uint     `json:"deviceId"`
@@ -370,6 +374,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func bulkStats(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var jobs int64
 		db.Model(&models.BulkJob{}).Where("user_id = ?", userID).Count(&jobs)
 		type row struct {
@@ -404,6 +409,7 @@ func bulkStats(db *gorm.DB) gin.HandlerFunc {
 func checkRecipients(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint     `json:"deviceId" binding:"required"`
@@ -445,6 +451,7 @@ func checkRecipients(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func listBulkJobs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		limit := 20
 		if l, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil && l > 0 && l <= 100 {
 			limit = l

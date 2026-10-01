@@ -5,6 +5,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -23,6 +24,7 @@ func registerGroupRuleRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listGroupRules(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
 		query := db.Where("user_id = ?", userID)
 		if deviceID := c.Query("device_id"); deviceID != "" {
@@ -53,6 +55,7 @@ type groupRuleReq struct {
 func createGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req groupRuleReq
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
@@ -89,6 +92,7 @@ func createGroupRule(db *gorm.DB) gin.HandlerFunc {
 func updateGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var rule models.GroupRule
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&rule).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Aturan tidak ditemukan"})
@@ -123,6 +127,7 @@ func updateGroupRule(db *gorm.DB) gin.HandlerFunc {
 func deleteGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		res := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.GroupRule{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Aturan tidak ditemukan"})
@@ -135,6 +140,7 @@ func deleteGroupRule(db *gorm.DB) gin.HandlerFunc {
 func toggleGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var rule models.GroupRule
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&rule).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Aturan tidak ditemukan"})

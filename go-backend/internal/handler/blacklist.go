@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -22,6 +23,7 @@ func registerBlacklistRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listBlacklist(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var items []models.Blacklist
 		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&items)
 		c.JSON(http.StatusOK, gin.H{"blacklist": items})
@@ -31,6 +33,7 @@ func listBlacklist(db *gorm.DB) gin.HandlerFunc {
 func addBlacklist(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Phone  string `json:"phone" binding:"required"`
 			Reason string `json:"reason"`
@@ -48,6 +51,7 @@ func addBlacklist(db *gorm.DB) gin.HandlerFunc {
 func removeBlacklist(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Blacklist{})
 		if result.RowsAffected == 0 {

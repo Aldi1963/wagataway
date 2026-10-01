@@ -10,6 +10,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/subscription"
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,7 @@ func listPlans(db *gorm.DB) gin.HandlerFunc {
 func getSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		// BONUS (tanggal expired asli di dashboard): sertakan status langganan
 		// terpusat (active | grace | expired) dari subscription.Check, agar kartu
 		// dashboard bisa menampilkan badge "Masa Tenggang" / "Berakhir".
@@ -81,6 +83,7 @@ type subscriptionWithState struct {
 func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		qr, err := quota.Check(db, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca kuota", "code": "DB_ERROR"})
@@ -109,6 +112,7 @@ func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			PlanID uint `json:"planId" binding:"required"`
 		}
@@ -233,6 +237,7 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 	kp := newClipkuPay(cfg, db)
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var tx models.Transaction
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).
 			Preload("Plan").First(&tx).Error; err != nil {
@@ -267,6 +272,7 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 func listTransactions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var txs []models.Transaction
 		db.Where("user_id = ?", userID).Preload("Plan").
 			Order("created_at DESC").Limit(50).Find(&txs)
@@ -295,6 +301,7 @@ var errAlreadyRedeemed = errors.New("voucher already redeemed by user")
 func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Code string `json:"code" binding:"required"`
 		}

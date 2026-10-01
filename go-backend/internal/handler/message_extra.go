@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -63,6 +64,7 @@ func queueSend(db *gorm.DB, wm *whatsapp.Manager, userID uint, msg *models.Messa
 func getMessageStatus(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var msg models.Message
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&msg).Error; err != nil {
@@ -78,6 +80,7 @@ func getMessageStatus(db *gorm.DB) gin.HandlerFunc {
 func revokeMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var msg models.Message
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&msg).Error; err != nil {
@@ -106,6 +109,7 @@ func revokeMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID           uint     `json:"deviceId" binding:"required"`
@@ -178,6 +182,7 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -240,6 +245,7 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -279,6 +285,7 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -318,6 +325,7 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID  uint    `json:"deviceId" binding:"required"`

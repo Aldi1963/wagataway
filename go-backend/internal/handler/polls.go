@@ -7,6 +7,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -111,6 +112,7 @@ func getUserPoll(c *gin.Context, db *gorm.DB, userID uint) (*models.Poll, bool) 
 func listPolls(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 		if page < 1 {
@@ -144,6 +146,7 @@ func listPolls(db *gorm.DB) gin.HandlerFunc {
 func getPollResults(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		poll, ok := getUserPoll(c, db, userID)
 		if !ok {
 			return
@@ -156,6 +159,7 @@ func getPollResults(db *gorm.DB) gin.HandlerFunc {
 func closePoll(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		poll, ok := getUserPoll(c, db, userID)
 		if !ok {
 			return
@@ -173,6 +177,7 @@ func closePoll(db *gorm.DB) gin.HandlerFunc {
 func sendPollRecap(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		poll, ok := getUserPoll(c, db, userID)
 		if !ok {
 			return

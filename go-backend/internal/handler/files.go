@@ -13,6 +13,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -50,6 +51,7 @@ var allowedUploadMimes = map[string]string{
 func uploadFile(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		// Batasi body agar client nakal tidak bisa bikin OOM.
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes+1<<20)
@@ -140,6 +142,7 @@ func uploadFile(db *gorm.DB) gin.HandlerFunc {
 func listFiles(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var files []models.File
 		var total int64
@@ -156,6 +159,7 @@ func listFiles(db *gorm.DB) gin.HandlerFunc {
 func serveFileContent(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var f models.File
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
@@ -181,6 +185,7 @@ func serveFileContent(db *gorm.DB) gin.HandlerFunc {
 func deleteFile(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var f models.File
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {

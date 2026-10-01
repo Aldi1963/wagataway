@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"go.mau.fi/whatsmeow"
@@ -27,6 +28,7 @@ type syncDeviceRequest struct {
 // lalu mengembalikan client whatsmeow yang aktif.
 func resolveSyncClient(c *gin.Context, db *gorm.DB, wm *whatsapp.Manager, deviceID uint) (*whatsmeow.Client, error) {
 	userID := middleware.GetUserID(c)
+	db = rls.Scoped(db, userID)
 	var device models.Device
 	if err := db.Where("id = ? AND user_id = ?", deviceID, userID).First(&device).Error; err != nil {
 		return nil, fmt.Errorf("perangkat tidak ditemukan")
@@ -72,6 +74,7 @@ func upsertSyncContact(db *gorm.DB, userID uint, phone, name string) (created, f
 func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req syncDeviceRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "deviceId wajib diisi", "code": "VALIDATION_ERROR"})
@@ -126,6 +129,7 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req syncDeviceRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "deviceId wajib diisi", "code": "VALIDATION_ERROR"})

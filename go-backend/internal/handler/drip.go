@@ -7,6 +7,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -30,6 +31,7 @@ func registerDripRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listDripCampaigns(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var campaigns []models.DripCampaign
 		db.Where("user_id = ?", userID).Preload("Steps").
 			Order("created_at DESC").Find(&campaigns)
@@ -40,6 +42,7 @@ func listDripCampaigns(db *gorm.DB) gin.HandlerFunc {
 func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name        string `json:"name" binding:"required"`
 			Description string `json:"description"`
@@ -73,6 +76,7 @@ func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func getDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
 		if err := db.Where("id = ? AND user_id = ?", id, userID).
@@ -91,6 +95,7 @@ func getDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func updateDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
@@ -107,6 +112,7 @@ func updateDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func deleteDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.DripCampaign{})
 		if result.RowsAffected == 0 {
@@ -123,6 +129,7 @@ func deleteDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func addDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
@@ -165,6 +172,7 @@ func addDripStep(db *gorm.DB) gin.HandlerFunc {
 func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		stepId, _ := strconv.ParseUint(c.Param("stepId"), 10, 32)
 		var step models.DripStep
@@ -210,6 +218,7 @@ func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 func deleteDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		stepId, _ := strconv.ParseUint(c.Param("stepId"), 10, 32)
 		var step models.DripStep
@@ -227,6 +236,7 @@ func deleteDripStep(db *gorm.DB) gin.HandlerFunc {
 func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
@@ -283,6 +293,7 @@ func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 func dripAnalytics(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -24,6 +25,7 @@ func registerAutoReplyRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listAutoReplies(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var rules []models.AutoReply
 		db.Where("user_id = ?", userID).Order("priority DESC, created_at DESC").Find(&rules)
 		c.JSON(http.StatusOK, gin.H{"rules": rules})
@@ -33,6 +35,7 @@ func listAutoReplies(db *gorm.DB) gin.HandlerFunc {
 func createAutoReply(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name         string `json:"name" binding:"required"`
 			Keyword      string `json:"keyword" binding:"required"`
@@ -81,6 +84,7 @@ func createAutoReply(db *gorm.DB) gin.HandlerFunc {
 func updateAutoReply(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var rule models.AutoReply
@@ -102,6 +106,7 @@ func updateAutoReply(db *gorm.DB) gin.HandlerFunc {
 func deleteAutoReply(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.AutoReply{})
 		if result.RowsAffected == 0 {
@@ -115,6 +120,7 @@ func deleteAutoReply(db *gorm.DB) gin.HandlerFunc {
 func toggleAutoReply(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var rule models.AutoReply

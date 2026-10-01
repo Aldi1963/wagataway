@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -49,6 +50,7 @@ func normalizePhoneVariants(phone string) []string {
 func getChatHistory(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		deviceID, err := strconv.ParseUint(c.Query("deviceId"), 10, 32)
 		if err != nil || deviceID == 0 {

@@ -11,6 +11,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/realtime"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/service"
@@ -61,6 +62,7 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 func listConversations(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		deviceID := c.Query("deviceId")
 
 		query := db.Where("user_id = ?", userID)
@@ -78,6 +80,7 @@ func listConversations(db *gorm.DB) gin.HandlerFunc {
 func getChatMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		phone := c.Param("phone")
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -100,6 +103,7 @@ func getChatMessages(db *gorm.DB) gin.HandlerFunc {
 func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			Phone    string `json:"phone" binding:"required"`
@@ -192,6 +196,7 @@ func resolveSenderJID(db *gorm.DB, userID, deviceID uint, phone string) string {
 func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			Phone    string `json:"phone" binding:"required"`
@@ -318,6 +323,7 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func setChatMode(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		phone := c.Param("phone")
 		var req struct {
 			Mode string `json:"mode" binding:"required"` // manual, ai, hybrid
@@ -348,6 +354,7 @@ func setChatMode(db *gorm.DB) gin.HandlerFunc {
 func markConversationRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		phone := c.Param("phone")
 
 		db.Model(&models.ChatInbox{}).
@@ -367,6 +374,7 @@ func markConversationRead(db *gorm.DB) gin.HandlerFunc {
 func getProfilePic(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		deviceID, _ := strconv.Atoi(c.Query("deviceId"))
 		phone := c.Query("phone")
 		if deviceID == 0 || phone == "" {

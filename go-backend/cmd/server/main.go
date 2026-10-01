@@ -12,6 +12,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database"
 	"github.com/Aldi1963/wagataway/internal/handler"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/Aldi1963/wagataway/internal/worker"
 	"github.com/rs/zerolog"
@@ -40,6 +41,12 @@ func main() {
 	if err := database.AutoMigrate(db); err != nil {
 		log.Fatal().Err(err).Msg("Failed to run migrations")
 	}
+
+	// Row Level Security: lapis kedua di atas filter user_id aplikasi.
+	if err := database.ApplyRLS(db); err != nil {
+		log.Fatal().Err(err).Msg("Failed to apply RLS policies")
+	}
+	rls.Register(db)
 
 	log.Info().Msg("Database connected and migrated")
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -21,6 +22,7 @@ func registerMessageReportRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func getCampaignReport(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
 		query := db.Where("user_id = ? AND campaign_id = ?", userID, c.Param("id"))
 		if status := c.Query("status"); status != "" {
@@ -43,6 +45,7 @@ func getCampaignReport(db *gorm.DB) gin.HandlerFunc {
 func getReportSummary(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		type row struct {
 			CampaignID string `json:"campaignId"`
 			Total      int64  `json:"total"`

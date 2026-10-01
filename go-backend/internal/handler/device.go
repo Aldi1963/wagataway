@@ -7,6 +7,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,7 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 func listDevices(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var devices []models.Device
 		if err := db.Where("user_id = ?", userID).Order("created_at DESC").Find(&devices).Error; err != nil {
@@ -68,6 +70,7 @@ func listDevices(db *gorm.DB) gin.HandlerFunc {
 func createDevice(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req struct {
 			Name       string `json:"name" binding:"required"`
@@ -113,6 +116,7 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 func getDevice(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -128,6 +132,7 @@ func getDevice(db *gorm.DB) gin.HandlerFunc {
 func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -206,6 +211,7 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func regenerateWebhookSecret(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -231,6 +237,7 @@ func regenerateWebhookSecret(db *gorm.DB) gin.HandlerFunc {
 func deleteDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -252,6 +259,7 @@ func deleteDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func connectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -272,6 +280,7 @@ func connectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func disconnectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -291,6 +300,7 @@ func disconnectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func getDeviceQR(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -315,6 +325,7 @@ func getDeviceQR(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func getDeviceStatus(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
@@ -334,6 +345,7 @@ func getDeviceStatus(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func listBotDeliveries(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device

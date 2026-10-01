@@ -9,6 +9,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -54,6 +55,7 @@ func toAPIKeyResponse(k models.ApiKey) apiKeyResponse {
 func listApiKeys(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var keys []models.ApiKey
 		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&keys)
 		out := make([]apiKeyResponse, 0, len(keys))
@@ -67,6 +69,7 @@ func listApiKeys(db *gorm.DB) gin.HandlerFunc {
 func createApiKey(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name string `json:"name" binding:"required"`
 		}
@@ -106,6 +109,7 @@ func createApiKey(db *gorm.DB) gin.HandlerFunc {
 func deleteApiKey(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		res := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ApiKey{})
 		if res.RowsAffected == 0 {

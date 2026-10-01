@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -23,6 +24,7 @@ func registerTemplateRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listTemplates(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var templates []models.MessageTemplate
 		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&templates)
 		c.JSON(http.StatusOK, gin.H{"templates": templates})
@@ -32,6 +34,7 @@ func listTemplates(db *gorm.DB) gin.HandlerFunc {
 func createTemplate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name      string `json:"name" binding:"required"`
 			Category  string `json:"category"`
@@ -54,6 +57,7 @@ func createTemplate(db *gorm.DB) gin.HandlerFunc {
 func updateTemplate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var tpl models.MessageTemplate
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&tpl).Error; err != nil {
@@ -70,6 +74,7 @@ func updateTemplate(db *gorm.DB) gin.HandlerFunc {
 func deleteTemplate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.MessageTemplate{})
 		if result.RowsAffected == 0 {

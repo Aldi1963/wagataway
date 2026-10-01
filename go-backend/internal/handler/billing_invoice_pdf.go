@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"github.com/jung-kurt/gofpdf"
 	"gorm.io/gorm"
@@ -21,6 +22,7 @@ import (
 func getInvoicePDF(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var tx models.Transaction
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).
 			Preload("Plan").Preload("User").First(&tx).Error; err != nil {

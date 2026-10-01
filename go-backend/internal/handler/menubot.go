@@ -7,6 +7,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -51,6 +52,7 @@ func menuBotDeviceOK(db *gorm.DB, userID uint, deviceID *uint) bool {
 func listMenuBots(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var bots []models.MenuBot
 		db.Where("user_id = ?", userID).
 			Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position ASC, id ASC") }).
@@ -84,6 +86,7 @@ func listMenuBots(db *gorm.DB) gin.HandlerFunc {
 func createMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name           string `json:"name" binding:"required"`
 			DeviceID       *uint  `json:"deviceId"`
@@ -119,6 +122,7 @@ func createMenuBot(db *gorm.DB) gin.HandlerFunc {
 func getMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
 		if !ok {
@@ -132,6 +136,7 @@ func getMenuBot(db *gorm.DB) gin.HandlerFunc {
 func updateMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
 		if !ok {
@@ -188,6 +193,7 @@ func updateMenuBot(db *gorm.DB) gin.HandlerFunc {
 func deleteMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
 		if !ok {
@@ -208,6 +214,7 @@ func deleteMenuBot(db *gorm.DB) gin.HandlerFunc {
 func toggleMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
 		if !ok {
@@ -243,6 +250,7 @@ func validateMenuBotItem(db *gorm.DB, userID, botID uint, actionType string, sub
 func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
 		if !ok {
@@ -300,6 +308,7 @@ func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 func updateMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		itemID, _ := strconv.ParseUint(c.Param("itemId"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
@@ -360,6 +369,7 @@ func updateMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 func deleteMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		itemID, _ := strconv.ParseUint(c.Param("itemId"), 10, 32)
 		bot, ok := menuBotOwned(db, userID, uint(id))
@@ -379,6 +389,7 @@ func deleteMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 func listMenuBotSessions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		if _, ok := menuBotOwned(db, userID, uint(id)); !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
@@ -395,6 +406,7 @@ func listMenuBotSessions(db *gorm.DB) gin.HandlerFunc {
 func deleteMenuBotSession(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		sessionID, _ := strconv.ParseUint(c.Param("sessionId"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", sessionID, userID).Delete(&models.MenuBotSession{})
 		if result.RowsAffected == 0 {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -22,6 +23,7 @@ func registerWebhookDeliveryLogRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listWebhookDeliveryLogs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
 		query := db.Where("user_id = ?", userID)
 		if deviceID := c.Query("device_id"); deviceID != "" {
@@ -48,6 +50,7 @@ func listWebhookDeliveryLogs(db *gorm.DB) gin.HandlerFunc {
 func retryWebhookDeliveryLog(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var orig models.WebhookDeliveryLog
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&orig).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Log tidak ditemukan"})

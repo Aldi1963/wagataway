@@ -14,6 +14,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
@@ -100,6 +101,7 @@ func integrationDeviceOwned(db *gorm.DB, userID, deviceID uint) bool {
 func listIntegrations(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var list []models.Integration
 		db.Where("user_id = ?", userID).
 			Preload("Device", func(db *gorm.DB) *gorm.DB { return db.Select("id", "name", "status") }).
@@ -115,6 +117,7 @@ func listIntegrations(db *gorm.DB) gin.HandlerFunc {
 func createIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name     string `json:"name"`
 			Platform string `json:"platform"`
@@ -168,6 +171,7 @@ func createIntegration(db *gorm.DB) gin.HandlerFunc {
 func getIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
@@ -191,6 +195,7 @@ func getIntegration(db *gorm.DB) gin.HandlerFunc {
 func updateIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
@@ -246,6 +251,7 @@ func updateIntegration(db *gorm.DB) gin.HandlerFunc {
 func deleteIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
@@ -267,6 +273,7 @@ func deleteIntegration(db *gorm.DB) gin.HandlerFunc {
 func regenerateIntegrationToken(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
@@ -298,6 +305,7 @@ func regenerateIntegrationToken(db *gorm.DB) gin.HandlerFunc {
 func listIntegrationLogs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})

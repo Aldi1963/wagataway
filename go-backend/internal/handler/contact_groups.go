@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -32,6 +33,7 @@ func registerContactGroupRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.M
 func getWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var group models.ContactGroup
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
@@ -52,6 +54,7 @@ func getWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var group models.ContactGroup
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
@@ -88,6 +91,7 @@ func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 func listContactGroups(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var groups []models.ContactGroup
 		db.Where("user_id = ?", userID).Order("name ASC").Find(&groups)
 		c.JSON(http.StatusOK, gin.H{"groups": groups})
@@ -97,6 +101,7 @@ func listContactGroups(db *gorm.DB) gin.HandlerFunc {
 func createContactGroup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name        string `json:"name" binding:"required"`
 			Description string `json:"description"`
@@ -118,6 +123,7 @@ func createContactGroup(db *gorm.DB) gin.HandlerFunc {
 func updateContactGroup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var group models.ContactGroup
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
@@ -134,6 +140,7 @@ func updateContactGroup(db *gorm.DB) gin.HandlerFunc {
 func deleteContactGroup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		db.Where("group_id = ?", id).Delete(&models.ContactGroupMember{})
 		db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ContactGroup{})

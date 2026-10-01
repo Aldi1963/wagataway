@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -114,6 +115,7 @@ func deviceBelongsToUser(db *gorm.DB, deviceID, userID uint) bool {
 func listRecurringSchedules(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
 		query := db.Where("user_id = ?", userID)
 		if c.Query("active") == "true" {
@@ -173,6 +175,7 @@ func validateRecurringReq(db *gorm.DB, userID uint, req recurringScheduleReq) st
 func createRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req recurringScheduleReq
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
@@ -210,6 +213,7 @@ func createRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 func updateRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var s models.RecurringSchedule
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&s).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})
@@ -245,6 +249,7 @@ func updateRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 func deleteRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		res := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.RecurringSchedule{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})
@@ -257,6 +262,7 @@ func deleteRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 func toggleRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var s models.RecurringSchedule
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&s).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})

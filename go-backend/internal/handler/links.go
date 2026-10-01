@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -31,6 +32,7 @@ func registerLinkRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listLinks(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var links []models.ShortLink
 		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&links)
 		c.JSON(http.StatusOK, gin.H{"links": links})
@@ -40,6 +42,7 @@ func listLinks(db *gorm.DB) gin.HandlerFunc {
 func createLink(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			TargetURL string `json:"targetUrl" binding:"required"`
 			Title     string `json:"title"`
@@ -78,6 +81,7 @@ func createLink(db *gorm.DB) gin.HandlerFunc {
 func updateLink(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var link models.ShortLink
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&link).Error; err != nil {
@@ -102,6 +106,7 @@ func updateLink(db *gorm.DB) gin.HandlerFunc {
 func deleteLink(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ShortLink{})
 		c.JSON(http.StatusOK, gin.H{"message": "Link dihapus"})
@@ -111,6 +116,7 @@ func deleteLink(db *gorm.DB) gin.HandlerFunc {
 func linkStats(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var link models.ShortLink
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&link).Error; err != nil {

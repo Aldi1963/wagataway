@@ -9,6 +9,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
@@ -232,6 +233,7 @@ func createTrialSubscription(db *gorm.DB, user *models.User) bool {
 func handleGetMe(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var user models.User
 		if err := db.First(&user, userID).Error; err != nil {
@@ -294,6 +296,7 @@ func normalizeNotifyWA(raw string) (string, error) {
 func handleUpdateMe(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req updateMeRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -340,6 +343,7 @@ type changePasswordRequest struct {
 func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 
 		var req changePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {

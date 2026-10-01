@@ -8,6 +8,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -43,6 +44,7 @@ func generateAffiliateCode(db *gorm.DB) string {
 func getAffiliateInfo(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var aff models.Affiliate
 		if err := db.Where("user_id = ?", userID).First(&aff).Error; err != nil {
 			c.JSON(http.StatusOK, gin.H{"affiliate": nil})
@@ -70,6 +72,7 @@ func getAffiliateInfo(db *gorm.DB) gin.HandlerFunc {
 func createOrGetAffiliate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var aff models.Affiliate
 		if err := db.Where("user_id = ?", userID).First(&aff).Error; err == nil {
 			c.JSON(http.StatusOK, gin.H{"affiliate": aff})
@@ -103,6 +106,7 @@ func createOrGetAffiliate(db *gorm.DB) gin.HandlerFunc {
 func listAffiliateEarnings(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var aff models.Affiliate
 		if err := db.Where("user_id = ?", userID).First(&aff).Error; err != nil {
 			c.JSON(http.StatusOK, gin.H{"earnings": []models.AffiliateEarning{}, "total": 0})

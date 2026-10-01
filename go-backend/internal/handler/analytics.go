@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -21,6 +22,7 @@ func registerAnalyticsRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func analyticsOverview(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		today := time.Now().Truncate(24 * time.Hour)
 
 		var totalMsg int64
@@ -56,6 +58,7 @@ func analyticsOverview(db *gorm.DB) gin.HandlerFunc {
 func analyticsMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		days := 7
 		if q := c.Query("days"); q == "30" {
 			days = 30

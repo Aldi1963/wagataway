@@ -7,6 +7,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -25,6 +26,7 @@ func registerScheduleRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listSchedules(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		status := c.DefaultQuery("status", "")
 
 		query := db.Where("user_id = ?", userID)
@@ -41,6 +43,7 @@ func listSchedules(db *gorm.DB) gin.HandlerFunc {
 func createSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			To       string `json:"to" binding:"required"`
@@ -87,6 +90,7 @@ func createSchedule(db *gorm.DB) gin.HandlerFunc {
 func updateSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var sched models.ScheduledMessage
 		if err := db.Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").First(&sched).Error; err != nil {
@@ -127,6 +131,7 @@ func updateSchedule(db *gorm.DB) gin.HandlerFunc {
 func deleteSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ScheduledMessage{})
 		if result.RowsAffected == 0 {
@@ -140,6 +145,7 @@ func deleteSchedule(db *gorm.DB) gin.HandlerFunc {
 func cancelSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		result := db.Model(&models.ScheduledMessage{}).
 			Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").
@@ -170,6 +176,7 @@ func registerScheduleAliasRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func patchScheduleState(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var req struct {

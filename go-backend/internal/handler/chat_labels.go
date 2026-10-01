@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -41,6 +42,7 @@ func getPageLimit(c *gin.Context) (int, int) {
 func listChatLabels(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var labels []models.ChatLabel
 		db.Where("user_id = ?", userID).Order("name ASC").Find(&labels)
 		c.JSON(http.StatusOK, gin.H{"labels": labels})
@@ -50,6 +52,7 @@ func listChatLabels(db *gorm.DB) gin.HandlerFunc {
 func createChatLabel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			Name  string `json:"name" binding:"required"`
 			Color string `json:"color"`
@@ -73,6 +76,7 @@ func createChatLabel(db *gorm.DB) gin.HandlerFunc {
 func updateChatLabel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var label models.ChatLabel
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&label).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Label tidak ditemukan"})
@@ -100,6 +104,7 @@ func updateChatLabel(db *gorm.DB) gin.HandlerFunc {
 func deleteChatLabel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		// Lepaskan label dari assignment yang memakainya
 		var label models.ChatLabel
 		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&label).Error; err != nil {
@@ -115,6 +120,7 @@ func deleteChatLabel(db *gorm.DB) gin.HandlerFunc {
 func listChatAssignments(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
 		query := db.Where("chat_assignments.user_id = ?", userID)
 		if labelID := c.Query("label_id"); labelID != "" {
@@ -137,6 +143,7 @@ func listChatAssignments(db *gorm.DB) gin.HandlerFunc {
 func upsertChatAssignment(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		var req struct {
 			ChatJID    string `json:"chatJid" binding:"required"`
 			LabelID    *uint  `json:"labelId"`
@@ -187,6 +194,7 @@ func upsertChatAssignment(db *gorm.DB) gin.HandlerFunc {
 func deleteChatAssignment(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
+		db = rls.Scoped(db, userID)
 		res := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.ChatAssignment{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Assignment tidak ditemukan"})
