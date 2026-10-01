@@ -11,6 +11,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -134,6 +135,13 @@ func handleRegister(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Fitur 7: beri trial paket Lite 7 hari secara otomatis. Sekali per
+		// user (guard di dalam createTrialSubscription). Kegagalan pembuatan
+		// trial TIDAK menggagalkan registrasi — user tetap terdaftar.
+		if createTrialSubscription(db, &user) {
+			user.Plan = trialPlanSlug
+		}
+
 		token, err := generateToken(cfg, &user)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat token", "code": "TOKEN_ERROR"})
@@ -151,6 +159,74 @@ func handleRegister(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			},
 		})
 	}
+}
+
+// Fitur 7 (Trial 7 hari otomatis):
+// Slug paket yang diberikan sebagai trial saat registrasi baru.
+const trialPlanSlug = "lite"
+
+// trialDurationDays: durasi masa trial dalam hari kalender.
+const trialDurationDays = 7
+
+// createTrialSubscription memberi user baru langganan trial paket Lite
+// 7 hari (is_trial=true, status aktif).
+//
+// Guard sekali-per-user: trial hanya dibuat bila user BELUM punya
+// subscription apapun — mencegah trial ganda dari retry register / double
+// submit (percobaan register ulang untuk email yang sama ditolak di tahap
+// EMAIL_EXISTS sebelum sampai ke sini).
+//
+// Trial mengikuti semua aturan langganan yang sudah ada tanpa kode khusus:
+// kuota Lite (quota.TrialMonthlyLimit), reminder H-3/H-1 (worker), dan
+// grace period (paket subscription). Kolom user.plan disinkronkan ke
+// slug paket trial agar konsisten dengan alur aktivasi berbayar.
+//
+// Kegagalan pembuatan trial TIDAK menggagalkan registrasi — user tetap
+// terdaftar, hanya tanpa trial. Mengembalikan true bila trial dibuat.
+func createTrialSubscription(db *gorm.DB, user *models.User) bool {
+	var count int64
+	if err := db.Model(&models.Subscription{}).
+		Where("user_id = ?", user.ID).
+		Count(&count).Error; err != nil {
+		log.Error().Err(err).Uint("userID", user.ID).
+			Msg("trial: gagal cek subscription user, lewati pembuatan trial")
+		return false
+	}
+	if count > 0 {
+		// Bukan registrasi baru — user sudah punya riwayat langganan.
+		return false
+	}
+
+	var plan models.Plan
+	if err := db.Where("slug = ? AND is_active = ?", trialPlanSlug, true).
+		First(&plan).Error; err != nil {
+		log.Error().Err(err).Str("slug", trialPlanSlug).
+			Msg("trial: paket trial tidak ditemukan, lewati pembuatan trial")
+		return false
+	}
+
+	now := time.Now()
+	sub := models.Subscription{
+		UserID:    user.ID,
+		PlanID:    plan.ID,
+		Status:    "active",
+		IsTrial:   true,
+		StartDate: now,
+		EndDate:   now.AddDate(0, 0, trialDurationDays),
+	}
+	if err := db.Create(&sub).Error; err != nil {
+		log.Error().Err(err).Uint("userID", user.ID).
+			Msg("trial: gagal membuat subscription trial")
+		return false
+	}
+	if err := db.Model(&models.User{}).Where("id = ?", user.ID).
+		Update("plan", plan.Slug).Error; err != nil {
+		log.Error().Err(err).Uint("userID", user.ID).
+			Msg("trial: gagal sinkron kolom plan user")
+	}
+	log.Info().Uint("userID", user.ID).Uint("planID", plan.ID).
+		Msg("trial: subscription trial 7 hari dibuat")
+	return true
 }
 
 func handleGetMe(db *gorm.DB) gin.HandlerFunc {
