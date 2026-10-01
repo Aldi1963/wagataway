@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
 
@@ -115,8 +115,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     apiGet<{ messages: ChatMsg[] }>(`/chat/messages/${activePhone}`)
       .then((d) => setMessages(d.messages || []))
       .catch(() => {});
-    // Mark as read
-    apiPost(`/chat/conversations/${activePhone}/read`).catch(() => {});
+    // Mark as read (backend: PATCH)
+    apiPatch(`/chat/conversations/${activePhone}/read`).catch(() => {});
     setConversations((prev) =>
       prev.map((c) => (c.phone === activePhone ? { ...c, unreadCount: 0 } : c))
     );
@@ -284,7 +284,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                     : "hover:bg-secondary/50"
                 )}
               >
-                <div className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center text-xs font-semibold shrink-0">
                   {(convo.contactName || convo.phone).charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -293,7 +293,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                       {convo.contactName || convo.phone}
                     </span>
                     {convo.unreadCount > 0 && (
-                      <Badge className="h-4 px-1.5 text-[9px]">
+                      <Badge className="h-4 px-1.5 text-[9px] bg-[#243370] dark:bg-[#4c63d2] text-white border-transparent">
                         {convo.unreadCount}
                       </Badge>
                     )}
@@ -324,7 +324,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
-                <div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold">
+                <div className="w-7 h-7 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white flex items-center justify-center text-xs font-semibold">
                   {(activeConvo?.contactName || activePhone).charAt(0).toUpperCase()}
                 </div>
                 <div>
