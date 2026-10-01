@@ -154,10 +154,10 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
             <p className="text-xs text-slate-500">Tanggal: {tglID(tx.paidAt || tx.createdAt)}</p>
           </div>
         </div>
-        <div className="h-[3px] bg-[#243370] mt-4 mb-5" />
+        <div className="h-[3px] bg-[#243370] mt-3 mb-4" />
 
         {/* Ditagihkan kepada | Metode */}
-        <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <p className="text-[10px] font-bold text-slate-500 tracking-wider">DITAGIHKAN KEPADA</p>
             <p className="text-sm font-bold text-slate-800 mt-1">{userName || "-"}</p>
@@ -170,56 +170,56 @@ export default function InvoiceModal({ tx, userName, userEmail, onClose }: Props
         </div>
 
         {/* Tabel rincian */}
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full border-collapse text-[12px] md:text-sm">
           <thead>
             <tr className="bg-[#243370] text-white">
-              <th className="text-left text-[11px] font-bold px-3 py-2.5">DESKRIPSI</th>
-              <th className="text-center text-[11px] font-bold px-2 py-2.5 w-12">QTY</th>
-              <th className="text-right text-[11px] font-bold px-3 py-2.5 w-28">HARGA</th>
-              <th className="text-right text-[11px] font-bold px-3 py-2.5 w-28">JUMLAH</th>
+              <th className="text-left text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2">DESKRIPSI</th>
+              <th className="text-center text-[10px] md:text-[11px] font-bold px-1 py-2 w-9">QTY</th>
+              <th className="text-right text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2 w-20 md:w-28">HARGA</th>
+              <th className="text-right text-[10px] md:text-[11px] font-bold px-2 md:px-3 py-2 w-20 md:w-28">JUMLAH</th>
             </tr>
           </thead>
           <tbody>
             <tr className="border-b border-slate-200">
-              <td className="px-3 py-3">
-                <p className="font-semibold text-slate-800 text-[13px]">Langganan Paket {planName} ({durasi} hari)</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Periode {tglID(start)} – {tglID(end)}</p>
+              <td className="px-2 md:px-3 py-2">
+                <p className="font-semibold text-slate-800">Langganan Paket {planName} ({durasi} hari)</p>
+                <p className="text-[10px] md:text-[11px] text-slate-500 mt-0.5">Periode {tglID(start)} – {tglID(end)}</p>
               </td>
-              <td className="text-center text-slate-700 px-2 py-3">1</td>
-              <td className="text-right text-slate-700 px-3 py-3">{rupiah(tx.amount)}</td>
-              <td className="text-right font-semibold text-slate-800 px-3 py-3">{rupiah(tx.amount)}</td>
+              <td className="text-center text-slate-700 px-1 py-2">1</td>
+              <td className="text-right text-slate-700 px-2 md:px-3 py-2 whitespace-nowrap">{rupiah(tx.amount)}</td>
+              <td className="text-right font-semibold text-slate-800 px-2 md:px-3 py-2 whitespace-nowrap">{rupiah(tx.amount)}</td>
             </tr>
             <tr className="border-b border-slate-200">
-              <td colSpan={4} className="px-3 py-2.5">
-                <p className="text-[11px] italic text-slate-500">Terbilang: &ldquo;{terbilang(tx.amount)} Rupiah&rdquo;</p>
+              <td colSpan={4} className="px-2 md:px-3 py-2">
+                <p className="text-[10px] md:text-[11px] italic text-slate-500">Terbilang: &ldquo;{terbilang(tx.amount)} Rupiah&rdquo;</p>
               </td>
             </tr>
             <tr>
-              <td colSpan={3} className="px-3 py-3 text-right font-bold text-[#243370] bg-[#243370]/5 text-[13px]">TOTAL</td>
-              <td className="px-3 py-3 text-right font-bold text-[#243370] bg-[#243370]/5 text-lg">{rupiah(tx.amount)}</td>
+              <td colSpan={3} className="px-2 md:px-3 py-2 text-right font-bold text-[#243370] bg-[#243370]/5">TOTAL</td>
+              <td className="px-2 md:px-3 py-2 text-right font-bold text-[#243370] bg-[#243370]/5 text-base md:text-lg whitespace-nowrap">{rupiah(tx.amount)}</td>
             </tr>
           </tbody>
         </table>
 
         {/* Stempel + TTD */}
-        <div className="flex items-start justify-between mt-8 gap-4">
-          <div className="flex-1 flex items-center justify-center pt-2">
+        <div className="flex items-start justify-between mt-6 gap-3">
+          <div className="flex-1 flex items-center justify-center pt-1">
             <div
-              className="w-28 h-28 rounded-full border-[3px] border-green-600 flex flex-col items-center justify-center -rotate-12 opacity-90"
+              className="w-20 h-20 md:w-28 md:h-28 rounded-full border-[3px] border-green-600 flex flex-col items-center justify-center -rotate-12 opacity-90 shrink-0"
               style={{ boxShadow: "inset 0 0 0 2px #fff, inset 0 0 0 4px #16a34a" }}
             >
-              <span className="text-green-700 font-bold text-lg tracking-widest">LUNAS</span>
-              <span className="text-green-700 text-[9px] font-bold tracking-wider mt-0.5">WAGATAWAY</span>
+              <span className="text-green-700 font-bold text-sm md:text-lg tracking-widest">LUNAS</span>
+              <span className="text-green-700 text-[8px] md:text-[9px] font-bold tracking-wider mt-0.5">WAGATAWAY</span>
             </div>
           </div>
-          <div className="w-44 text-[13px] text-slate-800">
+          <div className="w-36 md:w-44 text-[12px] md:text-[13px] text-slate-800 shrink-0">
             <p>Jakarta, {tglID(tx.paidAt || tx.createdAt)}</p>
             <p className="mt-1">Hormat kami,</p>
-            <p className="text-[#243370] mt-2 mb-1 leading-none" style={{ fontFamily: "'GreatVibes', cursive", fontSize: "2.6rem" }}>
+            <p className="text-[#243370] my-1 leading-none whitespace-nowrap overflow-hidden" style={{ fontFamily: "'GreatVibes', cursive", fontSize: "clamp(1.7rem, 9vw, 2.6rem)" }}>
               WaGataway
             </p>
             <p className="font-bold">( Tim Finance )</p>
-            <p className="text-[11px] text-slate-500">Finance – WaGataway</p>
+            <p className="text-[10px] md:text-[11px] text-slate-500">Finance – WaGataway</p>
           </div>
         </div>
 
