@@ -33,6 +33,7 @@ import {
   Bot,
   FlaskConical,
   Webhook,
+  CreditCard,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -61,6 +62,7 @@ const topItems: NavItem[] = [
   { label: "Live Chat", href: "/live-chat", icon: MessagesSquare },
   { label: "Kontak", href: "/contacts", icon: Users },
   { label: "Akun", href: "/settings", icon: Settings },
+  { label: "Langganan", href: "/billing", icon: CreditCard },
 ];
 
 const sections: NavSection[] = [
@@ -156,7 +158,8 @@ const ACTIVE_ALIASES: Record<string, string[]> = {
   "/live-chat": ["/live-chat", "/chat-labels"],
   "/reports": ["/reports", "/analytics"],
   "/developer": ["/developer", "/api-docs", "/api-playground", "/webhook-logs"],
-  "/settings": ["/settings", "/team", "/affiliate", "/billing", "/profile"],
+  "/settings": ["/settings", "/team", "/profile"],
+  "/billing": ["/billing", "/affiliate"],
 };
 
 function isItemActive(location: string, href: string) {

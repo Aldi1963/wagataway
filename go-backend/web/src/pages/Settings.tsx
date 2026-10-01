@@ -4,17 +4,15 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
-import { Check, UserRound, KeyRound, Users, CreditCard, ChevronRight } from "lucide-react";
+import { Check, UserRound, KeyRound, Users, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/api";
 import { KeyManager } from "@/components/KeyManager";
 import Team from "./Team";
-import Affiliate from "./Affiliate";
-import Billing from "./Billing";
 
 /** Judul seksi ala halaman profil: tebal + garis pembatas. */
-function SectionHeader({ title, desc }: { title: string; desc?: string }) {
+export function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
     <div>
       <h3 className="text-xl font-bold text-foreground">{title}</h3>
@@ -28,27 +26,31 @@ const TABS = [
   { id: "profil", label: "Profil", icon: UserRound },
   { id: "api", label: "Pengaturan API", icon: KeyRound },
   { id: "tim", label: "Tim", icon: Users },
-  { id: "langganan", label: "Langganan", icon: CreditCard },
 ];
 
 /** Alias tab lama (?tab=keamanan dsb.) ke halaman baru yang digabung. */
 const TAB_ALIAS: Record<string, string> = {
   profil: "profil",
   keamanan: "profil",
-  tampilan: "profil",
   "api-key": "api",
   api: "api",
   tim: "tim",
-  afiliasi: "langganan",
-  langganan: "langganan",
 };
 
+/** Tab lama yang kini pindah ke halaman /billing. */
+const MOVED_TO_BILLING = new Set(["langganan", "afiliasi"]);
+
 const VALID_TABS = new Set(TABS.map((t) => t.id));
-const WIDE_TABS = new Set(["tim", "langganan"]);
+const WIDE_TABS = new Set(["tim"]);
 
 function initialTab(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("tab");
+    // tab lama yang sudah pindah ke /billing
+    if (q && MOVED_TO_BILLING.has(q)) {
+      window.location.replace("/billing");
+      return "profil";
+    }
     const mapped = q ? TAB_ALIAS[q] : undefined;
     return mapped && VALID_TABS.has(mapped) ? mapped : "profil";
   } catch {
@@ -275,16 +277,6 @@ export default function Settings() {
       )}
 
       {active === "tim" && <Team embedded />}
-
-      {active === "langganan" && (
-        <div className="space-y-10">
-          <Billing embedded />
-          <div>
-            <SectionHeader title="Afiliasi" desc="Undang teman dan dapatkan komisi" />
-            <Affiliate embedded />
-          </div>
-        </div>
-      )}
       </div>
     </div>
   );

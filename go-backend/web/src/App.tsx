@@ -27,6 +27,7 @@ const Links = lazy(() => import("@/pages/Links"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const Langganan = lazy(() => import("@/pages/Langganan"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -186,10 +187,10 @@ function AppRouter() {
           <Redirect to="/settings?tab=tim" />
         </Route>
         <Route path="/affiliate">
-          <Redirect to="/settings?tab=afiliasi" />
+          <Redirect to="/billing" />
         </Route>
         <Route path="/billing">
-          <Redirect to="/settings?tab=langganan" />
+          <ProtectedRoute><Langganan /></ProtectedRoute>
         </Route>
         <Route path="/contacts">
           <ProtectedRoute><ContactsHub /></ProtectedRoute>
