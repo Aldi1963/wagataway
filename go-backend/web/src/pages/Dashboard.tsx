@@ -628,8 +628,7 @@ export default function Dashboard() {
           </p>
         </StatCard>
 
-        {/* Kartu Subscription lebih lebar dari 3 kartu lain di HP (kotak merah user) */}
-        <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading} className="-mx-2 md:mx-0">
+        <StatCard label="Subscription" icon={Star} tile="#2e4186" loading={loading}>
           <p className="text-3xl font-bold text-foreground tracking-tight">
             {subPlanName}
             {/* Fitur 7: label Trial */}
