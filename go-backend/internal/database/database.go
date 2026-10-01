@@ -93,6 +93,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.WaOtpCode{},
 		&models.Poll{},
 		&models.PollVote{},
+		&models.Integration{},
+		&models.IntegrationLog{},
 	); err != nil {
 		return err
 	}

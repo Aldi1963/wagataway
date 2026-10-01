@@ -59,6 +59,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		registerOtpAuthRoutes(api, cfg, db)
 		registerLinkRoutes(api, db) // /l/:code redirect
 
+		// Integration Hub inbox — publik, auth via token acak di URL (bukan auth user).
+		// JANGAN pindahkan ke grup protected: platform luar tidak punya sesi user.
+		registerIntegrationInboxRoute(api, db, waManager)
+
 		// Webhook Clipku Pay — publik, diverifikasi via X-Signature
 		api.POST("/billing/clipkupay/webhook", clipkuPayWebhook(cfg, db))
 
@@ -80,6 +84,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerAutoReplyRoutes(protected, db)
 			registerAIReplyRoutes(protected, db)
 			registerMenuBotRoutes(protected, db)
+			registerIntegrationRoutes(protected, db, waManager)
 			registerApiKeyRoutes(protected, db)
 			registerBillingRoutes(protected, cfg, db)
 			registerScheduleRoutes(protected, db)
