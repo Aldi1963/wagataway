@@ -98,7 +98,7 @@ function buildGroups(baseUrl: string): GroupDoc[] {
   return [
     {
       title: "Pesan",
-      desc: "Kirim pesan teks, media, dan blast ke banyak nomor.",
+      desc: "Kirim pesan teks, media, dan blast ke banyak nomor. Semua endpoint kirim tunduk pada kuota pesan bulanan paket: bila kuota habis, respons 429 dengan code QUOTA_EXCEEDED (lihat GET /api/quota).",
       endpoints: [
         {
           method: "POST",
@@ -715,6 +715,13 @@ function buildGroups(baseUrl: string): GroupDoc[] {
         { method: "GET", path: "/api/links", title: "Daftar short link", curl: curl("GET", "/api/links") },
         { method: "GET", path: "/api/blacklist", title: "Daftar blacklist", curl: curl("GET", "/api/blacklist") },
         { method: "GET", path: "/api/auto-reply", title: "Daftar auto reply", curl: curl("GET", "/api/auto-reply") },
+        {
+          method: "GET",
+          path: "/api/quota",
+          title: "Info kuota pesan bulanan",
+          curl: curl("GET", "/api/quota"),
+          note: "Mengembalikan pemakaian & limit paket aktif: planName, limit (0 = unlimited), usedThisMonth, remaining, percentUsed, warning (true bila pemakaian >= 80%), isUnlimited, isTrial, quotaExceeded. Hanya pesan outgoing berstatus sent/delivered/read di bulan kalender berjalan yang dihitung; pesan gagal (failed) tidak menghabiskan kuota. Batas per paket: Free 3000, Lite 15000, Regular 100000, Pro 300000, Master unlimited, trial 15000.",
+        },
       ],
     },
   ];
@@ -725,7 +732,7 @@ const errorCodes = [
   { code: "401", desc: "Tidak terautentikasi — API key salah, kedaluwarsa, atau tidak dikirim." },
   { code: "404", desc: "Resource tidak ditemukan atau bukan milik akun Anda." },
   { code: "422", desc: "Validasi gagal — lihat pesan error untuk detail field." },
-  { code: "429", desc: "Terlalu banyak permintaan — tunggu sebentar lalu coba lagi." },
+  { code: "429", desc: "Terlalu banyak permintaan — tunggu sebentar lalu coba lagi. Bila body memuat code QUOTA_EXCEEDED, artinya kuota pesan bulanan paket habis: perpanjang/upgrade paket untuk menambah kuota." },
   { code: "500", desc: "Kesalahan server — hubungi dukungan bila berulang." },
 ];
 

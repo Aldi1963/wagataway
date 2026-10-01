@@ -14,6 +14,7 @@ import {
   Eye,
   EyeOff,
   Copy,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,20 @@ interface Plan {
 interface BillingSubscription {
   endDate: string;
   Plan?: { name: string; price: number };
+}
+
+// Info kuota pesan bulanan (Fitur 3) dari GET /api/quota.
+interface QuotaInfo {
+  planName: string;
+  quota: number;
+  usedThisMonth: number;
+  remaining: number;
+  limit: number;
+  isUnlimited: boolean;
+  percentUsed: number;
+  warning: boolean;
+  isTrial: boolean;
+  quotaExceeded: boolean;
 }
 
 type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator";
@@ -188,6 +203,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
   const [bulkStats, setBulkStats] = useState({ jobs: 0, wait: 0, sent: 0, failed: 0 });
@@ -257,6 +273,9 @@ export default function Dashboard() {
       apiGet<{ subscription: BillingSubscription | null }>("/billing/subscription")
         .then((res) => res.subscription)
         .catch(() => null),
+      apiGet<QuotaInfo>("/quota")
+        .then((res) => setQuota(res))
+        .catch(() => setQuota(null)),
     ])
       .then(([, plans, , msgTotal, sub]) => {
         const planKey = (user?.plan || "").toLowerCase();
@@ -519,6 +538,45 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Banner peringatan kuota pesan (Fitur 3): >=80% atau habis */}
+      {!loading && quota?.quotaExceeded && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-destructive">
+                Kuota pesan paket {quota.planName} habis ({quota.usedThisMonth.toLocaleString("id-ID")}/{quota.limit.toLocaleString("id-ID")})
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Pengiriman pesan baru akan ditolak. Perpanjang atau upgrade paket untuk menambah kuota.
+              </p>
+              <Button
+                size="sm"
+                className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+                onClick={() => navigate("/billing?perpanjang=1")}
+              >
+                Perpanjang / Upgrade
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {!loading && quota && !quota.quotaExceeded && quota.warning && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-500">
+                Kuota pesan hampir habis ({quota.percentUsed}% terpakai)
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {quota.usedThisMonth.toLocaleString("id-ID")} dari {quota.limit.toLocaleString("id-ID")} pesan bulan ini. Pertimbangkan upgrade paket.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Empat kartu statistik */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Total Devices" icon={Smartphone} tile={NAVY} loading={loading}>
@@ -555,6 +613,49 @@ export default function Dashboard() {
             {subPlanName}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">{subEndLabel}</p>
+          {/* Meter kuota pesan bulanan (Fitur 3) */}
+          {quota && (
+            <div className="mt-2.5">
+              {quota.isUnlimited ? (
+                <p className="text-xs font-semibold text-foreground">
+                  Pesan: <span className="text-[#243370] dark:text-blue-400">Unlimited</span>
+                  <span className="font-normal text-muted-foreground">
+                    {" "}({quota.usedThisMonth.toLocaleString("id-ID")} terkirim bulan ini)
+                  </span>
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>
+                      {quota.usedThisMonth.toLocaleString("id-ID")} / {quota.limit.toLocaleString("id-ID")} pesan
+                    </span>
+                    <span className={cn(quota.warning && "text-amber-600 font-semibold")}>
+                      {quota.percentUsed}%
+                    </span>
+                  </div>
+                  <div
+                    className="mt-1 h-1.5 rounded-full bg-border"
+                    role="progressbar"
+                    aria-valuenow={quota.percentUsed}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        quota.quotaExceeded
+                          ? "bg-destructive"
+                          : quota.warning
+                            ? "bg-amber-500"
+                            : "bg-[#243370]"
+                      )}
+                      style={{ width: `${quota.percentUsed}%` }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {canRenew && (
             <Button
               size="sm"
