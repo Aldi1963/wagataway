@@ -570,7 +570,7 @@ export default function Dashboard() {
               </p>
               <Button
                 size="sm"
-                className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+                variant="tint"
                 onClick={() => navigate("/billing?perpanjang=1")}
               >
                 Perpanjang / Upgrade
@@ -647,48 +647,43 @@ export default function Dashboard() {
               </span>
             )}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">{subEndLabel}</p>
-          {/* Meter kuota pesan bulanan (Fitur 3) */}
-          {quota && (
-            <div className="mt-2.5">
-              {quota.isUnlimited ? (
-                <p className="text-xs font-semibold text-foreground">
-                  Pesan: <span className="text-[#243370] dark:text-blue-400">Unlimited</span>
-                  <span className="font-normal text-muted-foreground">
-                    {" "}({quota.usedThisMonth.toLocaleString("id-ID")} terkirim bulan ini)
-                  </span>
-                </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {subEndLabel}
+            {quota &&
+              (quota.isUnlimited ? (
+                <>
+                  {" "}· <span className="font-semibold text-foreground">Unlimited</span>
+                </>
               ) : (
                 <>
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                    <span className="min-w-0 truncate">
-                      {quota.usedThisMonth.toLocaleString("id-ID")} / {quota.limit.toLocaleString("id-ID")} pesan
-                    </span>
-                    <span className={cn("shrink-0", quota.warning && "text-amber-600 font-semibold")}>
-                      {quota.percentUsed}%
-                    </span>
-                  </div>
-                  <div
-                    className="mt-1 h-1.5 rounded-full bg-border"
-                    role="progressbar"
-                    aria-valuenow={quota.percentUsed}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all",
-                        quota.quotaExceeded
-                          ? "bg-destructive"
-                          : quota.warning
-                            ? "bg-amber-500"
-                            : "bg-[#243370]"
-                      )}
-                      style={{ width: `${quota.percentUsed}%` }}
-                    />
-                  </div>
+                  {" "}·{" "}
+                  <span className={cn(quota.warning && "text-amber-600 font-semibold")}>
+                    {quota.usedThisMonth.toLocaleString("id-ID")}/
+                    {quota.limit.toLocaleString("id-ID")} pesan ({quota.percentUsed}%)
+                  </span>
                 </>
-              )}
+              ))}
+          </p>
+          {/* Meter kuota pesan bulanan (Fitur 3) — ramping, selaras kartu lain */}
+          {quota && !quota.isUnlimited && (
+            <div
+              className="mt-1.5 h-1 rounded-full bg-border"
+              role="progressbar"
+              aria-valuenow={quota.percentUsed}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  quota.quotaExceeded
+                    ? "bg-destructive"
+                    : quota.warning
+                      ? "bg-amber-500"
+                      : "bg-[#243370]"
+                )}
+                style={{ width: `${quota.percentUsed}%` }}
+              />
             </div>
           )}
           {/* Fitur 7: ajakan upgrade untuk user trial; perpanjang untuk berbayar;
@@ -696,7 +691,7 @@ export default function Dashboard() {
           {isTrialSub ? (
             <Button
               size="sm"
-              className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+              variant="tint"
               onClick={() => navigate("/billing")}
             >
               Upgrade sekarang
@@ -704,7 +699,7 @@ export default function Dashboard() {
           ) : !subscription ? (
             <Button
               size="sm"
-              className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+              variant="tint"
               onClick={() => navigate("/billing")}
             >
               Pilih Paket
@@ -713,7 +708,7 @@ export default function Dashboard() {
             canRenew && (
               <Button
                 size="sm"
-                className="mt-2 bg-[#243370] hover:bg-[#1c2a5c] text-white"
+                variant="tint"
                 onClick={() => navigate("/billing?perpanjang=1")}
               >
                 Perpanjang
