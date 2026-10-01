@@ -66,18 +66,40 @@ func isPublicIP(ip net.IP) bool {
 // NewSafeClient membuat http.Client untuk request outbound:
 //   - timeout sesuai parameter,
 //   - redirect TIDAK diikuti (mengembalikan respons 3xx apa adanya),
-//   - dial menolak koneksi ke IP non-publik — melindungi dari DNS
-//     rebinding (IP berubah setelah validasi).
+//   - bila env HTTPS_PROXY/HTTP_PROXY terisi (mis. sandbox Muse VM yang
+//     mewajibkan egress via proxy — dial langsung di-intercept dan TLS
+//     gagal), request dilewatkan proxy tersebut; bila tidak ada proxy,
+//     dial langsung dengan penolakan koneksi ke IP non-publik —
+//     melindungi dari DNS rebinding (IP berubah setelah validasi).
+//
+// Catatan: validasi SSRF terhadap URL target tetap dilakukan pemanggil
+// via ValidateOutboundURL sebelum client dipakai.
 func NewSafeClient(timeout time.Duration) *http.Client {
+	transport := &http.Transport{}
+	if proxyURL, _ := proxyForHTTPS(); proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	} else {
+		transport.DialContext = safeDialContext(timeout)
+	}
 	return &http.Client{
 		Timeout: timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
-		Transport: &http.Transport{
-			DialContext: safeDialContext(timeout),
-		},
+		Transport: transport,
 	}
+}
+
+// proxyForHTTPS mengembalikan proxy yang berlaku untuk https menurut env
+// (HTTPS_PROXY/https_proxy, fallback HTTP_PROXY/http_proxy), atau nil bila
+// tidak ada. Dibaca sekali saat client dibuat.
+func proxyForHTTPS() (*url.URL, error) {
+	reqURL, _ := url.Parse("https://example.com/")
+	pu, err := http.ProxyFromEnvironment(&http.Request{URL: reqURL})
+	if err != nil || pu == nil {
+		return nil, err
+	}
+	return pu, nil
 }
 
 // safeDialContext mengembalikan dial function yang me-resolve host,
