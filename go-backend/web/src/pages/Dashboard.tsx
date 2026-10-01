@@ -11,12 +11,16 @@ import {
   X,
   RefreshCw,
   Pencil,
+  Eye,
+  EyeOff,
+  Copy,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import OnboardingWizard, { isOnboardingDone } from "@/components/OnboardingWizard";
 
@@ -28,6 +32,7 @@ interface Device {
   phone: string;
   status: "connected" | "connecting" | "disconnected";
   webhookUrl: string;
+  webhookSecret: string;
   autoOnline: boolean;
   readReceipts: boolean;
   rejectCall: boolean;
@@ -206,6 +211,9 @@ export default function Dashboard() {
   const [editing, setEditing] = useState<Device | null>(null);
   const [editName, setEditName] = useState("");
   const [editWebhook, setEditWebhook] = useState("");
+  const [editSecret, setEditSecret] = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+  const [regenBusy, setRegenBusy] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Tab dialog hubungkan: "qr" (scan) atau "pair" (kode pairing 8 digit)
@@ -357,6 +365,47 @@ export default function Dashboard() {
     setEditing(d);
     setEditName(d.name || "");
     setEditWebhook(d.webhookUrl || "");
+    setEditSecret(d.webhookSecret || "");
+    setShowSecret(false);
+  };
+
+  const handleCopySecret = async () => {
+    if (!editSecret) {
+      toast.error("Belum ada secret");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(editSecret);
+      toast.success("Webhook secret disalin");
+    } catch {
+      toast.error("Gagal menyalin");
+    }
+  };
+
+  const handleRegenerateSecret = async () => {
+    if (!editing || regenBusy) return;
+    if (
+      !window.confirm(
+        "Buat ulang webhook secret? Secret lama langsung tidak berlaku dan penerima webhook harus memakai secret baru."
+      )
+    )
+      return;
+    setRegenBusy(true);
+    try {
+      const res = await apiPost<{ webhookSecret?: string }>(
+        `/devices/${editing.id}/webhook-secret/regenerate`,
+        {}
+      );
+      const s = res.webhookSecret || "";
+      setEditSecret(s);
+      setShowSecret(true);
+      setEditing({ ...editing, webhookSecret: s });
+      toast.success("Webhook secret diperbarui");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal membuat secret baru");
+    } finally {
+      setRegenBusy(false);
+    }
   };
 
   const handleEditSave = async () => {
@@ -794,6 +843,64 @@ export default function Dashboard() {
                   if (e.key === "Enter") handleEditSave();
                 }}
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">
+                Webhook Secret{" "}
+                <span className="text-muted-foreground">(HMAC-SHA256)</span>
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  type={showSecret ? "text" : "password"}
+                  value={editSecret}
+                  readOnly
+                  placeholder="Otomatis dibuat"
+                  className="font-mono text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setShowSecret(!showSecret)}
+                  aria-label={showSecret ? "Sembunyikan secret" : "Tampilkan secret"}
+                  title={showSecret ? "Sembunyikan" : "Tampilkan"}
+                >
+                  {showSecret ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={handleCopySecret}
+                  aria-label="Salin secret"
+                  title="Salin"
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={handleRegenerateSecret}
+                  disabled={regenBusy}
+                  aria-label="Buat ulang secret"
+                  title="Buat ulang"
+                >
+                  <RefreshCw
+                    className={cn("w-4 h-4", regenBusy && "animate-spin")}
+                  />
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Setiap webhook dikirim dengan header{" "}
+                <span className="font-mono">X-Wagataway-Signature</span>{" "}
+                (HMAC-SHA256 dari body memakai secret ini) agar penerima bisa
+                memverifikasi keasliannya.
+              </p>
             </div>
             <div className="flex justify-end gap-2">
               <Button

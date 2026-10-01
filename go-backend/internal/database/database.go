@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/rs/zerolog/log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -88,7 +89,34 @@ func AutoMigrate(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
+	if err := migrateDeviceWebhookSecrets(db); err != nil {
+		return err
+	}
 	return migrateAPIKeyHashes(db)
+}
+
+// migrateDeviceWebhookSecrets mengisi webhook_secret untuk device yang sudah
+// punya webhook_url tapi secret-nya masih kosong (device lama). Idempoten.
+func migrateDeviceWebhookSecrets(db *gorm.DB) error {
+	var ids []uint
+	if err := db.Model(&models.Device{}).
+		Where("webhook_url <> ? AND (webhook_secret = ? OR webhook_secret IS NULL)", "", "").
+		Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	for _, id := range ids {
+		secret, err := security.GenerateWebhookSecret()
+		if err != nil {
+			return err
+		}
+		if err := db.Model(&models.Device{}).Where("id = ?", id).Update("webhook_secret", secret).Error; err != nil {
+			return err
+		}
+	}
+	if len(ids) > 0 {
+		log.Info().Int("count", len(ids)).Msg("Backfilled device webhook secrets")
+	}
+	return nil
 }
 
 // migrateAPIKeyHashes memindahkan API key plaintext lama ke kolom KeyHash.

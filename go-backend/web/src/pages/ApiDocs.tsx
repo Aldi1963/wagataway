@@ -490,6 +490,13 @@ function buildGroups(baseUrl: string): GroupDoc[] {
           title: "Kirim ulang delivery yang gagal",
           curl: curl("POST", "/api/webhooks/1/deliveries/5/retry"),
         },
+        {
+          method: "POST",
+          path: "/api/devices/:id/webhook-secret/regenerate",
+          title: "Buat ulang webhook secret perangkat",
+          note: "Setiap webhook per-device dikirim dengan header X-Wagataway-Signature (HMAC-SHA256 dari raw JSON body memakai secret ini, format sha256=<hex>) dan X-Wagataway-Timestamp untuk anti-replay. Lihat panduan verifikasi di bawah.",
+          curl: curl("POST", "/api/devices/1/webhook-secret/regenerate"),
+        },
       ],
     },
     {
@@ -951,6 +958,51 @@ function DocsContent({ isPublic, embedded = false }: { isPublic: boolean; embedd
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Verifikasi signature webhook</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Setiap webhook per-device dikirim dengan header{" "}
+            <code className="font-mono">X-Wagataway-Signature</code> berisi
+            HMAC-SHA256 dari <em>raw JSON body</em> (format{" "}
+            <code className="font-mono">sha256=&lt;hex&gt;</code>) memakai
+            webhook secret perangkat, plus{" "}
+            <code className="font-mono">X-Wagataway-Timestamp</code> (unix
+            epoch, untuk cek anti-replay). Secret bisa dilihat, disalin, dan dibuat
+            ulang dari modal Ubah Perangkat di Dashboard. Payload tidak berubah
+            — penerima lama yang mengabaikan header ini tetap berfungsi.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <CurlBlock
+            title="Contoh verifikasi (Node.js)"
+            code={`const crypto = require("crypto");
+
+function verifyWagatawaySignature(secret, rawBody, signature, timestamp) {
+  // Tolak request yang terlalu lama (anti-replay, toleransi 5 menit)
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  const expected =
+    "sha256=" + crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
+
+// Di handler webhook (Express):
+app.post("/hook/wa", express.raw({ type: "application/json" }), (req, res) => {
+  const ok = verifyWagatawaySignature(
+    process.env.WAGATAWAY_WEBHOOK_SECRET, // secret dari modal Ubah Perangkat
+    req.body,                             // raw body, JANGAN JSON.parse dulu
+    req.headers["x-wagataway-signature"],
+    req.headers["x-wagataway-timestamp"]
+  );
+  if (!ok) return res.status(401).send("signature tidak valid");
+  const payload = JSON.parse(req.body.toString());
+  // ... proses payload.event / payload.payload
+  res.sendStatus(200);
+});`}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">

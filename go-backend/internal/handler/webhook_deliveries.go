@@ -53,7 +53,16 @@ func retryWebhookDeliveryLog(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Log tidak ditemukan"})
 			return
 		}
-		statusCode, success, errMsg, _ := whatsapp.DeliverWebhookPayload(orig.URL, "", orig.Event, []byte(orig.Payload))
+		// Retry memakai webhook secret milik device agar header HMAC
+		// X-Wagataway-Signature ikut terkirim seperti pengiriman aslinya.
+		secret := ""
+		if orig.DeviceID != 0 {
+			var dev models.Device
+			if err := db.Select("webhook_secret").Where("id = ?", orig.DeviceID).First(&dev).Error; err == nil {
+				secret = dev.WebhookSecret
+			}
+		}
+		statusCode, success, errMsg, _ := whatsapp.DeliverWebhookPayload(orig.URL, secret, orig.Event, []byte(orig.Payload))
 		orig.RetryCount++
 		db.Save(&orig)
 		// Catat hasil retry sebagai baris baru untuk riwayat.

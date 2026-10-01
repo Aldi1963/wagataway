@@ -212,6 +212,10 @@ func downloadFile(url string) ([]byte, error) {
 
 // DeliverWebhookPayload POSTs a raw JSON payload to a webhook URL with the
 // standard headers (Content-Type, X-Webhook-Event, X-Webhook-Secret).
+// Bila secret diisi, ditambahkan juga header HMAC aditif
+// X-Wagataway-Signature (HMAC-SHA256 dari raw body, format "sha256=<hex>")
+// dan X-Wagataway-Timestamp (unix epoch, untuk anti-replay). Payload tidak
+// berubah.
 // Timeout 10 detik, tanpa mengikuti redirect (anti-SSRF).
 // Mengembalikan HTTP status, sukses/tidak, pesan error,
 // dan durasi pengiriman dalam milidetik.
@@ -228,6 +232,9 @@ func DeliverWebhookPayload(url, secret, event string, raw []byte) (statusCode in
 	if secret != "" {
 		req.Header.Set("X-Webhook-Secret", secret)
 	}
+	// HMAC aditif — tidak mengubah payload, penerima lama yang mengabaikan
+	// header ini tetap berfungsi.
+	security.SetWebhookSignatureHeaders(req, secret, raw)
 
 	client := security.NewSafeClient(10 * time.Second)
 	resp, err := client.Do(req)

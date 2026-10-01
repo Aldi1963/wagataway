@@ -27,6 +27,7 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 		devices.POST("/:id/pair-code", requestPairCode(db, wm))
 		devices.GET("/:id/status", getDeviceStatus(db, wm))
 		devices.GET("/:id/bot-deliveries", listBotDeliveries(db))
+		devices.POST("/:id/webhook-secret/regenerate", regenerateWebhookSecret(db))
 	}
 }
 
@@ -92,6 +93,14 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 			Status:     "disconnected",
 		}
 
+		// Secret HMAC webhook dibuat otomatis saat device dibuat.
+		secret, err := security.GenerateWebhookSecret()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat webhook secret", "code": "GENERATE_ERROR"})
+			return
+		}
+		device.WebhookSecret = secret
+
 		if err := db.Create(&device).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat perangkat", "code": "CREATE_ERROR"})
 			return
@@ -154,6 +163,12 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 					c.JSON(http.StatusBadRequest, gin.H{"message": "Webhook URL tidak valid: " + err.Error(), "code": "VALIDATION_ERROR"})
 					return
 				}
+				// Backfill: URL baru di-set tapi secret belum ada → buatkan.
+				if device.WebhookSecret == "" {
+					if secret, err := security.GenerateWebhookSecret(); err == nil {
+						updates["webhook_secret"] = secret
+					}
+				}
 			}
 			updates["webhook_url"] = *req.WebhookURL
 		}
@@ -172,12 +187,44 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		db.Model(&device).Updates(updates)
 
+		// Muat ulang agar respons memuat nilai terbaru (termasuk webhook_secret
+		// bila baru di-backfill) untuk ditampilkan di modal Edit Perangkat.
+		db.Where("id = ? AND user_id = ?", id, userID).First(&device)
+
 		// Terapkan perubahan flag ke sesi WhatsApp aktif tanpa restart
 		if req.AutoOnline != nil || req.ReadReceipts != nil || req.RejectCall != nil || req.TypingIndicator != nil {
 			wm.RefreshDeviceFlags(uint(id))
 		}
 
 		c.JSON(http.StatusOK, gin.H{"device": device, "message": "Perangkat berhasil diperbarui"})
+	}
+}
+
+// regenerateWebhookSecret membuat ulang webhook secret (HMAC key) sebuah
+// device. Secret lama langsung tidak berlaku; penerima webhook harus memakai
+// secret baru untuk verifikasi X-Wagataway-Signature.
+func regenerateWebhookSecret(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+		var device models.Device
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+
+		secret, err := security.GenerateWebhookSecret()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat secret", "code": "GENERATE_ERROR"})
+			return
+		}
+		if err := db.Model(&device).Update("webhook_secret", secret).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan secret", "code": "DB_ERROR"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"webhookSecret": secret})
 	}
 }
 

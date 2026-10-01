@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waCompanionReg"
@@ -881,9 +882,17 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 
 	// Webhook URL per-device (diisi dari modal Tambah/Edit Perangkat).
 	var dev models.Device
-	if err := m.db.Select("webhook_url").Where("id = ?", deviceID).First(&dev).Error; err == nil {
+	if err := m.db.Select("webhook_url", "webhook_secret").Where("id = ?", deviceID).First(&dev).Error; err == nil {
 		if url := strings.TrimSpace(dev.WebhookURL); url != "" {
-			go m.deliverDeviceWebhook(userID, deviceID, url, event, payload)
+			// Backfill: device lama yang belum punya secret dibuatkan sekali di sini
+			// (selain migrasi startup) agar pengiriman pertama pun sudah bertanda.
+			if dev.WebhookSecret == "" {
+				if secret, err := security.GenerateWebhookSecret(); err == nil {
+					dev.WebhookSecret = secret
+					m.db.Model(&models.Device{}).Where("id = ?", deviceID).Update("webhook_secret", secret)
+				}
+			}
+			go m.deliverDeviceWebhook(userID, deviceID, url, dev.WebhookSecret, event, payload)
 		}
 	}
 }
@@ -891,7 +900,10 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 // deliverDeviceWebhook mengirim webhook per-device. Bila URL mengarah ke bot
 // PPOB (path berakhiran /whatsapp/bot), kirim format WAMP {from, message}
 // yang dimengerti WhatsappBotController; selain itu kirim envelope standar.
-func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, event string, payload map[string]interface{}) {
+// Payload TIDAK berubah; HMAC-SHA256 dari raw body dikirim aditif sebagai
+// header X-Wagataway-Signature (+ X-Wagataway-Timestamp). PPOB mengabaikan
+// header ekstra, dan alur balasan JSON {"text"} tetap seperti semula.
+func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, secret, event string, payload map[string]interface{}) {
 	var raw []byte
 	if isWampBotURL(url) {
 		if event != "message.received" {
@@ -918,7 +930,7 @@ func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, event string,
 		safePayload, _ := json.Marshal(map[string]interface{}{
 			"from": from, "message": truncate(text, 200),
 		})
-		replyText, statusCode, attempts, err := postWampBotWithRetry(url, raw)
+		replyText, statusCode, attempts, err := postWampBotWithRetry(url, secret, raw)
 		errStr := ""
 		if err != nil {
 			errStr = err.Error()
@@ -969,7 +981,7 @@ func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, event string,
 		}
 	}
 
-	statusCode, success, errMsg, _ := DeliverWebhookPayload(url, "", event, raw)
+	statusCode, success, errMsg, _ := DeliverWebhookPayload(url, secret, event, raw)
 	if !success {
 		log.Warn().Uint("deviceID", deviceID).Str("event", event).Int("status", statusCode).Str("error", errMsg).Msg("Device webhook delivery failed")
 	} else {
@@ -981,7 +993,9 @@ func (m *Manager) deliverDeviceWebhook(userID, deviceID uint, url, event string,
 // 3x percobaan dan backoff 2s, 5s. Retry HANYA untuk network error/timeout dan
 // HTTP 5xx; 4xx (termasuk 404 dari middleware PPOB) dan respons non-JSON tidak
 // di-retry. Mengembalikan teks balasan, status code, jumlah percobaan, error.
-func postWampBotWithRetry(url string, raw []byte) (string, int, int, error) {
+// Header HMAC X-Wagataway-Signature ikut terkirim (aditif; PPOB mengabaikannya)
+// tanpa mengubah payload {from, message, secret}.
+func postWampBotWithRetry(url, secret string, raw []byte) (string, int, int, error) {
 	backoffs := []time.Duration{2 * time.Second, 5 * time.Second}
 	var lastErr error
 	var statusCode int
@@ -991,7 +1005,7 @@ func postWampBotWithRetry(url string, raw []byte) (string, int, int, error) {
 			time.Sleep(backoffs[i-1])
 		}
 		attempts++
-		replyText, sc, err, retryable := postWampBotOnce(url, raw)
+		replyText, sc, err, retryable := postWampBotOnce(url, secret, raw)
 		statusCode = sc
 		if err == nil {
 			return replyText, sc, attempts, nil
@@ -1011,13 +1025,16 @@ func postWampBotWithRetry(url string, raw []byte) (string, int, int, error) {
 // Pakai HTTP client yang sadar proxy (ProxyFromEnvironment): client aman generik
 // (SafeClient, dial langsung) tidak bisa keluar dari sandbox ini karena semua
 // TCP diintersep ke egress proxy. URL webhook diset admin sendiri, jadi aman.
-func postWampBotOnce(url string, raw []byte) (string, int, error, bool) {
+func postWampBotOnce(url, secret string, raw []byte) (string, int, error, bool) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		return "", 0, err, false
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-Event", "message.received")
+	// Header HMAC aditif — PPOB mengabaikan header ekstra; payload tetap
+	// {from, message, secret} dan respons JSON {"text"} diproses seperti semula.
+	security.SetWebhookSignatureHeaders(req, secret, raw)
 
 	client := &http.Client{
 		Timeout: 30 * time.Second,
