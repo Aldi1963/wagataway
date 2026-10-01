@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/rs/zerolog/log"
 )
 
@@ -92,11 +93,13 @@ func (s *Scheduler) deviceBelongsToUser(deviceID, userID uint) bool {
 }
 
 // recordReport mencatat hasil pengiriman ke MessageReport.
-func (s *Scheduler) recordReport(userID uint, campaignID, phone, status, errMsg string) {
+func (s *Scheduler) recordReport(userID, deviceID uint, campaignID, phone, messageID, status, errMsg string) {
 	s.db.Create(&models.MessageReport{
 		UserID:     userID,
+		DeviceID:   deviceID,
 		CampaignID: campaignID,
 		Phone:      phone,
+		MessageID:  messageID,
 		Status:     status,
 		ErrorMsg:   errMsg,
 		SentAt:     time.Now(),
@@ -125,12 +128,16 @@ func (s *Scheduler) processRecurringSchedules() {
 		}
 		campaignID := fmt.Sprintf("recurring-%d", sch.ID)
 
-		err := s.waManager.SendMessage(sch.DeviceID, sch.Target, msgType, sch.Message, sch.MediaURL)
+		waMsgID, err := s.waManager.SendMessageWithOptions(sch.DeviceID, sch.Target, whatsapp.SendOptions{
+			Type:     msgType,
+			Content:  sch.Message,
+			MediaURL: sch.MediaURL,
+		})
 		if err != nil {
 			// Gagal (mis. device tidak connected): retry 10 menit lagi.
 			retryAt := now.Add(10 * time.Minute)
 			s.db.Model(&sch).Update("next_run_at", &retryAt)
-			s.recordReport(sch.UserID, campaignID, sch.Target, "failed", err.Error())
+			s.recordReport(sch.UserID, sch.DeviceID, campaignID, sch.Target, "", "failed", err.Error())
 			log.Error().Err(err).Uint("scheduleID", sch.ID).Msg("Recurring: gagal kirim, retry 10 menit lagi")
 			continue
 		}
@@ -140,7 +147,7 @@ func (s *Scheduler) processRecurringSchedules() {
 			"last_run_at": &now,
 			"next_run_at": &next,
 		})
-		s.recordReport(sch.UserID, campaignID, sch.Target, "sent", "")
+		s.recordReport(sch.UserID, sch.DeviceID, campaignID, sch.Target, waMsgID, "sent", "")
 		log.Info().Uint("scheduleID", sch.ID).Time("nextRun", next).Msg("Recurring: terkirim")
 	}
 
@@ -172,15 +179,18 @@ func (s *Scheduler) processFollowups() {
 		}
 
 		campaignID := fmt.Sprintf("followup-%d", fu.ID)
-		err := s.waManager.SendMessage(fu.DeviceID, fu.TargetPhone, "text", fu.Message, "")
+		waMsgID, err := s.waManager.SendMessageWithOptions(fu.DeviceID, fu.TargetPhone, whatsapp.SendOptions{
+			Type:    "text",
+			Content: fu.Message,
+		})
 		if err != nil {
-			s.recordReport(fu.UserID, campaignID, fu.TargetPhone, "failed", err.Error())
+			s.recordReport(fu.UserID, fu.DeviceID, campaignID, fu.TargetPhone, "", "failed", err.Error())
 			log.Error().Err(err).Uint("followupID", fu.ID).Msg("Followup: gagal kirim")
 			continue
 		}
 
 		s.db.Model(&fu).Update("last_sent_at", &now)
-		s.recordReport(fu.UserID, campaignID, fu.TargetPhone, "sent", "")
+		s.recordReport(fu.UserID, fu.DeviceID, campaignID, fu.TargetPhone, waMsgID, "sent", "")
 		sent++
 		log.Info().Uint("followupID", fu.ID).Msg("Followup: terkirim")
 	}

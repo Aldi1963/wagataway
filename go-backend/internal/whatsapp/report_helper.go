@@ -15,14 +15,16 @@ import (
 	"gorm.io/gorm"
 )
 
-func recordMessageReport(db *gorm.DB, userID uint, campaignID, phone, status, errMsg string, sentAt time.Time) {
+func recordMessageReport(db *gorm.DB, userID, deviceID uint, campaignID, phone, messageID, status, errMsg string, sentAt time.Time) {
 	if db == nil {
 		return
 	}
 	report := models.MessageReport{
 		UserID:     userID,
+		DeviceID:   deviceID,
 		CampaignID: campaignID,
 		Phone:      phone,
+		MessageID:  messageID,
 		Status:     status,
 		ErrorMsg:   errMsg,
 		SentAt:     sentAt,

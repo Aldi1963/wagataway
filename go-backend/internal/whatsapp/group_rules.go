@@ -1,14 +1,11 @@
 package whatsapp
 
-// Aturan grup otomatis: anti-link dan anti-spam untuk pesan grup masuk.
+// Aturan grup otomatis: welcome message anggota baru, anti-link, dan
+// anti-spam untuk pesan grup masuk.
 //
-// Dipanggil via goroutine dari handleIncomingMessage — non-blocking dan gagal
+// Dipanggil via goroutine dari handleIncomingMessage (checkGroupRules) dan
+// handleEvent (handleGroupParticipantChange) — non-blocking dan gagal
 // diam-diam (hanya log), sehingga tidak mengganggu alur pesan yang sudah ada.
-//
-// CATATAN: Fitur welcome message (sambutan anggota baru) TIDAK diimplementasikan
-// karena versi whatsmeow yang dipakai tidak memiliki event GroupParticipant
-// untuk join/leave anggota. Field WelcomeMsg di model tetap tersimpan via API
-// dan bisa dipakai nanti bila event tersedia.
 
 import (
 	"fmt"
@@ -18,6 +15,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/rs/zerolog/log"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 // linkPattern mendeteksi URL di teks pesan.
@@ -41,6 +39,58 @@ const (
 	spamWindow    = 10 * time.Second // ...dalam 10 detik = spam
 	spamWarnCooldown = 1 * time.Minute // peringatan maksimal 1x per menit per sender
 )
+
+// handleGroupParticipantChange menangani event *events.GroupInfo.
+// Bila ada anggota baru yang join (evt.Join), cari GroupRule aktif untuk
+// device+grup ini dan kirim WelcomeMsg dengan mention teks polos
+// (@nomor, gaya yang sama dengan peringatan anti-link).
+func (m *Manager) handleGroupParticipantChange(sess *SessionState, evt *events.GroupInfo) {
+	if len(evt.Join) == 0 {
+		return
+	}
+	groupJID := evt.JID.String()
+	if !isGroupJID(groupJID) {
+		return
+	}
+
+	var rule models.GroupRule
+	if err := m.db.Where("user_id = ? AND device_id = ? AND group_jid = ? AND is_active = ? AND welcome_msg <> ''",
+		sess.UserID, sess.DeviceID, groupJID, true).
+		First(&rule).Error; err != nil {
+		return // tidak ada welcome message aktif untuk grup ini
+	}
+
+	// Nomor device sendiri — jangan sambut diri sendiri bila device yang join.
+	var selfUser string
+	if sess.Client != nil && sess.Client.Store.ID != nil {
+		selfUser = sess.Client.Store.ID.User
+	}
+
+	mentions := ""
+	for _, j := range evt.Join {
+		if j.User == "" || j.User == selfUser {
+			continue
+		}
+		mentions += "@" + j.User + " "
+	}
+	if mentions == "" {
+		return
+	}
+
+	text := rule.WelcomeMsg + "\n" + mentions
+	if err := m.SendMessage(sess.DeviceID, groupJID, "text", text, ""); err != nil {
+		log.Error().Err(err).
+			Uint("deviceID", sess.DeviceID).
+			Str("group", groupJID).
+			Msg("Group rule welcome message failed")
+	} else {
+		log.Info().
+			Uint("deviceID", sess.DeviceID).
+			Str("group", groupJID).
+			Str("mentions", mentions).
+			Msg("Group rule welcome message sent")
+	}
+}
 
 // checkGroupRules memeriksa aturan grup yang aktif untuk device+grup ini
 // dan menegakkannya (anti-link, anti-spam).

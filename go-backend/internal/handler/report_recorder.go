@@ -13,16 +13,19 @@ import (
 )
 
 // recordReport menyimpan satu baris laporan pengiriman.
-// status: "sent" atau "failed". campaignID: "bulk-<jobID>" untuk bulk,
-// "single-<unix>" untuk kiriman tunggal.
-func recordReport(db *gorm.DB, userID uint, campaignID, phone, status, errMsg string) {
+// status: "sent" atau "failed" (nanti di-update jadi "delivered"/"read"
+// oleh handleReceipt via message_id + device_id).
+// campaignID: "bulk-<jobID>" untuk bulk, "single-<unix>" untuk kiriman tunggal.
+func recordReport(db *gorm.DB, userID, deviceID uint, campaignID, phone, messageID, status, errMsg string) {
 	if db == nil {
 		return
 	}
 	report := models.MessageReport{
 		UserID:     userID,
+		DeviceID:   deviceID,
 		CampaignID: campaignID,
 		Phone:      phone,
+		MessageID:  messageID,
 		Status:     status,
 		ErrorMsg:   errMsg,
 		SentAt:     time.Now(),

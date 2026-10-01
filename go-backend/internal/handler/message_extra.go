@@ -45,11 +45,11 @@ func queueSend(db *gorm.DB, wm *whatsapp.Manager, userID uint, msg *models.Messa
 		waID, err := wm.SendMessageWithOptions(msg.DeviceID, msg.To, opts)
 		if err != nil {
 			db.Model(msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
-			recordReport(db, userID, campaignID, msg.To, "failed", err.Error())
+			recordReport(db, userID, msg.DeviceID, campaignID, msg.To, "", "failed", err.Error())
 		} else {
 			now := time.Now()
 			db.Model(msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
-			recordReport(db, userID, campaignID, msg.To, "sent", "")
+			recordReport(db, userID, msg.DeviceID, campaignID, msg.To, waID, "sent", "")
 		}
 	}()
 }

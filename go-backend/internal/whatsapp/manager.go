@@ -317,7 +317,11 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 	campaignID := fmt.Sprintf("bulk-%d", jobID)
 
 	for _, r := range recipients {
-		err := m.SendMessage(job.DeviceID, r.Phone, job.Type, job.Content, job.MediaURL)
+		waMsgID, err := m.SendMessageWithOptions(job.DeviceID, r.Phone, SendOptions{
+			Type:     job.Type,
+			Content:  job.Content,
+			MediaURL: job.MediaURL,
+		})
 
 		sentAt := time.Now()
 		if err != nil {
@@ -326,14 +330,14 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 				"status":    "failed",
 				"error_msg": err.Error(),
 			})
-			recordMessageReport(db, job.UserID, campaignID, r.Phone, "failed", err.Error(), sentAt)
+			recordMessageReport(db, job.UserID, job.DeviceID, campaignID, r.Phone, "", "failed", err.Error(), sentAt)
 		} else {
 			sentCount++
 			db.Model(&r).Updates(map[string]interface{}{
 				"status":  "sent",
 				"sent_at": &sentAt,
 			})
-			recordMessageReport(db, job.UserID, campaignID, r.Phone, "sent", "", sentAt)
+			recordMessageReport(db, job.UserID, job.DeviceID, campaignID, r.Phone, waMsgID, "sent", "", sentAt)
 		}
 
 		// Random delay between messages (anti-ban)
@@ -650,6 +654,11 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 		// Message delivery/read receipts
 		m.handleReceipt(sess, v)
 
+	case *events.GroupInfo:
+		// Perubahan info grup — pakai untuk welcome message anggota baru
+		// (evt.Join terisi saat ada anggota yang join/ditambahkan).
+		go m.handleGroupParticipantChange(sess, v)
+
 	case *events.Presence:
 		// Online/offline presence updates
 		log.Debug().Uint("deviceID", sess.DeviceID).Str("from", v.From.String()).Msg("Presence update")
@@ -754,7 +763,7 @@ func (m *Manager) handleReceipt(sess *SessionState, receipt *events.Receipt) {
 		return
 	}
 
-	// Update message status in DB
+	// Update message status in DB (messages + message_reports bila tercatat).
 	for _, msgID := range receipt.MessageIDs {
 		m.db.Model(&models.Message{}).
 			Where("message_id = ? AND device_id = ?", msgID, sess.DeviceID).
@@ -772,6 +781,14 @@ func (m *Manager) handleReceipt(sess *SessionState, receipt *events.Receipt) {
 				"status":    status,
 			})
 		}
+	}
+
+	// Perbarui juga laporan broadcast (message_reports) bila pesan ini tercatat
+	// saat pengiriman (dicocokkan via message_id + device_id).
+	if len(receipt.MessageIDs) > 0 {
+		m.db.Model(&models.MessageReport{}).
+			Where("message_id IN ? AND device_id = ?", receipt.MessageIDs, sess.DeviceID).
+			Update("status", status)
 	}
 }
 

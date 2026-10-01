@@ -146,11 +146,11 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			})
 			if err != nil {
 				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
-				recordReport(db, userID, campaignID, req.To, "failed", err.Error())
+				recordReport(db, userID, req.DeviceID, campaignID, req.To, "", "failed", err.Error())
 			} else {
 				now := time.Now()
 				db.Model(&msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
-				recordReport(db, userID, campaignID, req.To, "sent", "")
+				recordReport(db, userID, req.DeviceID, campaignID, req.To, waID, "sent", "")
 			}
 		}()
 

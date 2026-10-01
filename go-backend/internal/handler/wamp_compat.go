@@ -121,11 +121,11 @@ func wampSend(db *gorm.DB, wm *whatsapp.Manager, isMedia bool) gin.HandlerFunc {
 			})
 			if err != nil {
 				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
-				recordReport(db, ak.UserID, campaignID, req.Number, "failed", err.Error())
+				recordReport(db, ak.UserID, device.ID, campaignID, req.Number, "", "failed", err.Error())
 			} else {
 				now := time.Now()
 				db.Model(&msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
-				recordReport(db, ak.UserID, campaignID, req.Number, "sent", "")
+				recordReport(db, ak.UserID, device.ID, campaignID, req.Number, waID, "sent", "")
 			}
 		}()
 
