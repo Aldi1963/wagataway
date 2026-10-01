@@ -31,9 +31,9 @@ func registerDripRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listDripCampaigns(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var campaigns []models.DripCampaign
-		db.Where("user_id = ?", userID).Preload("Steps").
+		udb.Where("user_id = ?", userID).Preload("Steps").
 			Order("created_at DESC").Find(&campaigns)
 		c.JSON(http.StatusOK, gin.H{"campaigns": campaigns})
 	}
@@ -42,7 +42,7 @@ func listDripCampaigns(db *gorm.DB) gin.HandlerFunc {
 func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name        string `json:"name" binding:"required"`
 			Description string `json:"description"`
@@ -59,7 +59,7 @@ func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 		}
 		// Cek kepemilikan device
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -68,7 +68,7 @@ func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 			Description: req.Description, TriggerType: req.TriggerType,
 			TriggerVal: req.TriggerVal, IsActive: true,
 		}
-		db.Create(&campaign)
+		udb.Create(&campaign)
 		c.JSON(http.StatusCreated, gin.H{"campaign": campaign})
 	}
 }
@@ -76,10 +76,10 @@ func createDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func getDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
-		if err := db.Where("id = ? AND user_id = ?", id, userID).
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).
 			Preload("Steps", func(d *gorm.DB) *gorm.DB { return d.Order("step_order ASC") }).
 			First(&campaign).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
@@ -87,7 +87,7 @@ func getDripCampaign(db *gorm.DB) gin.HandlerFunc {
 		}
 		// Count enrollments
 		var enrolled int64
-		db.Model(&models.DripEnrollment{}).Where("campaign_id = ?", id).Count(&enrolled)
+		udb.Model(&models.DripEnrollment{}).Where("campaign_id = ?", id).Count(&enrolled)
 		c.JSON(http.StatusOK, gin.H{"campaign": campaign, "enrolled": enrolled})
 	}
 }
@@ -95,16 +95,16 @@ func getDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func updateDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
 			return
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&campaign).Updates(snakeKeys(req))
+		udb.Model(&campaign).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"campaign": campaign, "message": "Diperbarui"})
 	}
 }
@@ -112,16 +112,16 @@ func updateDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func deleteDripCampaign(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.DripCampaign{})
+		result := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.DripCampaign{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
 			return
 		}
 		// Delete steps and enrollments
-		db.Where("campaign_id = ?", id).Delete(&models.DripStep{})
-		db.Where("campaign_id = ?", id).Delete(&models.DripEnrollment{})
+		udb.Where("campaign_id = ?", id).Delete(&models.DripStep{})
+		udb.Where("campaign_id = ?", id).Delete(&models.DripEnrollment{})
 		c.JSON(http.StatusOK, gin.H{"message": "Campaign dihapus"})
 	}
 }
@@ -129,10 +129,10 @@ func deleteDripCampaign(db *gorm.DB) gin.HandlerFunc {
 func addDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
 			return
 		}
@@ -156,7 +156,7 @@ func addDripStep(db *gorm.DB) gin.HandlerFunc {
 		// Auto step order
 		if req.StepOrder == 0 {
 			var count int64
-			db.Model(&models.DripStep{}).Where("campaign_id = ?", id).Count(&count)
+			udb.Model(&models.DripStep{}).Where("campaign_id = ?", id).Count(&count)
 			req.StepOrder = int(count) + 1
 		}
 		step := models.DripStep{
@@ -164,7 +164,7 @@ func addDripStep(db *gorm.DB) gin.HandlerFunc {
 			DelayHours: req.DelayHours, Type: req.Type,
 			Content: req.Content, MediaURL: req.MediaURL,
 		}
-		db.Create(&step)
+		udb.Create(&step)
 		c.JSON(http.StatusCreated, gin.H{"step": step})
 	}
 }
@@ -172,11 +172,11 @@ func addDripStep(db *gorm.DB) gin.HandlerFunc {
 func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		stepId, _ := strconv.ParseUint(c.Param("stepId"), 10, 32)
 		var step models.DripStep
-		if err := db.Joins("JOIN drip_campaigns ON drip_campaigns.id = drip_steps.campaign_id").
+		if err := udb.Joins("JOIN drip_campaigns ON drip_campaigns.id = drip_steps.campaign_id").
 			Where("drip_steps.id = ? AND drip_steps.campaign_id = ? AND drip_campaigns.user_id = ?", stepId, id, userID).
 			First(&step).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Step tidak ditemukan"})
@@ -210,7 +210,7 @@ func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 		if req.MediaURL != nil {
 			updates["media_url"] = *req.MediaURL
 		}
-		db.Model(&step).Updates(updates)
+		udb.Model(&step).Updates(updates)
 		c.JSON(http.StatusOK, gin.H{"step": step})
 	}
 }
@@ -218,17 +218,17 @@ func updateDripStep(db *gorm.DB) gin.HandlerFunc {
 func deleteDripStep(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		stepId, _ := strconv.ParseUint(c.Param("stepId"), 10, 32)
 		var step models.DripStep
-		if err := db.Joins("JOIN drip_campaigns ON drip_campaigns.id = drip_steps.campaign_id").
+		if err := udb.Joins("JOIN drip_campaigns ON drip_campaigns.id = drip_steps.campaign_id").
 			Where("drip_steps.id = ? AND drip_steps.campaign_id = ? AND drip_campaigns.user_id = ?", stepId, id, userID).
 			First(&step).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Step tidak ditemukan"})
 			return
 		}
-		db.Delete(&step)
+		udb.Delete(&step)
 		c.JSON(http.StatusOK, gin.H{"message": "Step dihapus"})
 	}
 }
@@ -236,10 +236,10 @@ func deleteDripStep(db *gorm.DB) gin.HandlerFunc {
 func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
 			return
 		}
@@ -258,7 +258,7 @@ func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 			}
 			// Get first step delay
 			var firstStep models.DripStep
-			db.Where("campaign_id = ? AND step_order = ?", id, 1).First(&firstStep)
+			udb.Where("campaign_id = ? AND step_order = ?", id, 1).First(&firstStep)
 			delay := 24
 			if firstStep.ID != 0 {
 				delay = firstStep.DelayHours
@@ -273,13 +273,13 @@ func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 				NextSendAt:  &nextSend,
 				EnrolledAt:  time.Now(),
 			}
-			if db.Create(&enrollment).Error == nil {
+			if udb.Create(&enrollment).Error == nil {
 				enrolled++
 			}
 		}
 
 		// Update campaign enrolled count
-		db.Model(&campaign).Update("enrolled", gorm.Expr("enrolled + ?", enrolled))
+		udb.Model(&campaign).Update("enrolled", gorm.Expr("enrolled + ?", enrolled))
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":  "Berhasil enroll",
@@ -293,10 +293,10 @@ func enrollDrip(db *gorm.DB) gin.HandlerFunc {
 func dripAnalytics(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var campaign models.DripCampaign
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&campaign).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Campaign tidak ditemukan"})
 			return
 		}
@@ -306,7 +306,7 @@ func dripAnalytics(db *gorm.DB) gin.HandlerFunc {
 			Count  int64
 		}
 		var rows []statusCount
-		db.Model(&models.DripEnrollment{}).Select("status, COUNT(*) AS count").
+		udb.Model(&models.DripEnrollment{}).Select("status, COUNT(*) AS count").
 			Where("campaign_id = ?", id).Group("status").Scan(&rows)
 		byStatus := gin.H{"active": int64(0), "completed": int64(0), "cancelled": int64(0)}
 		for _, r := range rows {
@@ -314,18 +314,18 @@ func dripAnalytics(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var steps []models.DripStep
-		db.Where("campaign_id = ?", id).Order("step_order ASC").Find(&steps)
+		udb.Where("campaign_id = ?", id).Order("step_order ASC").Find(&steps)
 		progress := make([]gin.H, 0, len(steps))
 		for _, st := range steps {
 			var reached int64
-			db.Model(&models.DripEnrollment{}).
+			udb.Model(&models.DripEnrollment{}).
 				Where("campaign_id = ? AND current_step >= ?", id, st.StepOrder).
 				Count(&reached)
 			progress = append(progress, gin.H{"stepOrder": st.StepOrder, "reached": reached})
 		}
 
 		var total int64
-		db.Model(&models.DripEnrollment{}).Where("campaign_id = ?", id).Count(&total)
+		udb.Model(&models.DripEnrollment{}).Where("campaign_id = ?", id).Count(&total)
 
 		c.JSON(http.StatusOK, gin.H{
 			"enrollmentsByStatus": byStatus,

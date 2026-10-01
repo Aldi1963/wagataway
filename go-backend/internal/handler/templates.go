@@ -24,9 +24,9 @@ func registerTemplateRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listTemplates(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var templates []models.MessageTemplate
-		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&templates)
+		udb.Where("user_id = ?", userID).Order("created_at DESC").Find(&templates)
 		c.JSON(http.StatusOK, gin.H{"templates": templates})
 	}
 }
@@ -34,7 +34,7 @@ func listTemplates(db *gorm.DB) gin.HandlerFunc {
 func createTemplate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name      string `json:"name" binding:"required"`
 			Category  string `json:"category"`
@@ -49,7 +49,7 @@ func createTemplate(db *gorm.DB) gin.HandlerFunc {
 			UserID: userID, Name: req.Name, Category: req.Category,
 			Content: req.Content, Variables: req.Variables,
 		}
-		db.Create(&tpl)
+		udb.Create(&tpl)
 		c.JSON(http.StatusCreated, gin.H{"template": tpl})
 	}
 }
@@ -57,16 +57,16 @@ func createTemplate(db *gorm.DB) gin.HandlerFunc {
 func updateTemplate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var tpl models.MessageTemplate
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&tpl).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&tpl).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Template tidak ditemukan"})
 			return
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&tpl).Updates(snakeKeys(req))
+		udb.Model(&tpl).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"template": tpl})
 	}
 }
@@ -74,9 +74,9 @@ func updateTemplate(db *gorm.DB) gin.HandlerFunc {
 func deleteTemplate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.MessageTemplate{})
+		result := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.MessageTemplate{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Template tidak ditemukan"})
 			return

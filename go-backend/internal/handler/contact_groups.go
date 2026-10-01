@@ -34,10 +34,10 @@ func registerContactGroupRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.M
 func getWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var group models.ContactGroup
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
 			return
 		}
@@ -55,10 +55,10 @@ func getWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var group models.ContactGroup
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
 			return
 		}
@@ -74,7 +74,7 @@ func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Template wajib diisi bila welcome DM diaktifkan"})
 			return
 		}
-		if err := db.Model(&group).Updates(map[string]interface{}{
+		if err := udb.Model(&group).Updates(map[string]interface{}{
 			"welcome_dm_enabled":  req.Enabled,
 			"welcome_dm_template": req.Template,
 		}).Error; err != nil {
@@ -92,9 +92,9 @@ func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
 func listContactGroups(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var groups []models.ContactGroup
-		db.Where("user_id = ?", userID).Order("name ASC").Find(&groups)
+		udb.Where("user_id = ?", userID).Order("name ASC").Find(&groups)
 		c.JSON(http.StatusOK, gin.H{"groups": groups})
 	}
 }
@@ -102,7 +102,7 @@ func listContactGroups(db *gorm.DB) gin.HandlerFunc {
 func createContactGroup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name        string `json:"name" binding:"required"`
 			Description string `json:"description"`
@@ -116,7 +116,7 @@ func createContactGroup(db *gorm.DB) gin.HandlerFunc {
 			UserID: userID, Name: req.Name,
 			Description: req.Description, Color: req.Color,
 		}
-		db.Create(&group)
+		udb.Create(&group)
 		c.JSON(http.StatusCreated, gin.H{"group": group})
 	}
 }
@@ -124,16 +124,16 @@ func createContactGroup(db *gorm.DB) gin.HandlerFunc {
 func updateContactGroup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var group models.ContactGroup
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
 			return
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&group).Updates(snakeKeys(req))
+		udb.Model(&group).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"group": group})
 	}
 }
@@ -141,10 +141,10 @@ func updateContactGroup(db *gorm.DB) gin.HandlerFunc {
 func deleteContactGroup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		db.Where("group_id = ?", id).Delete(&models.ContactGroupMember{})
-		db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ContactGroup{})
+		udb.Where("group_id = ?", id).Delete(&models.ContactGroupMember{})
+		udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ContactGroup{})
 		c.JSON(http.StatusOK, gin.H{"message": "Grup dihapus"})
 	}
 }

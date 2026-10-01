@@ -43,10 +43,10 @@ func main() {
 	}
 
 	// Row Level Security: lapis kedua di atas filter user_id aplikasi.
-	if err := database.ApplyRLS(db); err != nil {
+	if err := rls.ApplyRLS(db); err != nil {
 		log.Fatal().Err(err).Msg("Failed to apply RLS policies")
 	}
-	rls.Register(db)
+	rls.Register(db) // fail-closed: pastikan driver pgx-rls yang dipakai
 
 	log.Info().Msg("Database connected and migrated")
 

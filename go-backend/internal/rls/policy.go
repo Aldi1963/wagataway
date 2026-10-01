@@ -1,4 +1,4 @@
-package database
+package rls
 
 import (
 	"fmt"
@@ -58,15 +58,19 @@ const rlsUserMatch = "NULLIF(current_setting('app.current_user_id', true), '')::
 // NOTE: FORCE ROW LEVEL SECURITY is required because the application
 // connects as the table owner, which would otherwise bypass RLS entirely.
 func ApplyRLS(db *gorm.DB) error {
+	return applyRLSTables(db, userScopedTables)
+}
+
+// ApplyRLSTables menerapkan RLS hanya pada tabel yang disebut — dipakai test
+// yang tidak memigrasi seluruh skema produksi.
+func ApplyRLSTables(db *gorm.DB, tables []string) error {
 	exec := func(sql string) error {
 		if err := db.Exec(sql).Error; err != nil {
 			return fmt.Errorf("rls: %w (sql: %.80s)", err, sql)
 		}
 		return nil
 	}
-
-	// 1. Tables with a user_id column.
-	for _, tbl := range userScopedTables {
+	for _, tbl := range tables {
 		if err := exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", tbl)); err != nil {
 			return err
 		}
@@ -81,6 +85,19 @@ func ApplyRLS(db *gorm.DB) error {
 		if err := exec(policy); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func applyRLSTables(db *gorm.DB, tables []string) error {
+	if err := ApplyRLSTables(db, tables); err != nil {
+		return err
+	}
+	exec := func(sql string) error {
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("rls: %w (sql: %.80s)", err, sql)
+		}
+		return nil
 	}
 
 	// 2. users table: a user may only touch their own row.

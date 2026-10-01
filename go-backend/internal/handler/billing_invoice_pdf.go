@@ -22,9 +22,9 @@ import (
 func getInvoicePDF(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var tx models.Transaction
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).
 			Preload("Plan").Preload("User").First(&tx).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Transaksi tidak ditemukan"})
 			return

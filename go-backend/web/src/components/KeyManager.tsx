@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -310,16 +311,17 @@ export function KeyManager({ onUseKey }: { onUseKey?: (key: string) => void }) {
               </div>
               <div>
                 <label className="text-xs">Masa berlaku</label>
-                <select
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                <Dropdown
+                  className="mt-1"
                   value={expiry}
-                  onChange={(e) => setExpiry(e.target.value)}
-                >
-                  <option value="never">Tanpa batas waktu</option>
-                  <option value="30">30 hari</option>
-                  <option value="90">90 hari</option>
-                  <option value="365">1 tahun</option>
-                </select>
+                  onChange={setExpiry}
+                  options={[
+                    { value: "never", label: "Tanpa batas waktu" },
+                    { value: "30", label: "30 hari" },
+                    { value: "90", label: "90 hari" },
+                    { value: "365", label: "1 tahun" },
+                  ]}
+                />
               </div>
               <p className="text-xs text-muted-foreground">
                 Key penuh hanya ditampilkan sekali setelah dibuat. Simpan di tempat aman.

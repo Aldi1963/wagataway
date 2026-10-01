@@ -24,13 +24,13 @@ func registerNotificationRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listNotifications(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var notifs []models.Notification
-		db.Where("user_id = ? OR user_id IS NULL", userID).
+		udb.Where("user_id = ? OR user_id IS NULL", userID).
 			Order("created_at DESC").Limit(50).Find(&notifs)
 
 		var unread int64
-		db.Model(&models.Notification{}).
+		udb.Model(&models.Notification{}).
 			Where("(user_id = ? OR user_id IS NULL) AND is_read = ?", userID, false).
 			Count(&unread)
 
@@ -41,9 +41,9 @@ func listNotifications(db *gorm.DB) gin.HandlerFunc {
 func markNotifRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		db.Model(&models.Notification{}).Where("id = ? AND user_id = ?", id, userID).Update("is_read", true)
+		udb.Model(&models.Notification{}).Where("id = ? AND user_id = ?", id, userID).Update("is_read", true)
 		c.JSON(http.StatusOK, gin.H{"message": "Ditandai dibaca"})
 	}
 }
@@ -51,8 +51,8 @@ func markNotifRead(db *gorm.DB) gin.HandlerFunc {
 func markAllNotifRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		db.Model(&models.Notification{}).
+		udb := rls.Scoped(db, userID)
+		udb.Model(&models.Notification{}).
 			Where("(user_id = ? OR user_id IS NULL) AND is_read = ?", userID, false).
 			Update("is_read", true)
 		c.JSON(http.StatusOK, gin.H{"message": "Semua ditandai dibaca"})
@@ -62,9 +62,9 @@ func markAllNotifRead(db *gorm.DB) gin.HandlerFunc {
 func deleteNotification(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Notification{})
+		udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Notification{})
 		c.JSON(http.StatusOK, gin.H{"message": "Notifikasi dihapus"})
 	}
 }

@@ -20,6 +20,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -274,7 +275,7 @@ func fetchGithubPrimaryEmail(accessToken string) string {
 }
 
 // GET /api/auth/oauth/:provider/callback — callback dari provider.
-func handleOAuthCallback(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+func handleOAuthCallback(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		provider := strings.ToLower(c.Param("provider"))
 		p, ok := oauthProviders()[provider]
@@ -335,6 +336,7 @@ func handleOAuthCallback(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		issueSession(db, user.ID, jti, c)
+		trackLogin(db, waManager, user, c)
 
 		base := strings.TrimRight(strings.TrimSpace(cfg.AppURL), "/")
 		if base == "" {
@@ -418,11 +420,11 @@ func handleOAuthStatus(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func registerOAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+func registerOAuthRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) {
 	auth := rg.Group("/auth")
 	{
 		auth.GET("/oauth/status", handleOAuthStatus(cfg, db))
 		auth.GET("/oauth/:provider", handleOAuthStart(cfg, db))
-		auth.GET("/oauth/:provider/callback", handleOAuthCallback(cfg, db))
+		auth.GET("/oauth/:provider/callback", handleOAuthCallback(cfg, db, waManager))
 	}
 }

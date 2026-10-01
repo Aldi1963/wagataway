@@ -44,19 +44,19 @@ func generateAffiliateCode(db *gorm.DB) string {
 func getAffiliateInfo(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var aff models.Affiliate
-		if err := db.Where("user_id = ?", userID).First(&aff).Error; err != nil {
+		if err := udb.Where("user_id = ?", userID).First(&aff).Error; err != nil {
 			c.JSON(http.StatusOK, gin.H{"affiliate": nil})
 			return
 		}
 		var pending, paid float64
-		db.Model(&models.AffiliateEarning{}).Where("affiliate_id = ? AND status = ?", aff.ID, "pending").
+		udb.Model(&models.AffiliateEarning{}).Where("affiliate_id = ? AND status = ?", aff.ID, "pending").
 			Select("COALESCE(SUM(amount),0)").Scan(&pending)
-		db.Model(&models.AffiliateEarning{}).Where("affiliate_id = ? AND status = ?", aff.ID, "paid").
+		udb.Model(&models.AffiliateEarning{}).Where("affiliate_id = ? AND status = ?", aff.ID, "paid").
 			Select("COALESCE(SUM(amount),0)").Scan(&paid)
 		var referrals int64
-		db.Model(&models.AffiliateEarning{}).Where("affiliate_id = ?", aff.ID).Count(&referrals)
+		udb.Model(&models.AffiliateEarning{}).Where("affiliate_id = ?", aff.ID).Count(&referrals)
 		c.JSON(http.StatusOK, gin.H{
 			"affiliate": aff,
 			"stats": gin.H{
@@ -72,9 +72,9 @@ func getAffiliateInfo(db *gorm.DB) gin.HandlerFunc {
 func createOrGetAffiliate(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var aff models.Affiliate
-		if err := db.Where("user_id = ?", userID).First(&aff).Error; err == nil {
+		if err := udb.Where("user_id = ?", userID).First(&aff).Error; err == nil {
 			c.JSON(http.StatusOK, gin.H{"affiliate": aff})
 			return
 		}
@@ -85,16 +85,16 @@ func createOrGetAffiliate(db *gorm.DB) gin.HandlerFunc {
 		code := strings.ToUpper(strings.TrimSpace(req.Code))
 		if code != "" {
 			var count int64
-			db.Model(&models.Affiliate{}).Where("code = ?", code).Count(&count)
+			udb.Model(&models.Affiliate{}).Where("code = ?", code).Count(&count)
 			if count > 0 {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Kode sudah dipakai"})
 				return
 			}
 		} else {
-			code = generateAffiliateCode(db)
+			code = generateAffiliateCode(udb)
 		}
 		aff = models.Affiliate{UserID: userID, Code: code, CommissionRate: 0.2}
-		if err := db.Create(&aff).Error; err != nil {
+		if err := udb.Create(&aff).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal membuat kode afiliasi"})
 			return
 		}
@@ -106,14 +106,14 @@ func createOrGetAffiliate(db *gorm.DB) gin.HandlerFunc {
 func listAffiliateEarnings(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var aff models.Affiliate
-		if err := db.Where("user_id = ?", userID).First(&aff).Error; err != nil {
+		if err := udb.Where("user_id = ?", userID).First(&aff).Error; err != nil {
 			c.JSON(http.StatusOK, gin.H{"earnings": []models.AffiliateEarning{}, "total": 0})
 			return
 		}
 		page, limit := getPageLimit(c)
-		query := db.Where("affiliate_id = ?", aff.ID)
+		query := udb.Where("affiliate_id = ?", aff.ID)
 		if status := c.Query("status"); status == "pending" || status == "paid" {
 			query = query.Where("status = ?", status)
 		}

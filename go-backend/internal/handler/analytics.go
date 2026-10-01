@@ -22,26 +22,26 @@ func registerAnalyticsRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func analyticsOverview(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		today := time.Now().Truncate(24 * time.Hour)
 
 		var totalMsg int64
-		db.Model(&models.Message{}).Where("user_id = ?", userID).Count(&totalMsg)
+		udb.Model(&models.Message{}).Where("user_id = ?", userID).Count(&totalMsg)
 
 		var todayMsg int64
-		db.Model(&models.Message{}).Where("user_id = ? AND created_at >= ?", userID, today).Count(&todayMsg)
+		udb.Model(&models.Message{}).Where("user_id = ? AND created_at >= ?", userID, today).Count(&todayMsg)
 
 		var sentMsg int64
-		db.Model(&models.Message{}).Where("user_id = ? AND status = ?", userID, "sent").Count(&sentMsg)
+		udb.Model(&models.Message{}).Where("user_id = ? AND status = ?", userID, "sent").Count(&sentMsg)
 
 		var failedMsg int64
-		db.Model(&models.Message{}).Where("user_id = ? AND status = ?", userID, "failed").Count(&failedMsg)
+		udb.Model(&models.Message{}).Where("user_id = ? AND status = ?", userID, "failed").Count(&failedMsg)
 
 		var totalContacts int64
-		db.Model(&models.Contact{}).Where("user_id = ?", userID).Count(&totalContacts)
+		udb.Model(&models.Contact{}).Where("user_id = ?", userID).Count(&totalContacts)
 
 		var activeDevices int64
-		db.Model(&models.Device{}).Where("user_id = ? AND status = ?", userID, "connected").Count(&activeDevices)
+		udb.Model(&models.Device{}).Where("user_id = ? AND status = ?", userID, "connected").Count(&activeDevices)
 
 		c.JSON(http.StatusOK, gin.H{
 			"totalMessages":  totalMsg,
@@ -58,7 +58,7 @@ func analyticsOverview(db *gorm.DB) gin.HandlerFunc {
 func analyticsMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		days := 7
 		if q := c.Query("days"); q == "30" {
 			days = 30
@@ -75,8 +75,8 @@ func analyticsMessages(db *gorm.DB) gin.HandlerFunc {
 			nextDay := day.Add(24 * time.Hour)
 
 			var sent, failed int64
-			db.Model(&models.Message{}).Where("user_id = ? AND status = ? AND created_at >= ? AND created_at < ?", userID, "sent", day, nextDay).Count(&sent)
-			db.Model(&models.Message{}).Where("user_id = ? AND status = ? AND created_at >= ? AND created_at < ?", userID, "failed", day, nextDay).Count(&failed)
+			udb.Model(&models.Message{}).Where("user_id = ? AND status = ? AND created_at >= ? AND created_at < ?", userID, "sent", day, nextDay).Count(&sent)
+			udb.Model(&models.Message{}).Where("user_id = ? AND status = ? AND created_at >= ? AND created_at < ?", userID, "failed", day, nextDay).Count(&failed)
 
 			stats[i] = DayStat{
 				Date:   day.Format("2006-01-02"),

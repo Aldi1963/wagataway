@@ -265,10 +265,10 @@ func createTrialSubscription(db *gorm.DB, user *models.User) bool {
 func handleGetMe(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var user models.User
-		if err := db.First(&user, userID).Error; err != nil {
+		if err := udb.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "User tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -331,7 +331,7 @@ func normalizeNotifyWA(raw string) (string, error) {
 func handleUpdateMe(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req updateMeRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -361,7 +361,7 @@ func handleUpdateMe(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := db.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+		if err := udb.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan perubahan", "code": "SERVER_ERROR"})
 			return
 		}
@@ -378,7 +378,7 @@ type changePasswordRequest struct {
 func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req changePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -387,7 +387,7 @@ func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var user models.User
-		if err := db.First(&user, userID).Error; err != nil {
+		if err := udb.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "User tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -403,7 +403,7 @@ func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := db.Model(&user).Update("password", string(hashed)).Error; err != nil {
+		if err := udb.Model(&user).Update("password", string(hashed)).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengubah password", "code": "SERVER_ERROR"})
 			return
 		}

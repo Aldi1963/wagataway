@@ -36,9 +36,9 @@ func verifyDeviceOwner(db *gorm.DB, deviceID uint, userID uint) bool {
 func listAIReplyConfigs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var cfgs []models.AIReplyConfig
-		query := db.Where("user_id = ?", userID).Order("created_at DESC")
+		query := udb.Where("user_id = ?", userID).Order("created_at DESC")
 		if deviceID := c.Query("deviceId"); deviceID != "" {
 			query = query.Where("device_id = ?", deviceID)
 		}
@@ -50,7 +50,7 @@ func listAIReplyConfigs(db *gorm.DB) gin.HandlerFunc {
 func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			DeviceID        uint   `json:"deviceId" binding:"required"`
 			SystemPrompt    string `json:"systemPrompt"`
@@ -61,7 +61,7 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		if !verifyDeviceOwner(db, req.DeviceID, userID) {
+		if !verifyDeviceOwner(udb, req.DeviceID, userID) {
 			c.JSON(http.StatusForbidden, gin.H{"message": "Device tidak ditemukan"})
 			return
 		}
@@ -78,7 +78,7 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 			IgnoreGroups:    ignoreGroups,
 			IsEnabled:       true,
 		}
-		if err := db.Create(&cfg).Error; err != nil {
+		if err := udb.Create(&cfg).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
 			return
 		}
@@ -89,11 +89,11 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 func updateAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var cfg models.AIReplyConfig
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&cfg).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&cfg).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Config tidak ditemukan"})
 			return
 		}
@@ -112,12 +112,12 @@ func updateAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 			case float64:
 				devUint = uint(v)
 			}
-			if devUint != 0 && !verifyDeviceOwner(db, devUint, userID) {
+			if devUint != 0 && !verifyDeviceOwner(udb, devUint, userID) {
 				c.JSON(http.StatusForbidden, gin.H{"message": "Device tidak ditemukan"})
 				return
 			}
 		}
-		db.Model(&cfg).Updates(snakeKeys(req))
+		udb.Model(&cfg).Updates(snakeKeys(req))
 		c.JSON(http.StatusOK, gin.H{"config": cfg, "message": "Diperbarui"})
 	}
 }
@@ -125,9 +125,9 @@ func updateAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 func deleteAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.AIReplyConfig{})
+		result := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.AIReplyConfig{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Config tidak ditemukan"})
 			return
@@ -139,16 +139,16 @@ func deleteAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 func toggleAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var cfg models.AIReplyConfig
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&cfg).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&cfg).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Config tidak ditemukan"})
 			return
 		}
 		newVal := !cfg.IsEnabled
-		db.Model(&cfg).Update("is_enabled", newVal)
+		udb.Model(&cfg).Update("is_enabled", newVal)
 		c.JSON(http.StatusOK, gin.H{"isEnabled": newVal})
 	}
 }

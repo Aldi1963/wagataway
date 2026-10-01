@@ -24,9 +24,9 @@ func registerCannedResponseRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listCanned(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var items []models.CannedResponse
-		db.Where("user_id = ?", userID).Order("title ASC").Find(&items)
+		udb.Where("user_id = ?", userID).Order("title ASC").Find(&items)
 		c.JSON(http.StatusOK, gin.H{"responses": items})
 	}
 }
@@ -34,7 +34,7 @@ func listCanned(db *gorm.DB) gin.HandlerFunc {
 func createCanned(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Title    string `json:"title" binding:"required"`
 			Shortcut string `json:"shortcut"`
@@ -49,7 +49,7 @@ func createCanned(db *gorm.DB) gin.HandlerFunc {
 			UserID: userID, Title: req.Title, Shortcut: req.Shortcut,
 			Content: req.Content, Category: req.Category,
 		}
-		db.Create(&item)
+		udb.Create(&item)
 		c.JSON(http.StatusCreated, gin.H{"response": item})
 	}
 }
@@ -57,16 +57,16 @@ func createCanned(db *gorm.DB) gin.HandlerFunc {
 func updateCanned(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var item models.CannedResponse
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&item).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&item).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Tidak ditemukan"})
 			return
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
-		db.Model(&item).Updates(req)
+		udb.Model(&item).Updates(req)
 		c.JSON(http.StatusOK, gin.H{"response": item})
 	}
 }
@@ -74,9 +74,9 @@ func updateCanned(db *gorm.DB) gin.HandlerFunc {
 func deleteCanned(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.CannedResponse{})
+		udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.CannedResponse{})
 		c.JSON(http.StatusOK, gin.H{"message": "Dihapus"})
 	}
 }

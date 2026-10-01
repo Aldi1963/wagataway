@@ -101,9 +101,9 @@ func integrationDeviceOwned(db *gorm.DB, userID, deviceID uint) bool {
 func listIntegrations(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var list []models.Integration
-		db.Where("user_id = ?", userID).
+		udb.Where("user_id = ?", userID).
 			Preload("Device", func(db *gorm.DB) *gorm.DB { return db.Select("id", "name", "status") }).
 			Order("created_at DESC").Find(&list)
 		out := make([]integrationOut, 0, len(list))
@@ -117,7 +117,7 @@ func listIntegrations(db *gorm.DB) gin.HandlerFunc {
 func createIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name     string `json:"name"`
 			Platform string `json:"platform"`
@@ -134,7 +134,7 @@ func createIntegration(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "nama, platform, dan deviceId wajib diisi", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !integrationDeviceOwned(db, userID, req.DeviceID) {
+		if !integrationDeviceOwned(udb, userID, req.DeviceID) {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -152,12 +152,12 @@ func createIntegration(db *gorm.DB) gin.HandlerFunc {
 			Template: req.Template,
 			IsActive: true,
 		}
-		if err := db.Create(&in).Error; err != nil {
+		if err := udb.Create(&in).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan integrasi", "code": "DB_ERROR"})
 			return
 		}
 		var d models.Device
-		_ = db.Select("id", "name").Where("id = ?", in.DeviceID).First(&d).Error
+		_ = udb.Select("id", "name").Where("id = ?", in.DeviceID).First(&d).Error
 		c.JSON(http.StatusCreated, gin.H{
 			"message":      "Integrasi dibuat",
 			"integration":  toIntegrationOut(in, d.Name),
@@ -171,13 +171,13 @@ func createIntegration(db *gorm.DB) gin.HandlerFunc {
 func getIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
-		in := integrationOwned(db, userID, uint(id))
+		in := integrationOwned(udb, userID, uint(id))
 		if in == nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Integrasi tidak ditemukan", "code": "NOT_FOUND"})
 			return
@@ -195,13 +195,13 @@ func getIntegration(db *gorm.DB) gin.HandlerFunc {
 func updateIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
-		in := integrationOwned(db, userID, uint(id))
+		in := integrationOwned(udb, userID, uint(id))
 		if in == nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Integrasi tidak ditemukan", "code": "NOT_FOUND"})
 			return
@@ -225,7 +225,7 @@ func updateIntegration(db *gorm.DB) gin.HandlerFunc {
 			updates["name"] = strings.TrimSpace(*req.Name)
 		}
 		if req.DeviceID != nil {
-			if *req.DeviceID == 0 || !integrationDeviceOwned(db, userID, *req.DeviceID) {
+			if *req.DeviceID == 0 || !integrationDeviceOwned(udb, userID, *req.DeviceID) {
 				c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 				return
 			}
@@ -238,12 +238,12 @@ func updateIntegration(db *gorm.DB) gin.HandlerFunc {
 			updates["is_active"] = *req.IsActive
 		}
 		if len(updates) > 0 {
-			if err := db.Model(in).Updates(updates).Error; err != nil {
+			if err := udb.Model(in).Updates(updates).Error; err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan", "code": "DB_ERROR"})
 				return
 			}
 		}
-		updated := integrationOwned(db, userID, uint(id))
+		updated := integrationOwned(udb, userID, uint(id))
 		c.JSON(http.StatusOK, gin.H{"message": "Integrasi diperbarui", "integration": toIntegrationOut(*updated, updated.Device.Name)})
 	}
 }
@@ -251,18 +251,18 @@ func updateIntegration(db *gorm.DB) gin.HandlerFunc {
 func deleteIntegration(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
-		in := integrationOwned(db, userID, uint(id))
+		in := integrationOwned(udb, userID, uint(id))
 		if in == nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Integrasi tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
-		if err := db.Delete(in).Error; err != nil {
+		if err := udb.Delete(in).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghapus", "code": "DB_ERROR"})
 			return
 		}
@@ -273,13 +273,13 @@ func deleteIntegration(db *gorm.DB) gin.HandlerFunc {
 func regenerateIntegrationToken(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
-		in := integrationOwned(db, userID, uint(id))
+		in := integrationOwned(udb, userID, uint(id))
 		if in == nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Integrasi tidak ditemukan", "code": "NOT_FOUND"})
 			return
@@ -289,7 +289,7 @@ func regenerateIntegrationToken(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat token", "code": "TOKEN_ERROR"})
 			return
 		}
-		if err := db.Model(in).Update("token", token).Error; err != nil {
+		if err := udb.Model(in).Update("token", token).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan token", "code": "DB_ERROR"})
 			return
 		}
@@ -305,13 +305,13 @@ func regenerateIntegrationToken(db *gorm.DB) gin.HandlerFunc {
 func listIntegrationLogs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "ID tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
-		in := integrationOwned(db, userID, uint(id))
+		in := integrationOwned(udb, userID, uint(id))
 		if in == nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Integrasi tidak ditemukan", "code": "NOT_FOUND"})
 			return
@@ -321,7 +321,7 @@ func listIntegrationLogs(db *gorm.DB) gin.HandlerFunc {
 			limit = l
 		}
 		var logs []models.IntegrationLog
-		db.Where("integration_id = ?", in.ID).Order("id DESC").Limit(limit).Find(&logs)
+		udb.Where("integration_id = ?", in.ID).Order("id DESC").Limit(limit).Find(&logs)
 		c.JSON(http.StatusOK, gin.H{"logs": logs})
 	}
 }

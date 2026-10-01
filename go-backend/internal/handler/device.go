@@ -37,10 +37,10 @@ func registerDeviceRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager
 func listDevices(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var devices []models.Device
-		if err := db.Where("user_id = ?", userID).Order("created_at DESC").Find(&devices).Error; err != nil {
+		if err := udb.Where("user_id = ?", userID).Order("created_at DESC").Find(&devices).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memuat perangkat", "code": "DB_ERROR"})
 			return
 		}
@@ -51,7 +51,7 @@ func listDevices(db *gorm.DB) gin.HandlerFunc {
 			Count    int64
 		}
 		var aggs []sentAgg
-		if err := db.Model(&models.Message{}).
+		if err := udb.Model(&models.Message{}).
 			Select("device_id, COUNT(*) AS count").
 			Where("user_id = ?", userID).
 			Group("device_id").
@@ -72,7 +72,7 @@ func listDevices(db *gorm.DB) gin.HandlerFunc {
 func createDevice(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			Name       string `json:"name" binding:"required"`
@@ -106,7 +106,7 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 		}
 		device.WebhookSecret = secret
 
-		if err := db.Create(&device).Error; err != nil {
+		if err := udb.Create(&device).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat perangkat", "code": "CREATE_ERROR"})
 			return
 		}
@@ -118,11 +118,11 @@ func createDevice(db *gorm.DB) gin.HandlerFunc {
 func getDevice(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -134,11 +134,11 @@ func getDevice(db *gorm.DB) gin.HandlerFunc {
 func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -192,11 +192,11 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			updates["max_retries"] = *req.MaxRetries
 		}
 
-		db.Model(&device).Updates(updates)
+		udb.Model(&device).Updates(updates)
 
 		// Muat ulang agar respons memuat nilai terbaru (termasuk webhook_secret
 		// bila baru di-backfill) untuk ditampilkan di modal Edit Perangkat.
-		db.Where("id = ? AND user_id = ?", id, userID).First(&device)
+		udb.Where("id = ? AND user_id = ?", id, userID).First(&device)
 
 		// Terapkan perubahan flag ke sesi WhatsApp aktif tanpa restart
 		if req.AutoOnline != nil || req.ReadReceipts != nil || req.RejectCall != nil || req.TypingIndicator != nil {
@@ -213,11 +213,11 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func regenerateWebhookSecret(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -227,7 +227,7 @@ func regenerateWebhookSecret(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat secret", "code": "GENERATE_ERROR"})
 			return
 		}
-		if err := db.Model(&device).Update("webhook_secret", secret).Error; err != nil {
+		if err := udb.Model(&device).Update("webhook_secret", secret).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan secret", "code": "DB_ERROR"})
 			return
 		}
@@ -239,11 +239,11 @@ func regenerateWebhookSecret(db *gorm.DB) gin.HandlerFunc {
 func deleteDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -252,7 +252,7 @@ func deleteDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		wm.Disconnect(uint(id))
 
 		// Soft delete
-		db.Delete(&device)
+		udb.Delete(&device)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Perangkat berhasil dihapus"})
 	}
@@ -261,11 +261,11 @@ func deleteDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func connectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -282,18 +282,18 @@ func connectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func disconnectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
 
 		wm.Disconnect(uint(id))
 
-		db.Model(&device).Update("status", "disconnected")
+		udb.Model(&device).Update("status", "disconnected")
 
 		c.JSON(http.StatusOK, gin.H{"message": "Perangkat berhasil diputuskan", "status": "disconnected"})
 	}
@@ -302,11 +302,11 @@ func disconnectDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func getDeviceQR(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -327,11 +327,11 @@ func getDeviceQR(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func getDeviceStatus(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -347,17 +347,17 @@ func getDeviceStatus(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func listBotDeliveries(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
 
 		page, limit := getPageLimit(c)
-		query := db.Where("user_id = ? AND device_id = ? AND event = ?", userID, device.ID, "wamp.bot")
+		query := udb.Where("user_id = ? AND device_id = ? AND event = ?", userID, device.ID, "wamp.bot")
 		var total int64
 		query.Model(&models.WebhookDeliveryLog{}).Count(&total)
 		var items []models.WebhookDeliveryLog

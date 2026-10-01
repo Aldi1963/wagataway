@@ -18,11 +18,11 @@ import (
 func requestPairCode(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}

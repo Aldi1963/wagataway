@@ -24,9 +24,9 @@ func registerGroupRuleRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listGroupRules(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		if deviceID := c.Query("device_id"); deviceID != "" {
 			query = query.Where("device_id = ?", deviceID)
 		}
@@ -55,7 +55,7 @@ type groupRuleReq struct {
 func createGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req groupRuleReq
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
@@ -65,7 +65,7 @@ func createGroupRule(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Device dan Group JID wajib diisi"})
 			return
 		}
-		if !deviceBelongsToUser(db, req.DeviceID, userID) {
+		if !deviceBelongsToUser(udb, req.DeviceID, userID) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Device tidak valid"})
 			return
 		}
@@ -81,7 +81,7 @@ func createGroupRule(db *gorm.DB) gin.HandlerFunc {
 		if req.IsActive != nil {
 			rule.IsActive = *req.IsActive
 		}
-		if err := db.Create(&rule).Error; err != nil {
+		if err := udb.Create(&rule).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal membuat aturan"})
 			return
 		}
@@ -92,9 +92,9 @@ func createGroupRule(db *gorm.DB) gin.HandlerFunc {
 func updateGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var rule models.GroupRule
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&rule).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&rule).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Aturan tidak ditemukan"})
 			return
 		}
@@ -104,7 +104,7 @@ func updateGroupRule(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		if req.DeviceID != 0 {
-			if !deviceBelongsToUser(db, req.DeviceID, userID) {
+			if !deviceBelongsToUser(udb, req.DeviceID, userID) {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Device tidak valid"})
 				return
 			}
@@ -119,7 +119,7 @@ func updateGroupRule(db *gorm.DB) gin.HandlerFunc {
 		if req.IsActive != nil {
 			rule.IsActive = *req.IsActive
 		}
-		db.Save(&rule)
+		udb.Save(&rule)
 		c.JSON(http.StatusOK, gin.H{"rule": rule})
 	}
 }
@@ -127,8 +127,8 @@ func updateGroupRule(db *gorm.DB) gin.HandlerFunc {
 func deleteGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		res := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.GroupRule{})
+		udb := rls.Scoped(db, userID)
+		res := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.GroupRule{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Aturan tidak ditemukan"})
 			return
@@ -140,14 +140,14 @@ func deleteGroupRule(db *gorm.DB) gin.HandlerFunc {
 func toggleGroupRule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var rule models.GroupRule
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&rule).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&rule).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Aturan tidak ditemukan"})
 			return
 		}
 		rule.IsActive = !rule.IsActive
-		db.Save(&rule)
+		udb.Save(&rule)
 		c.JSON(http.StatusOK, gin.H{"rule": rule})
 	}
 }

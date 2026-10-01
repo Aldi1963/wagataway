@@ -3,6 +3,7 @@ package database
 import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/quota"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/rs/zerolog/log"
 	"gorm.io/driver/postgres"
@@ -11,7 +12,14 @@ import (
 )
 
 func Connect(dsn string) (*gorm.DB, error) {
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	// NOTE: the pgx-rls driver (registered by internal/rls) wraps pgx and
+	// enforces Row Level Security per physical connection. Never open the
+	// DB with the plain "pgx" driver: rls.Register at startup fails
+	// closed if the wrapper is missing.
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DriverName: rls.DriverName,
+		DSN:        dsn,
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {

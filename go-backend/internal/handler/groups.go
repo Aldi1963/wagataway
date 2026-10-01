@@ -27,7 +27,7 @@ func registerGroupRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager)
 func listWAGroups(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var deviceID uint
 		if n, err := strconv.ParseUint(c.Query("deviceId"), 10, 32); err != nil || n == 0 {
@@ -36,7 +36,7 @@ func listWAGroups(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		} else {
 			deviceID = uint(n)
 		}
-		if !checkDeviceOwnership(c, db, userID, deviceID) {
+		if !checkDeviceOwnership(c, udb, userID, deviceID) {
 			return
 		}
 
@@ -63,7 +63,7 @@ func listWAGroups(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func createWAGroup(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID     uint     `json:"deviceId" binding:"required"`
@@ -82,7 +82,7 @@ func createWAGroup(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Maksimal 100 peserta per request", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
@@ -107,7 +107,7 @@ func createWAGroup(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func updateGroupParticipants(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID     uint     `json:"deviceId" binding:"required"`
@@ -126,7 +126,7 @@ func updateGroupParticipants(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc 
 			c.JSON(http.StatusBadRequest, gin.H{"message": "participants butuh 1-100 nomor", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
@@ -143,7 +143,7 @@ func updateGroupParticipants(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc 
 func updateGroupMeta(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -162,7 +162,7 @@ func updateGroupMeta(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Nama grup maksimal 25 karakter (batasan WhatsApp)", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 

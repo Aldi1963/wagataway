@@ -59,9 +59,9 @@ func currentJTI(c *gin.Context) string {
 func handleListSessions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var sessions []models.Session
-		if err := db.Where("revoked_at IS NULL").Order("last_seen DESC").Limit(50).Find(&sessions).Error; err != nil {
+		if err := udb.Where("revoked_at IS NULL").Order("last_seen DESC").Limit(50).Find(&sessions).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memuat sesi"})
 			return
 		}
@@ -81,14 +81,14 @@ func handleListSessions(db *gorm.DB) gin.HandlerFunc {
 func handleRevokeSession(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var s models.Session
-		if err := db.Where("id = ? AND revoked_at IS NULL", c.Param("id")).First(&s).Error; err != nil {
+		if err := udb.Where("id = ? AND revoked_at IS NULL", c.Param("id")).First(&s).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Sesi tidak ditemukan"})
 			return
 		}
 		now := time.Now()
-		db.Model(&s).Update("revoked_at", now)
+		udb.Model(&s).Update("revoked_at", now)
 		c.JSON(http.StatusOK, gin.H{"message": "Sesi dicabut"})
 	}
 }
@@ -96,9 +96,9 @@ func handleRevokeSession(db *gorm.DB) gin.HandlerFunc {
 func handleRevokeOtherSessions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		jti := currentJTI(c)
-		q := db.Model(&models.Session{}).Where("revoked_at IS NULL")
+		q := udb.Model(&models.Session{}).Where("revoked_at IS NULL")
 		if jti != "" {
 			q = q.Where("jti <> ?", jti)
 		}

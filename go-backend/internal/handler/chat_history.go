@@ -50,7 +50,7 @@ func normalizePhoneVariants(phone string) []string {
 func getChatHistory(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		deviceID, err := strconv.ParseUint(c.Query("deviceId"), 10, 32)
 		if err != nil || deviceID == 0 {
@@ -89,7 +89,7 @@ func getChatHistory(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Pastikan device milik user
-		if !checkDeviceOwnership(c, db, userID, uint(deviceID)) {
+		if !checkDeviceOwnership(c, udb, userID, uint(deviceID)) {
 			return
 		}
 
@@ -97,7 +97,7 @@ func getChatHistory(db *gorm.DB) gin.HandlerFunc {
 
 		// 1. Chat inbox (in & out)
 		var inbox []models.ChatInbox
-		q := db.Where("user_id = ? AND device_id = ? AND phone IN ?", userID, deviceID, variants)
+		q := udb.Where("user_id = ? AND device_id = ? AND phone IN ?", userID, deviceID, variants)
 		if hasBefore {
 			q = q.Where("created_at < ?", before)
 		}
@@ -115,7 +115,7 @@ func getChatHistory(db *gorm.DB) gin.HandlerFunc {
 
 		// 2. Pesan API/blast (outgoing)
 		var msgs []models.Message
-		q2 := db.Where("user_id = ? AND device_id = ? AND \"to\" IN ?", userID, deviceID, variants)
+		q2 := udb.Where("user_id = ? AND device_id = ? AND \"to\" IN ?", userID, deviceID, variants)
 		if hasBefore {
 			q2 = q2.Where("created_at < ?", before)
 		}

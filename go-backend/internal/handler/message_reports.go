@@ -22,9 +22,9 @@ func registerMessageReportRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func getCampaignReport(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
-		query := db.Where("user_id = ? AND campaign_id = ?", userID, c.Param("id"))
+		query := udb.Where("user_id = ? AND campaign_id = ?", userID, c.Param("id"))
 		if status := c.Query("status"); status != "" {
 			query = query.Where("status = ?", status)
 		}
@@ -45,7 +45,7 @@ func getCampaignReport(db *gorm.DB) gin.HandlerFunc {
 func getReportSummary(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		type row struct {
 			CampaignID string `json:"campaignId"`
 			Total      int64  `json:"total"`
@@ -54,7 +54,7 @@ func getReportSummary(db *gorm.DB) gin.HandlerFunc {
 			Read       int64  `json:"read"`
 		}
 		var rows []row
-		db.Model(&models.MessageReport{}).
+		udb.Model(&models.MessageReport{}).
 			Select(`campaign_id,
 				COUNT(*) AS total,
 				SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,

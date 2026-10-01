@@ -53,7 +53,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 	{
 		// ── Public routes (no auth) ────────────────────────────────────────
 		registerAuthRoutes(api, cfg, db, waManager)
-		registerOAuthRoutes(api, cfg, db)
+		registerOAuthRoutes(api, cfg, db, waManager)
 		registerTeamLoginRoute(api, cfg, db) // POST /api/auth/team-login
 		registerPublicRoutes(api, cfg, db)
 		registerOtpAuthRoutes(api, cfg, db)

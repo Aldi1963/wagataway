@@ -121,17 +121,23 @@ export default function Login() {
                 Kode 2FA
               </label>
               <Input
-                placeholder="123456"
+                placeholder="123456 atau kode cadangan"
                 value={twofaCode}
                 onChange={(e) =>
-                  setTwofaCode(e.target.value.replace(/\D/g, "").slice(0, 8))
+                  setTwofaCode(
+                    e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8),
+                  )
                 }
                 required
                 autoFocus
-                inputMode="numeric"
+                inputMode="text"
                 autoComplete="one-time-code"
-                className="font-mono text-center text-xl tracking-[0.35em] h-12"
+                className="font-mono text-center text-xl tracking-[0.35em] h-12 uppercase"
               />
+              <p className="text-xs text-muted-foreground">
+                6 digit dari aplikasi authenticator, atau 8 karakter kode
+                cadangan.
+              </p>
             </div>
           </>
         ) : (

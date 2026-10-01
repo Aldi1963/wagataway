@@ -62,10 +62,10 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 func listConversations(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		deviceID := c.Query("deviceId")
 
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		if deviceID != "" {
 			query = query.Where("device_id = ?", deviceID)
 		}
@@ -80,13 +80,13 @@ func listConversations(db *gorm.DB) gin.HandlerFunc {
 func getChatMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		phone := c.Param("phone")
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
 		var messages []models.ChatInbox
-		db.Where("user_id = ? AND phone = ?", userID, phone).
+		udb.Where("user_id = ? AND phone = ?", userID, phone).
 			Order("created_at DESC").Offset(offset).Limit(limit).
 			Find(&messages)
 
@@ -103,7 +103,7 @@ func getChatMessages(db *gorm.DB) gin.HandlerFunc {
 func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			Phone    string `json:"phone" binding:"required"`
@@ -119,9 +119,9 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Send via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
-		to := resolveSenderJID(db, userID, req.DeviceID, req.Phone)
+		to := resolveSenderJID(udb, userID, req.DeviceID, req.Phone)
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 		err := wm.SendMessage(req.DeviceID, to, req.Type, req.Content, "")
@@ -140,11 +140,11 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Direction: "out",
 			IsRead:    true,
 		}
-		db.Create(&msg)
+		udb.Create(&msg)
 
 		// Update conversation
 		var conv models.ChatConversation
-		result := db.Where("user_id = ? AND device_id = ? AND phone = ?",
+		result := udb.Where("user_id = ? AND device_id = ? AND phone = ?",
 			userID, req.DeviceID, req.Phone).First(&conv)
 		now := time.Now()
 		if result.Error != nil {
@@ -152,9 +152,9 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				UserID: userID, DeviceID: req.DeviceID, Phone: req.Phone,
 				LastMessage: truncateStr(req.Content, 200), LastActivity: now,
 			}
-			db.Create(&conv)
+			udb.Create(&conv)
 		} else {
-			db.Model(&conv).Updates(map[string]interface{}{
+			udb.Model(&conv).Updates(map[string]interface{}{
 				"last_message": truncateStr(req.Content, 200), "last_activity": now,
 			})
 		}
@@ -196,7 +196,7 @@ func resolveSenderJID(db *gorm.DB, userID, deviceID uint, phone string) string {
 func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			Phone    string `json:"phone" binding:"required"`
@@ -221,7 +221,7 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		if req.BotID != nil {
 			var bot models.CsBot
-			if err := db.Where("id = ? AND user_id = ?", *req.BotID, userID).First(&bot).Error; err == nil {
+			if err := udb.Where("id = ? AND user_id = ?", *req.BotID, userID).First(&bot).Error; err == nil {
 				if bot.Prompt != "" {
 					systemPrompt = bot.Prompt
 				}
@@ -242,7 +242,7 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Get recent conversation history (last 10 messages)
 		var history []models.ChatInbox
-		db.Where("user_id = ? AND phone = ?", userID, req.Phone).
+		udb.Where("user_id = ? AND phone = ?", userID, req.Phone).
 			Order("created_at DESC").Limit(10).Find(&history)
 
 		// Build messages for AI (reverse to chronological)
@@ -279,9 +279,9 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Send AI response via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
-		to := resolveSenderJID(db, userID, req.DeviceID, req.Phone)
+		to := resolveSenderJID(udb, userID, req.DeviceID, req.Phone)
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 		sendErr := wm.SendMessage(req.DeviceID, to, "text", aiResp.Content, "")
@@ -298,7 +298,7 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			UserID: userID, DeviceID: req.DeviceID, Phone: req.Phone,
 			Content: aiResp.Content, Type: "text", Direction: "out", IsRead: true,
 		}
-		db.Create(&msg)
+		udb.Create(&msg)
 
 		// Broadcast via SSE
 		realtime.DefaultHub.SendToUser(userID, realtime.Event{
@@ -323,7 +323,7 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func setChatMode(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		phone := c.Param("phone")
 		var req struct {
 			Mode string `json:"mode" binding:"required"` // manual, ai, hybrid
@@ -336,7 +336,7 @@ func setChatMode(db *gorm.DB) gin.HandlerFunc {
 		// For now, store mode in a simple way
 		// In production this would be a separate table or field on conversation
 		var conv models.ChatConversation
-		if err := db.Where("user_id = ? AND phone = ?", userID, phone).First(&conv).Error; err != nil {
+		if err := udb.Where("user_id = ? AND phone = ?", userID, phone).First(&conv).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Conversation tidak ditemukan"})
 			return
 		}
@@ -354,14 +354,14 @@ func setChatMode(db *gorm.DB) gin.HandlerFunc {
 func markConversationRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		phone := c.Param("phone")
 
-		db.Model(&models.ChatInbox{}).
+		udb.Model(&models.ChatInbox{}).
 			Where("user_id = ? AND phone = ? AND is_read = ?", userID, phone, false).
 			Update("is_read", true)
 
-		db.Model(&models.ChatConversation{}).
+		udb.Model(&models.ChatConversation{}).
 			Where("user_id = ? AND phone = ?", userID, phone).
 			Update("unread_count", 0)
 
@@ -374,7 +374,7 @@ func markConversationRead(db *gorm.DB) gin.HandlerFunc {
 func getProfilePic(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		deviceID, _ := strconv.Atoi(c.Query("deviceId"))
 		phone := c.Query("phone")
 		if deviceID == 0 || phone == "" {
@@ -383,7 +383,7 @@ func getProfilePic(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		var dev models.Device
-		if err := db.Where("id = ? AND user_id = ?", deviceID, userID).First(&dev).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", deviceID, userID).First(&dev).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan"})
 			return
 		}
@@ -406,7 +406,7 @@ func getProfilePic(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		jid := types.NewJID(digits, types.DefaultUserServer)
 		// Untuk pengirim LID, pakai SenderJID asli (…@lid) bila tersimpan.
 		var conv models.ChatConversation
-		if err := db.Where("user_id = ? AND device_id = ? AND phone = ?", userID, deviceID, phone).
+		if err := udb.Where("user_id = ? AND device_id = ? AND phone = ?", userID, deviceID, phone).
 			First(&conv).Error; err == nil && conv.SenderJID != "" {
 			if pj, perr := types.ParseJID(conv.SenderJID); perr == nil && pj.Server != "" {
 				jid = pj

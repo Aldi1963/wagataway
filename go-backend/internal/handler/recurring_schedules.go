@@ -115,9 +115,9 @@ func deviceBelongsToUser(db *gorm.DB, deviceID, userID uint) bool {
 func listRecurringSchedules(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		if c.Query("active") == "true" {
 			query = query.Where("is_active = ?", true)
 		}
@@ -175,13 +175,13 @@ func validateRecurringReq(db *gorm.DB, userID uint, req recurringScheduleReq) st
 func createRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req recurringScheduleReq
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		if msg := validateRecurringReq(db, userID, req); msg != "" {
+		if msg := validateRecurringReq(udb, userID, req); msg != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": msg})
 			return
 		}
@@ -202,7 +202,7 @@ func createRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 		if req.IsActive != nil {
 			s.IsActive = *req.IsActive
 		}
-		if err := db.Create(&s).Error; err != nil {
+		if err := udb.Create(&s).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal membuat jadwal"})
 			return
 		}
@@ -213,9 +213,9 @@ func createRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 func updateRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var s models.RecurringSchedule
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&s).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&s).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})
 			return
 		}
@@ -224,7 +224,7 @@ func updateRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		if msg := validateRecurringReq(db, userID, req); msg != "" {
+		if msg := validateRecurringReq(udb, userID, req); msg != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": msg})
 			return
 		}
@@ -241,7 +241,7 @@ func updateRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 			s.IsActive = *req.IsActive
 		}
 		s.NextRunAt = computeNextRun(req.Frequency, req.Time, req.DayOfWeek, req.DayOfMonth)
-		db.Save(&s)
+		udb.Save(&s)
 		c.JSON(http.StatusOK, gin.H{"schedule": s})
 	}
 }
@@ -249,8 +249,8 @@ func updateRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 func deleteRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		res := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.RecurringSchedule{})
+		udb := rls.Scoped(db, userID)
+		res := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.RecurringSchedule{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})
 			return
@@ -262,9 +262,9 @@ func deleteRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 func toggleRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var s models.RecurringSchedule
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&s).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&s).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})
 			return
 		}
@@ -272,7 +272,7 @@ func toggleRecurringSchedule(db *gorm.DB) gin.HandlerFunc {
 		if s.IsActive {
 			s.NextRunAt = computeNextRun(s.Frequency, s.Time, s.DayOfWeek, s.DayOfMonth)
 		}
-		db.Save(&s)
+		udb.Save(&s)
 		c.JSON(http.StatusOK, gin.H{"schedule": s})
 	}
 }

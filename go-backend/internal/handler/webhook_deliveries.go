@@ -23,9 +23,9 @@ func registerWebhookDeliveryLogRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listWebhookDeliveryLogs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		if deviceID := c.Query("device_id"); deviceID != "" {
 			query = query.Where("device_id = ?", deviceID)
 		}
@@ -50,9 +50,9 @@ func listWebhookDeliveryLogs(db *gorm.DB) gin.HandlerFunc {
 func retryWebhookDeliveryLog(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var orig models.WebhookDeliveryLog
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&orig).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&orig).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Log tidak ditemukan"})
 			return
 		}
@@ -61,13 +61,13 @@ func retryWebhookDeliveryLog(db *gorm.DB) gin.HandlerFunc {
 		secret := ""
 		if orig.DeviceID != 0 {
 			var dev models.Device
-			if err := db.Select("webhook_secret").Where("id = ?", orig.DeviceID).First(&dev).Error; err == nil {
+			if err := udb.Select("webhook_secret").Where("id = ?", orig.DeviceID).First(&dev).Error; err == nil {
 				secret = dev.WebhookSecret
 			}
 		}
 		statusCode, success, errMsg, _ := whatsapp.DeliverWebhookPayload(orig.URL, secret, orig.Event, []byte(orig.Payload))
 		orig.RetryCount++
-		db.Save(&orig)
+		udb.Save(&orig)
 		// Catat hasil retry sebagai baris baru untuk riwayat.
 		entry := models.WebhookDeliveryLog{
 			UserID:     userID,
@@ -80,7 +80,7 @@ func retryWebhookDeliveryLog(db *gorm.DB) gin.HandlerFunc {
 			ErrorMsg:   errMsg,
 			RetryCount: orig.RetryCount,
 		}
-		db.Create(&entry)
+		udb.Create(&entry)
 		c.JSON(http.StatusOK, gin.H{
 			"delivery": entry,
 			"message":  "Retry berhasil dikirim",

@@ -137,7 +137,7 @@ func prorateMetadataJSON(q ProrateQuote) string {
 func getProrateQuote(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			PlanID uint `form:"planId" binding:"required"`
 		}
@@ -146,11 +146,11 @@ func getProrateQuote(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		var plan models.Plan
-		if err := db.Where("id = ? AND is_active = ?", req.PlanID, true).First(&plan).Error; err != nil {
+		if err := udb.Where("id = ? AND is_active = ?", req.PlanID, true).First(&plan).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Paket tidak ditemukan"})
 			return
 		}
-		q, err := prorateQuote(db, userID, &plan)
+		q, err := prorateQuote(udb, userID, &plan)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghitung prorata"})
 			return

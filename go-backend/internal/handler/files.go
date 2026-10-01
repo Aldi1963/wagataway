@@ -51,7 +51,7 @@ var allowedUploadMimes = map[string]string{
 func uploadFile(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		// Batasi body agar client nakal tidak bisa bikin OOM.
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes+1<<20)
@@ -129,7 +129,7 @@ func uploadFile(db *gorm.DB) gin.HandlerFunc {
 			Mime:         mime,
 			Size:         size,
 		}
-		if err := db.Create(&rec).Error; err != nil {
+		if err := udb.Create(&rec).Error; err != nil {
 			os.Remove(dst)
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan metadata file", "code": "DB_ERROR"})
 			return
@@ -142,12 +142,12 @@ func uploadFile(db *gorm.DB) gin.HandlerFunc {
 func listFiles(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var files []models.File
 		var total int64
-		db.Model(&models.File{}).Where("user_id = ?", userID).Count(&total)
-		db.Where("user_id = ?", userID).
+		udb.Model(&models.File{}).Where("user_id = ?", userID).Count(&total)
+		udb.Where("user_id = ?", userID).
 			Order("created_at DESC").
 			Limit(100).
 			Find(&files)
@@ -159,10 +159,10 @@ func listFiles(db *gorm.DB) gin.HandlerFunc {
 func serveFileContent(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var f models.File
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "File tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -185,10 +185,10 @@ func serveFileContent(db *gorm.DB) gin.HandlerFunc {
 func deleteFile(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var f models.File
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "File tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -198,7 +198,7 @@ func deleteFile(db *gorm.DB) gin.HandlerFunc {
 			// Catat tapi tetap lanjut hapus record agar tidak nyangkut.
 			fmt.Fprintf(os.Stderr, "warning: gagal hapus file %s: %v\n", f.FileName, err)
 		}
-		if err := db.Delete(&f).Error; err != nil {
+		if err := udb.Delete(&f).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghapus file", "code": "DB_ERROR"})
 			return
 		}

@@ -35,9 +35,9 @@ func registerTeamLoginRoute(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB
 func listTeamMembers(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
-		query := db.Where("owner_id = ?", userID)
+		query := udb.Where("owner_id = ?", userID)
 		var total int64
 		query.Model(&models.TeamMember{}).Count(&total)
 		var items []models.TeamMember
@@ -55,7 +55,7 @@ func listTeamMembers(db *gorm.DB) gin.HandlerFunc {
 func inviteTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Email string `json:"email" binding:"required"`
 			Name  string `json:"name" binding:"required"`
@@ -70,8 +70,8 @@ func inviteTeamMember(db *gorm.DB) gin.HandlerFunc {
 		}
 		// Email tidak boleh bentrok dengan user maupun team member lain.
 		var count int64
-		db.Model(&models.User{}).Where("email = ?", req.Email).Count(&count)
-		db.Model(&models.TeamMember{}).Where("email = ?", req.Email).Count(&count)
+		udb.Model(&models.User{}).Where("email = ?", req.Email).Count(&count)
+		udb.Model(&models.TeamMember{}).Where("email = ?", req.Email).Count(&count)
 		if count > 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Email sudah terdaftar"})
 			return
@@ -95,7 +95,7 @@ func inviteTeamMember(db *gorm.DB) gin.HandlerFunc {
 			IsActive: true,
 			Password: string(hashed),
 		}
-		if err := db.Create(&member).Error; err != nil {
+		if err := udb.Create(&member).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal mengundang anggota"})
 			return
 		}
@@ -110,9 +110,9 @@ func inviteTeamMember(db *gorm.DB) gin.HandlerFunc {
 func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var member models.TeamMember
-		if err := db.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
+		if err := udb.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})
 			return
 		}
@@ -143,7 +143,7 @@ func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 			}
 			member.Password = string(hashed)
 		}
-		db.Save(&member)
+		udb.Save(&member)
 		c.JSON(http.StatusOK, gin.H{"member": member})
 	}
 }
@@ -151,8 +151,8 @@ func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 func deleteTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		res := db.Where("id = ? AND owner_id = ?", c.Param("id"), userID).Delete(&models.TeamMember{})
+		udb := rls.Scoped(db, userID)
+		res := udb.Where("id = ? AND owner_id = ?", c.Param("id"), userID).Delete(&models.TeamMember{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})
 			return
@@ -164,14 +164,14 @@ func deleteTeamMember(db *gorm.DB) gin.HandlerFunc {
 func toggleTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var member models.TeamMember
-		if err := db.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
+		if err := udb.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})
 			return
 		}
 		member.IsActive = !member.IsActive
-		db.Save(&member)
+		udb.Save(&member)
 		c.JSON(http.StatusOK, gin.H{"member": member})
 	}
 }

@@ -17,7 +17,10 @@ import (
 )
 
 func registerApiKeyRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	keys := rg.Group("/api-keys")
+	// Manajemen API key hanya untuk JWT dashboard atau API key berscope
+	// "full" — deny-by-default: key terbatas tidak boleh melihat,
+	// membuat, merotasi, atau menghapus key lain.
+	keys := rg.Group("/api-keys", middleware.RequireScope("full"))
 	{
 		keys.GET("", listApiKeys(db))
 		keys.GET("/scopes", listAPIScopes())
@@ -70,9 +73,9 @@ func toAPIKeyResponse(k models.ApiKey) apiKeyResponse {
 func listApiKeys(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var keys []models.ApiKey
-		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&keys)
+		udb.Where("user_id = ?", userID).Order("created_at DESC").Find(&keys)
 		out := make([]apiKeyResponse, 0, len(keys))
 		for _, k := range keys {
 			out = append(out, toAPIKeyResponse(k))
@@ -84,7 +87,7 @@ func listApiKeys(db *gorm.DB) gin.HandlerFunc {
 func createApiKey(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name          string   `json:"name" binding:"required"`
 			Scopes        []string `json:"scopes"`
@@ -128,7 +131,7 @@ func createApiKey(db *gorm.DB) gin.HandlerFunc {
 			Scopes:    string(scopesJSON),
 			ExpiresAt: expiresAt,
 		}
-		if err := db.Create(&key).Error; err != nil {
+		if err := udb.Create(&key).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan API key"})
 			return
 		}
@@ -149,10 +152,10 @@ func createApiKey(db *gorm.DB) gin.HandlerFunc {
 func rotateApiKey(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var key models.ApiKey
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&key).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&key).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "API key tidak ditemukan"})
 			return
 		}
@@ -166,7 +169,7 @@ func rotateApiKey(db *gorm.DB) gin.HandlerFunc {
 		key.KeyHash = models.HashAPIKey(rawKey)
 		key.LastUsed = nil
 		key.UpdatedAt = now
-		if err := db.Save(&key).Error; err != nil {
+		if err := udb.Save(&key).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal merotasi API key"})
 			return
 		}
@@ -184,9 +187,9 @@ func rotateApiKey(db *gorm.DB) gin.HandlerFunc {
 func deleteApiKey(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		res := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ApiKey{})
+		res := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ApiKey{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "API key tidak ditemukan"})
 			return

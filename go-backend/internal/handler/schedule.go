@@ -26,10 +26,10 @@ func registerScheduleRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listSchedules(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		status := c.DefaultQuery("status", "")
 
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		if status != "" {
 			query = query.Where("status = ?", status)
 		}
@@ -43,7 +43,7 @@ func listSchedules(db *gorm.DB) gin.HandlerFunc {
 func createSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			To       string `json:"to" binding:"required"`
@@ -72,7 +72,7 @@ func createSchedule(db *gorm.DB) gin.HandlerFunc {
 
 		// Cek kepemilikan device
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -82,7 +82,7 @@ func createSchedule(db *gorm.DB) gin.HandlerFunc {
 			Type: req.Type, Content: req.Content, MediaURL: req.MediaURL,
 			Status: "pending", SendAt: sendAt,
 		}
-		db.Create(&sched)
+		udb.Create(&sched)
 		c.JSON(http.StatusCreated, gin.H{"schedule": sched})
 	}
 }
@@ -90,10 +90,10 @@ func createSchedule(db *gorm.DB) gin.HandlerFunc {
 func updateSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		var sched models.ScheduledMessage
-		if err := db.Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").First(&sched).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").First(&sched).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan atau sudah terkirim"})
 			return
 		}
@@ -123,7 +123,7 @@ func updateSchedule(db *gorm.DB) gin.HandlerFunc {
 				updates["send_at"] = t
 			}
 		}
-		db.Model(&sched).Updates(updates)
+		udb.Model(&sched).Updates(updates)
 		c.JSON(http.StatusOK, gin.H{"schedule": sched, "message": "Diperbarui"})
 	}
 }
@@ -131,9 +131,9 @@ func updateSchedule(db *gorm.DB) gin.HandlerFunc {
 func deleteSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ScheduledMessage{})
+		result := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ScheduledMessage{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Jadwal tidak ditemukan"})
 			return
@@ -145,9 +145,9 @@ func deleteSchedule(db *gorm.DB) gin.HandlerFunc {
 func cancelSchedule(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		result := db.Model(&models.ScheduledMessage{}).
+		result := udb.Model(&models.ScheduledMessage{}).
 			Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").
 			Update("status", "cancelled")
 		if result.RowsAffected == 0 {
@@ -176,7 +176,7 @@ func registerScheduleAliasRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func patchScheduleState(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var req struct {
@@ -200,7 +200,7 @@ func patchScheduleState(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		result := db.Model(&models.ScheduledMessage{}).
+		result := udb.Model(&models.ScheduledMessage{}).
 			Where("id = ? AND user_id = ? AND status = ?", id, userID, from).
 			Update("status", to)
 		if result.RowsAffected == 0 {

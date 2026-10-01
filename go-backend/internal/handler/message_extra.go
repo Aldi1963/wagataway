@@ -64,10 +64,10 @@ func queueSend(db *gorm.DB, wm *whatsapp.Manager, userID uint, msg *models.Messa
 func getMessageStatus(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var msg models.Message
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&msg).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&msg).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Pesan tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -80,10 +80,10 @@ func getMessageStatus(db *gorm.DB) gin.HandlerFunc {
 func revokeMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var msg models.Message
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&msg).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&msg).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Pesan tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -100,7 +100,7 @@ func revokeMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
-		db.Model(&msg).Update("status", "revoked")
+		udb.Model(&msg).Update("status", "revoked")
 		c.JSON(http.StatusOK, gin.H{"message": "Pesan ditarik", "data": msg})
 	}
 }
@@ -109,7 +109,7 @@ func revokeMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID           uint     `json:"deviceId" binding:"required"`
@@ -131,12 +131,12 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Pertanyaan maksimal 1000 karakter", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
@@ -159,19 +159,19 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			AllowMultiple: req.AllowMultiple,
 		}
 		poll.SetOptions(req.Options)
-		if err := db.Create(poll).Error; err != nil {
+		if err := udb.Create(poll).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan metadata poll", "code": "DB_ERROR"})
 			return
 		}
 
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
+		queueSend(udb, wm, userID, msg, whatsapp.SendOptions{
 			Type:                 "poll",
 			Content:              req.Question,
 			PollOptions:          req.Options,
 			AllowMultipleAnswers: req.AllowMultiple,
 		}, func(waID string) {
 			now := time.Now()
-			db.Model(poll).Updates(map[string]interface{}{"message_id": waID, "sent_at": &now})
+			udb.Model(poll).Updates(map[string]interface{}{"message_id": waID, "sent_at": &now})
 		})
 
 		c.JSON(http.StatusOK, gin.H{"message": "Poll sedang dikirim", "data": msg, "pollId": poll.ID})
@@ -182,7 +182,7 @@ func sendPollMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -207,12 +207,12 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Body maksimal 2000 karakter", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
@@ -230,7 +230,7 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
+		queueSend(udb, wm, userID, msg, whatsapp.SendOptions{
 			Type:    "interactive",
 			Content: req.Body,
 			Buttons: buttons,
@@ -245,7 +245,7 @@ func sendInteractiveMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.Handle
 func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -257,12 +257,12 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid (mediaUrl wajib)", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
@@ -275,7 +275,7 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "sticker", MediaURL: req.MediaURL}, nil)
+		queueSend(udb, wm, userID, msg, whatsapp.SendOptions{Type: "sticker", MediaURL: req.MediaURL}, nil)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Stiker sedang dikirim", "data": msg})
 	}
@@ -285,7 +285,7 @@ func sendStickerMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFun
 func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
@@ -297,12 +297,12 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid (mediaUrl wajib)", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
@@ -315,7 +315,7 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{Type: "voicenote", MediaURL: req.MediaURL}, nil)
+		queueSend(udb, wm, userID, msg, whatsapp.SendOptions{Type: "voicenote", MediaURL: req.MediaURL}, nil)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Voice note sedang dikirim", "data": msg})
 	}
@@ -325,7 +325,7 @@ func sendVoiceNoteMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerF
 func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID  uint    `json:"deviceId" binding:"required"`
@@ -345,12 +345,12 @@ func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFu
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Koordinat tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
@@ -363,7 +363,7 @@ func sendLocationMessageHandler(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFu
 			Status:   "pending",
 			Via:      viaSource(c),
 		}
-		queueSend(db, wm, userID, msg, whatsapp.SendOptions{
+		queueSend(udb, wm, userID, msg, whatsapp.SendOptions{
 			Type:         "location",
 			Latitude:     req.Latitude,
 			Longitude:    req.Longitude,

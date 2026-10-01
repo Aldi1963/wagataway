@@ -74,13 +74,13 @@ func upsertSyncContact(db *gorm.DB, userID uint, phone, name string) (created, f
 func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req syncDeviceRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "deviceId wajib diisi", "code": "VALIDATION_ERROR"})
 			return
 		}
-		client, err := resolveSyncClient(c, db, wm, req.DeviceID)
+		client, err := resolveSyncClient(c, udb, wm, req.DeviceID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "DEVICE_OFFLINE"})
 			return
@@ -107,7 +107,7 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			if !digitsOnly.MatchString(phone) {
 				continue
 			}
-			created, nameFilled := upsertSyncContact(db, userID, phone, waContactName(info, phone))
+			created, nameFilled := upsertSyncContact(udb, userID, phone, waContactName(info, phone))
 			if created {
 				added++
 			} else if nameFilled {
@@ -129,13 +129,13 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req syncDeviceRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "deviceId wajib diisi", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if _, err := resolveSyncClient(c, db, wm, req.DeviceID); err != nil {
+		if _, err := resolveSyncClient(c, udb, wm, req.DeviceID); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "DEVICE_OFFLINE"})
 			return
 		}
@@ -169,7 +169,7 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 
 			var grp models.ContactGroup
-			err := db.Where("user_id = ? AND waj_id = ?", userID, waJID).First(&grp).Error
+			err := udb.Where("user_id = ? AND waj_id = ?", userID, waJID).First(&grp).Error
 			if err == gorm.ErrRecordNotFound {
 				grp = models.ContactGroup{
 					UserID:      userID,
@@ -178,12 +178,12 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 					MemberCount: len(phones),
 					WAJID:       waJID,
 				}
-				if err := db.Create(&grp).Error; err != nil {
+				if err := udb.Create(&grp).Error; err != nil {
 					continue
 				}
 				groupsAdded++
 			} else if err == nil {
-				db.Model(&grp).Updates(map[string]interface{}{
+				udb.Model(&grp).Updates(map[string]interface{}{
 					"name":         name,
 					"description":  strings.TrimSpace(g.Topic),
 					"member_count": len(phones),
@@ -195,14 +195,14 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 			// upsert tiap anggota jadi kontak, lalu tautkan ke grup
 			for _, phone := range phones {
-				upsertSyncContact(db, userID, phone, phone)
+				upsertSyncContact(udb, userID, phone, phone)
 				var contact models.Contact
-				if err := db.Where("user_id = ? AND phone = ?", userID, phone).First(&contact).Error; err != nil {
+				if err := udb.Where("user_id = ? AND phone = ?", userID, phone).First(&contact).Error; err != nil {
 					continue
 				}
 				var link models.ContactGroupMember
-				if err := db.Where("group_id = ? AND contact_id = ?", grp.ID, contact.ID).First(&link).Error; err == gorm.ErrRecordNotFound {
-					if db.Create(&models.ContactGroupMember{GroupID: grp.ID, ContactID: contact.ID}).Error == nil {
+				if err := udb.Where("group_id = ? AND contact_id = ?", grp.ID, contact.ID).First(&link).Error; err == gorm.ErrRecordNotFound {
+					if udb.Create(&models.ContactGroupMember{GroupID: grp.ID, ContactID: contact.ID}).Error == nil {
 						membersLinked++
 					}
 				}

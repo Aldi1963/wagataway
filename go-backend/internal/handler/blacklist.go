@@ -23,9 +23,9 @@ func registerBlacklistRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listBlacklist(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var items []models.Blacklist
-		db.Where("user_id = ?", userID).Order("created_at DESC").Find(&items)
+		udb.Where("user_id = ?", userID).Order("created_at DESC").Find(&items)
 		c.JSON(http.StatusOK, gin.H{"blacklist": items})
 	}
 }
@@ -33,7 +33,7 @@ func listBlacklist(db *gorm.DB) gin.HandlerFunc {
 func addBlacklist(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Phone  string `json:"phone" binding:"required"`
 			Reason string `json:"reason"`
@@ -43,7 +43,7 @@ func addBlacklist(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		item := models.Blacklist{UserID: userID, Phone: req.Phone, Reason: req.Reason}
-		db.Create(&item)
+		udb.Create(&item)
 		c.JSON(http.StatusCreated, gin.H{"blacklist": item})
 	}
 }
@@ -51,9 +51,9 @@ func addBlacklist(db *gorm.DB) gin.HandlerFunc {
 func removeBlacklist(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Blacklist{})
+		result := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Blacklist{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Tidak ditemukan"})
 			return

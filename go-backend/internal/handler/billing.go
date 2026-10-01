@@ -47,16 +47,16 @@ func listPlans(db *gorm.DB) gin.HandlerFunc {
 func getSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		// BONUS (tanggal expired asli di dashboard): sertakan status langganan
 		// terpusat (active | grace | expired) dari subscription.Check, agar kartu
 		// dashboard bisa menampilkan badge "Masa Tenggang" / "Berakhir".
 		subState := string(subscription.StateActive)
-		if st, err := subscription.Check(db, userID); err == nil && st != nil {
+		if st, err := subscription.Check(udb, userID); err == nil && st != nil {
 			subState = string(st.State)
 		}
 		var sub models.Subscription
-		err := db.Where("user_id = ? AND status = ?", userID, "active").
+		err := udb.Where("user_id = ? AND status = ?", userID, "active").
 			Preload("Plan").First(&sub).Error
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{"subscription": nil, "subState": subState})
@@ -83,8 +83,8 @@ type subscriptionWithState struct {
 func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		qr, err := quota.Check(db, userID)
+		udb := rls.Scoped(db, userID)
+		qr, err := quota.Check(udb, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca kuota", "code": "DB_ERROR"})
 			return
@@ -112,7 +112,7 @@ func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			PlanID uint `json:"planId" binding:"required"`
 		}
@@ -122,14 +122,14 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 		}
 
 		var plan models.Plan
-		if err := db.Where("id = ? AND is_active = ?", req.PlanID, true).First(&plan).Error; err != nil {
+		if err := udb.Where("id = ? AND is_active = ?", req.PlanID, true).First(&plan).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Paket tidak ditemukan"})
 			return
 		}
 
 		// Fitur 4 (prorata): bila user punya langganan aktif yang belum
 		// expired dan memilih paket BERBEDA, hitung sisa nilai paket lama.
-		q, err := prorateQuote(db, userID, &plan)
+		q, err := prorateQuote(udb, userID, &plan)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghitung prorata"})
 			return
@@ -155,17 +155,17 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 				ExternalID:    fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix()),
 				Metadata:      metadata,
 			}
-			if err := db.Create(&tx).Error; err != nil {
+			if err := udb.Create(&tx).Error; err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
 				return
 			}
-			if activated, err := activateSubscription(db, tx.ID); err != nil {
+			if activated, err := activateSubscription(udb, tx.ID); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengaktifkan paket"})
 				return
 			} else if activated {
 				// Fitur 6: tepat di momen transisi → paid (prorata bayar-0).
 				// Error notifikasi tidak menggagalkan aktivasi.
-				_ = notifyPaymentSuccess(db, wm, tx.ID)
+				_ = notifyPaymentSuccess(udb, wm, tx.ID)
 			}
 			c.JSON(http.StatusCreated, gin.H{
 				"transaction": tx,
@@ -182,14 +182,14 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 			return
 		}
 
-		kp := newClipkuPay(cfg, db)
+		kp := newClipkuPay(cfg, udb)
 		if !kp.enabled() {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "Payment gateway belum dikonfigurasi"})
 			return
 		}
 
 		var user models.User
-		if err := db.First(&user, userID).Error; err != nil {
+		if err := udb.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "User tidak ditemukan"})
 			return
 		}
@@ -206,7 +206,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 			ExternalID:    orderID,
 			Metadata:      metadata,
 		}
-		if err := db.Create(&tx).Error; err != nil {
+		if err := udb.Create(&tx).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat transaksi"})
 			return
 		}
@@ -214,11 +214,11 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 		// Buat transaksi di Clipku Pay
 		data, err := kp.createTransaction(orderID, amount, user.Name, user.Email)
 		if err != nil {
-			db.Model(&tx).Update("status", "failed")
+			udb.Model(&tx).Update("status", "failed")
 			c.JSON(http.StatusBadGateway, gin.H{"message": "Gagal membuat pembayaran: " + err.Error()})
 			return
 		}
-		db.Model(&tx).Updates(map[string]any{"payment_ref": data.PaymentURL})
+		udb.Model(&tx).Updates(map[string]any{"payment_ref": data.PaymentURL})
 
 		c.JSON(http.StatusCreated, gin.H{
 			"transaction": tx,
@@ -237,9 +237,9 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 	kp := newClipkuPay(cfg, db)
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var tx models.Transaction
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).
 			Preload("Plan").First(&tx).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Transaksi tidak ditemukan"})
 			return
@@ -251,14 +251,14 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 				if clipkuIsPaid(remote.Status) {
 					// Fitur 6: tepat di momen transisi → paid. Error
 					// notifikasi tidak menggagalkan sinkronisasi.
-					if activated, _ := activateSubscription(db, tx.ID); activated {
-						_ = notifyPaymentSuccess(db, wm, tx.ID)
+					if activated, _ := activateSubscription(udb, tx.ID); activated {
+						_ = notifyPaymentSuccess(udb, wm, tx.ID)
 					}
-					db.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
+					udb.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
 				} else {
 					st := strings.ToLower(strings.TrimSpace(remote.Status))
 					if st == "expired" || st == "failed" || st == "cancelled" {
-						db.Model(&tx).Update("status", st)
+						udb.Model(&tx).Update("status", st)
 						tx.Status = st
 					}
 				}
@@ -272,9 +272,9 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 func listTransactions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var txs []models.Transaction
-		db.Where("user_id = ?", userID).Preload("Plan").
+		udb.Where("user_id = ?", userID).Preload("Plan").
 			Order("created_at DESC").Limit(50).Find(&txs)
 		for i := range txs {
 			txs[i].InvoiceNumber = invoiceNumber(txs[i].ID, txs[i].CreatedAt)
@@ -301,7 +301,7 @@ var errAlreadyRedeemed = errors.New("voucher already redeemed by user")
 func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Code string `json:"code" binding:"required"`
 		}
@@ -311,7 +311,7 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var voucher models.Voucher
-		if err := db.Where("code = ? AND is_active = ?", req.Code, true).First(&voucher).Error; err != nil {
+		if err := udb.Where("code = ? AND is_active = ?", req.Code, true).First(&voucher).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Voucher tidak valid atau sudah tidak aktif"})
 			return
 		}
@@ -328,7 +328,7 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 
 		// Cek + catat redeem + increment used_count + terapkan efek voucher
 		// berjalan atomik dalam satu transaksi.
-		err := db.Transaction(func(tx *gorm.DB) error {
+		err := udb.Transaction(func(tx *gorm.DB) error {
 			var count int64
 			if err := tx.Model(&models.VoucherRedemption{}).
 				Where("voucher_id = ? AND user_id = ?", voucher.ID, userID).

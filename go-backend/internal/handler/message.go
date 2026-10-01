@@ -41,7 +41,7 @@ func viaSource(c *gin.Context) string {
 func listMessages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		page := 1
 		limit := 20
@@ -59,8 +59,8 @@ func listMessages(db *gorm.DB) gin.HandlerFunc {
 		var messages []models.Message
 		var total int64
 
-		db.Model(&models.Message{}).Where("user_id = ?", userID).Count(&total)
-		db.Where("user_id = ?", userID).
+		udb.Model(&models.Message{}).Where("user_id = ?", userID).Count(&total)
+		udb.Where("user_id = ?", userID).
 			Order("created_at DESC").
 			Offset((page - 1) * limit).
 			Limit(limit).
@@ -78,7 +78,7 @@ func listMessages(db *gorm.DB) gin.HandlerFunc {
 func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID       uint   `json:"deviceId" binding:"required"`
@@ -108,13 +108,13 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Cek kepemilikan device
 		var device models.Device
-		if err := db.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", req.DeviceID, userID).First(&device).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
@@ -122,7 +122,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		mediaURL := req.MediaURL
 		if req.FileID != nil {
 			var err error
-			mediaURL, err = resolveFileMediaURL(db, userID, *req.FileID)
+			mediaURL, err = resolveFileMediaURL(udb, userID, *req.FileID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"message": "File tidak ditemukan", "code": "NOT_FOUND"})
 				return
@@ -132,7 +132,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		// Idempotency: key yang sama tidak dikirim ulang.
 		if req.IdempotencyKey != "" {
 			var existing models.Message
-			if err := db.Where("user_id = ? AND device_id = ? AND idempotency_key = ?",
+			if err := udb.Where("user_id = ? AND device_id = ? AND idempotency_key = ?",
 				userID, req.DeviceID, req.IdempotencyKey).First(&existing).Error; err == nil {
 				c.JSON(http.StatusOK, gin.H{"message": "Pesan sudah pernah dikirim (duplikat)", "duplicate": true, "data": existing})
 				return
@@ -153,7 +153,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			IdempotencyKey: req.IdempotencyKey,
 		}
 
-		if err := db.Create(&msg).Error; err != nil {
+		if err := udb.Create(&msg).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan pesan", "code": "DB_ERROR"})
 			return
 		}
@@ -168,12 +168,12 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				ReplyTo:  req.ReplyTo,
 			})
 			if err != nil {
-				db.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
-				recordReport(db, userID, req.DeviceID, campaignID, req.To, "", "failed", err.Error())
+				udb.Model(&msg).Updates(map[string]interface{}{"status": "failed", "error_msg": err.Error()})
+				recordReport(udb, userID, req.DeviceID, campaignID, req.To, "", "failed", err.Error())
 			} else {
 				now := time.Now()
-				db.Model(&msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
-				recordReport(db, userID, req.DeviceID, campaignID, req.To, waID, "sent", "")
+				udb.Model(&msg).Updates(map[string]interface{}{"status": "sent", "message_id": waID, "sent_at": &now})
+				recordReport(udb, userID, req.DeviceID, campaignID, req.To, waID, "sent", "")
 			}
 		}()
 
@@ -184,7 +184,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID   uint     `json:"deviceId"`
@@ -253,7 +253,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Cek kepemilikan semua device
 		var devices []models.Device
-		db.Where("user_id = ? AND id IN ?", userID, deviceIDs).Find(&devices)
+		udb.Where("user_id = ? AND id IN ?", userID, deviceIDs).Find(&devices)
 		if len(devices) != len(deviceIDs) {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Salah satu perangkat tidak ditemukan", "code": "NOT_FOUND"})
 			return
@@ -276,7 +276,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		mediaURL := req.MediaURL
 		if req.FileID != nil {
 			var err error
-			mediaURL, err = resolveFileMediaURL(db, userID, *req.FileID)
+			mediaURL, err = resolveFileMediaURL(udb, userID, *req.FileID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"message": "File tidak ditemukan", "code": "NOT_FOUND"})
 				return
@@ -320,7 +320,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Kuota pesan bulanan (Fitur 3): hitung per pesan di muka.
 		// Ditolak 429 bila used + jumlah penerima > limit.
-		if !requireMessageQuota(c, db, userID, int64(len(recipients))) {
+		if !requireMessageQuota(c, udb, userID, int64(len(recipients))) {
 			return
 		}
 
@@ -342,7 +342,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			SkippedNumbers: skippedJSON,
 		}
 
-		if err := db.Create(&job).Error; err != nil {
+		if err := udb.Create(&job).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat bulk job", "code": "DB_ERROR"})
 			return
 		}
@@ -354,11 +354,11 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				Phone:     phone,
 				Status:    "pending",
 			}
-			db.Create(&recipient)
+			udb.Create(&recipient)
 		}
 
 		// Process in background
-		go wm.ProcessBulkJob(job.ID, db)
+		go wm.ProcessBulkJob(job.ID, udb)
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":   "Bulk message dijadwalkan",
@@ -374,15 +374,15 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func bulkStats(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var jobs int64
-		db.Model(&models.BulkJob{}).Where("user_id = ?", userID).Count(&jobs)
+		udb.Model(&models.BulkJob{}).Where("user_id = ?", userID).Count(&jobs)
 		type row struct {
 			Status string
 			Count  int64
 		}
 		var rows []row
-		db.Model(&models.BulkJobRecipient{}).
+		udb.Model(&models.BulkJobRecipient{}).
 			Select("bulk_job_recipients.status, COUNT(*) as count").
 			Joins("JOIN bulk_jobs ON bulk_jobs.id = bulk_job_recipients.bulk_job_id").
 			Where("bulk_jobs.user_id = ?", userID).
@@ -409,7 +409,7 @@ func bulkStats(db *gorm.DB) gin.HandlerFunc {
 func checkRecipients(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint     `json:"deviceId" binding:"required"`
@@ -423,7 +423,7 @@ func checkRecipients(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "numbers butuh 1-1000 nomor", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 
@@ -451,14 +451,14 @@ func checkRecipients(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 func listBulkJobs(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		limit := 20
 		if l, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
 
 		var jobs []models.BulkJob
-		db.Where("user_id = ?", userID).Order("id DESC").Limit(limit).Find(&jobs)
+		udb.Where("user_id = ?", userID).Order("id DESC").Limit(limit).Find(&jobs)
 
 		out := make([]gin.H, 0, len(jobs))
 		for _, j := range jobs {

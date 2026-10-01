@@ -14,6 +14,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/rs/zerolog/log"
 	"github.com/skip2/go-qrcode"
@@ -116,7 +117,13 @@ type twoFACodeRequest struct {
 // validateTOTPCode menerima kode 6 digit dengan toleransi skew ±1 periode.
 func validateTOTPCode(secret, code string) bool {
 	code = strings.TrimSpace(code)
-	return totp.Validate(code, secret)
+	ok, err := totp.ValidateCustom(code, secret, time.Now().UTC(), totp.ValidateOpts{
+		Period:    30,
+		Skew:      1,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA1,
+	})
+	return err == nil && ok
 }
 
 // generateBackupCodes membuat 10 kode cadangan; mengembalikan plaintext

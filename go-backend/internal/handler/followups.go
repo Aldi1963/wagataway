@@ -24,9 +24,9 @@ func registerFollowupRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 func listFollowups(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, limit := getPageLimit(c)
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		var total int64
 		query.Model(&models.Followup{}).Count(&total)
 		var items []models.Followup
@@ -71,13 +71,13 @@ func validateFollowupReq(db *gorm.DB, userID uint, req followupReq) string {
 func createFollowup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req followupReq
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		if msg := validateFollowupReq(db, userID, req); msg != "" {
+		if msg := validateFollowupReq(udb, userID, req); msg != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": msg})
 			return
 		}
@@ -93,7 +93,7 @@ func createFollowup(db *gorm.DB) gin.HandlerFunc {
 		if req.IsActive != nil {
 			f.IsActive = *req.IsActive
 		}
-		if err := db.Create(&f).Error; err != nil {
+		if err := udb.Create(&f).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal membuat follow-up"})
 			return
 		}
@@ -104,9 +104,9 @@ func createFollowup(db *gorm.DB) gin.HandlerFunc {
 func updateFollowup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var f models.Followup
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Follow-up tidak ditemukan"})
 			return
 		}
@@ -115,7 +115,7 @@ func updateFollowup(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		if msg := validateFollowupReq(db, userID, req); msg != "" {
+		if msg := validateFollowupReq(udb, userID, req); msg != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": msg})
 			return
 		}
@@ -127,7 +127,7 @@ func updateFollowup(db *gorm.DB) gin.HandlerFunc {
 		if req.IsActive != nil {
 			f.IsActive = *req.IsActive
 		}
-		db.Save(&f)
+		udb.Save(&f)
 		c.JSON(http.StatusOK, gin.H{"followup": f})
 	}
 }
@@ -135,8 +135,8 @@ func updateFollowup(db *gorm.DB) gin.HandlerFunc {
 func deleteFollowup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		res := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.Followup{})
+		udb := rls.Scoped(db, userID)
+		res := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).Delete(&models.Followup{})
 		if res.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Follow-up tidak ditemukan"})
 			return
@@ -148,14 +148,14 @@ func deleteFollowup(db *gorm.DB) gin.HandlerFunc {
 func toggleFollowup(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var f models.Followup
-		if err := db.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", c.Param("id"), userID).First(&f).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Follow-up tidak ditemukan"})
 			return
 		}
 		f.IsActive = !f.IsActive
-		db.Save(&f)
+		udb.Save(&f)
 		c.JSON(http.StatusOK, gin.H{"followup": f})
 	}
 }

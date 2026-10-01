@@ -30,7 +30,7 @@ func registerContactRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 func listContacts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		search := c.Query("search")
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -41,7 +41,7 @@ func listContacts(db *gorm.DB) gin.HandlerFunc {
 			limit = 50
 		}
 
-		query := db.Where("user_id = ?", userID)
+		query := udb.Where("user_id = ?", userID)
 		if search != "" {
 			query = query.Where("name ILIKE ? OR phone ILIKE ?", "%"+search+"%", "%"+search+"%")
 		}
@@ -64,7 +64,7 @@ func listContacts(db *gorm.DB) gin.HandlerFunc {
 func createContact(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name  string `json:"name" binding:"required"`
 			Phone string `json:"phone" binding:"required"`
@@ -85,7 +85,7 @@ func createContact(db *gorm.DB) gin.HandlerFunc {
 			Notes:  req.Notes,
 			Tags:   req.Tags,
 		}
-		if err := db.Create(&contact).Error; err != nil {
+		if err := udb.Create(&contact).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan kontak", "code": "DB_ERROR"})
 			return
 		}
@@ -96,11 +96,11 @@ func createContact(db *gorm.DB) gin.HandlerFunc {
 func updateContact(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 		var contact models.Contact
-		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&contact).Error; err != nil {
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&contact).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Kontak tidak ditemukan", "code": "NOT_FOUND"})
 			return
 		}
@@ -133,7 +133,7 @@ func updateContact(db *gorm.DB) gin.HandlerFunc {
 		if req.Tags != nil {
 			updates["tags"] = *req.Tags
 		}
-		db.Model(&contact).Updates(updates)
+		udb.Model(&contact).Updates(updates)
 
 		c.JSON(http.StatusOK, gin.H{"contact": contact, "message": "Kontak diperbarui"})
 	}
@@ -142,10 +142,10 @@ func updateContact(db *gorm.DB) gin.HandlerFunc {
 func deleteContact(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
-		result := db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Contact{})
+		result := udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Contact{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Kontak tidak ditemukan"})
 			return
@@ -158,7 +158,7 @@ func deleteContact(db *gorm.DB) gin.HandlerFunc {
 func bulkDeleteContacts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			IDs []uint `json:"ids" binding:"required"`
@@ -168,7 +168,7 @@ func bulkDeleteContacts(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		result := db.Where("user_id = ? AND id IN ?", userID, req.IDs).Delete(&models.Contact{})
+		result := udb.Where("user_id = ? AND id IN ?", userID, req.IDs).Delete(&models.Contact{})
 		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghapus kontak"})
 			return
@@ -180,7 +180,7 @@ func bulkDeleteContacts(db *gorm.DB) gin.HandlerFunc {
 func importContacts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Contacts []struct {
 				Name  string `json:"name"`
@@ -200,7 +200,7 @@ func importContacts(db *gorm.DB) gin.HandlerFunc {
 				continue
 			}
 			contact := models.Contact{UserID: userID, Name: r.Name, Phone: r.Phone, Email: r.Email, Tags: r.Tags}
-			if db.Create(&contact).Error == nil {
+			if udb.Create(&contact).Error == nil {
 				imported++
 			}
 		}
@@ -213,7 +213,7 @@ func importContacts(db *gorm.DB) gin.HandlerFunc {
 func validateNumbers(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 
 		var req struct {
 			DeviceID uint     `json:"deviceId" binding:"required"`
@@ -227,7 +227,7 @@ func validateNumbers(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "numbers butuh 1-100 nomor", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, req.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, req.DeviceID) {
 			return
 		}
 

@@ -112,7 +112,7 @@ func getUserPoll(c *gin.Context, db *gorm.DB, userID uint) (*models.Poll, bool) 
 func listPolls(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 		if page < 1 {
@@ -123,10 +123,10 @@ func listPolls(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var total int64
-		db.Model(&models.Poll{}).Where("user_id = ?", userID).Count(&total)
+		udb.Model(&models.Poll{}).Where("user_id = ?", userID).Count(&total)
 
 		var polls []models.Poll
-		if err := db.Where("user_id = ?", userID).
+		if err := udb.Where("user_id = ?", userID).
 			Order("id DESC").
 			Offset((page - 1) * limit).Limit(limit).
 			Find(&polls).Error; err != nil {
@@ -136,7 +136,7 @@ func listPolls(db *gorm.DB) gin.HandlerFunc {
 
 		results := make([]pollResultResponse, 0, len(polls))
 		for i := range polls {
-			results = append(results, buildPollResult(db, &polls[i]))
+			results = append(results, buildPollResult(udb, &polls[i]))
 		}
 		c.JSON(http.StatusOK, gin.H{"data": gin.H{"polls": results, "total": total, "page": page, "limit": limit}})
 	}
@@ -146,12 +146,12 @@ func listPolls(db *gorm.DB) gin.HandlerFunc {
 func getPollResults(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		poll, ok := getUserPoll(c, db, userID)
+		udb := rls.Scoped(db, userID)
+		poll, ok := getUserPoll(c, udb, userID)
 		if !ok {
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"data": buildPollResult(db, poll)})
+		c.JSON(http.StatusOK, gin.H{"data": buildPollResult(udb, poll)})
 	}
 }
 
@@ -159,16 +159,16 @@ func getPollResults(db *gorm.DB) gin.HandlerFunc {
 func closePoll(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		poll, ok := getUserPoll(c, db, userID)
+		udb := rls.Scoped(db, userID)
+		poll, ok := getUserPoll(c, udb, userID)
 		if !ok {
 			return
 		}
-		if err := db.Model(poll).Update("is_closed", true).Error; err != nil {
+		if err := udb.Model(poll).Update("is_closed", true).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menutup poll", "code": "DB_ERROR"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "Poll ditutup", "data": buildPollResult(db, poll)})
+		c.JSON(http.StatusOK, gin.H{"message": "Poll ditutup", "data": buildPollResult(udb, poll)})
 	}
 }
 
@@ -177,8 +177,8 @@ func closePoll(db *gorm.DB) gin.HandlerFunc {
 func sendPollRecap(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
-		poll, ok := getUserPoll(c, db, userID)
+		udb := rls.Scoped(db, userID)
+		poll, ok := getUserPoll(c, udb, userID)
 		if !ok {
 			return
 		}
@@ -194,16 +194,16 @@ func sendPollRecap(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Tujuan (to) wajib diisi", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if !checkDeviceOwnership(c, db, userID, poll.DeviceID) {
+		if !checkDeviceOwnership(c, udb, userID, poll.DeviceID) {
 			return
 		}
 
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
-		if !requireMessageQuota(c, db, userID, 1) {
+		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
 
-		result := buildPollResult(db, poll)
+		result := buildPollResult(udb, poll)
 		counts := make([]int, len(result.Options))
 		options := make([]string, len(result.Options))
 		for i, o := range result.Options {

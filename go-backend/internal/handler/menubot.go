@@ -52,9 +52,9 @@ func menuBotDeviceOK(db *gorm.DB, userID uint, deviceID *uint) bool {
 func listMenuBots(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var bots []models.MenuBot
-		db.Where("user_id = ?", userID).
+		udb.Where("user_id = ?", userID).
 			Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position ASC, id ASC") }).
 			Order("created_at DESC").
 			Find(&bots)
@@ -63,7 +63,7 @@ func listMenuBots(db *gorm.DB) gin.HandlerFunc {
 			RootMenuID uint
 			Count      int64
 		}
-		db.Model(&models.MenuBotSession{}).
+		udb.Model(&models.MenuBotSession{}).
 			Select("root_menu_id, COUNT(*) as count").
 			Where("user_id = ?", userID).
 			Group("root_menu_id").
@@ -86,7 +86,7 @@ func listMenuBots(db *gorm.DB) gin.HandlerFunc {
 func createMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		var req struct {
 			Name           string `json:"name" binding:"required"`
 			DeviceID       *uint  `json:"deviceId"`
@@ -98,7 +98,7 @@ func createMenuBot(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		if !menuBotDeviceOK(db, userID, req.DeviceID) {
+		if !menuBotDeviceOK(udb, userID, req.DeviceID) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Perangkat tidak ditemukan"})
 			return
 		}
@@ -111,7 +111,7 @@ func createMenuBot(db *gorm.DB) gin.HandlerFunc {
 			AlwaysActive:   req.AlwaysActive,
 			IsActive:       false, // default NONAKTIF — diaktifkan eksplisit via toggle
 		}
-		if err := db.Create(&bot).Error; err != nil {
+		if err := udb.Create(&bot).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
 			return
 		}
@@ -122,9 +122,9 @@ func createMenuBot(db *gorm.DB) gin.HandlerFunc {
 func getMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
@@ -136,9 +136,9 @@ func getMenuBot(db *gorm.DB) gin.HandlerFunc {
 func updateMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
@@ -163,7 +163,7 @@ func updateMenuBot(db *gorm.DB) gin.HandlerFunc {
 		if req.ClearDeviceID {
 			updates["device_id"] = nil
 		} else if req.DeviceID != nil {
-			if !menuBotDeviceOK(db, userID, req.DeviceID) {
+			if !menuBotDeviceOK(udb, userID, req.DeviceID) {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Perangkat tidak ditemukan"})
 				return
 			}
@@ -182,10 +182,10 @@ func updateMenuBot(db *gorm.DB) gin.HandlerFunc {
 			updates["is_active"] = *req.IsActive
 		}
 		if len(updates) > 0 {
-			db.Model(bot).Updates(updates)
+			udb.Model(bot).Updates(updates)
 		}
 		// Muat ulang beserta items untuk respons
-		fresh, _ := menuBotOwned(db, userID, bot.ID)
+		fresh, _ := menuBotOwned(udb, userID, bot.ID)
 		c.JSON(http.StatusOK, gin.H{"menuBot": fresh, "message": "Diperbarui"})
 	}
 }
@@ -193,20 +193,20 @@ func updateMenuBot(db *gorm.DB) gin.HandlerFunc {
 func deleteMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
 		}
 		// Item lain yang menunjuk ke menu ini sebagai sub-menu → putuskan tautannya
-		db.Model(&models.MenuBotItem{}).
+		udb.Model(&models.MenuBotItem{}).
 			Where("sub_menu_id = ?", bot.ID).
 			Updates(map[string]interface{}{"sub_menu_id": nil, "action_type": "reply"})
-		db.Where("menu_bot_id = ?", bot.ID).Delete(&models.MenuBotItem{})
-		db.Where("root_menu_id = ? OR current_menu_id = ?", bot.ID, bot.ID).Delete(&models.MenuBotSession{})
-		db.Delete(bot)
+		udb.Where("menu_bot_id = ?", bot.ID).Delete(&models.MenuBotItem{})
+		udb.Where("root_menu_id = ? OR current_menu_id = ?", bot.ID, bot.ID).Delete(&models.MenuBotSession{})
+		udb.Delete(bot)
 		c.JSON(http.StatusOK, gin.H{"message": "Menu bot dihapus"})
 	}
 }
@@ -214,15 +214,15 @@ func deleteMenuBot(db *gorm.DB) gin.HandlerFunc {
 func toggleMenuBot(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
 		}
 		newVal := !bot.IsActive
-		db.Model(bot).Update("is_active", newVal)
+		udb.Model(bot).Update("is_active", newVal)
 		c.JSON(http.StatusOK, gin.H{"isActive": newVal})
 	}
 }
@@ -250,9 +250,9 @@ func validateMenuBotItem(db *gorm.DB, userID, botID uint, actionType string, sub
 func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
@@ -268,7 +268,7 @@ func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		actionType, valid := validateMenuBotItem(db, userID, bot.ID, req.ActionType, req.SubMenuID)
+		actionType, valid := validateMenuBotItem(udb, userID, bot.ID, req.ActionType, req.SubMenuID)
 		if !valid {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Sub-menu tidak valid"})
 			return
@@ -278,7 +278,7 @@ func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 			position = *req.Position
 		} else {
 			var maxPos *int
-			db.Model(&models.MenuBotItem{}).Where("menu_bot_id = ?", bot.ID).
+			udb.Model(&models.MenuBotItem{}).Where("menu_bot_id = ?", bot.ID).
 				Select("MAX(position)").Scan(&maxPos)
 			if maxPos != nil {
 				position = *maxPos + 1
@@ -297,7 +297,7 @@ func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 		if actionType == "reply" {
 			item.SubMenuID = nil
 		}
-		if err := db.Create(&item).Error; err != nil {
+		if err := udb.Create(&item).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
 			return
 		}
@@ -308,16 +308,16 @@ func createMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 func updateMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		itemID, _ := strconv.ParseUint(c.Param("itemId"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
 		}
 		var item models.MenuBotItem
-		if err := db.Where("id = ? AND menu_bot_id = ?", itemID, bot.ID).First(&item).Error; err != nil {
+		if err := udb.Where("id = ? AND menu_bot_id = ?", itemID, bot.ID).First(&item).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Opsi tidak ditemukan"})
 			return
 		}
@@ -338,7 +338,7 @@ func updateMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 			updates["label"] = strings.TrimSpace(*req.Label)
 		}
 		if req.ActionType != nil {
-			actionType, valid := validateMenuBotItem(db, userID, bot.ID, *req.ActionType, req.SubMenuID)
+			actionType, valid := validateMenuBotItem(udb, userID, bot.ID, *req.ActionType, req.SubMenuID)
 			if !valid {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Sub-menu tidak valid"})
 				return
@@ -359,9 +359,9 @@ func updateMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 			updates["position"] = *req.Position
 		}
 		if len(updates) > 0 {
-			db.Model(&item).Updates(updates)
+			udb.Model(&item).Updates(updates)
 		}
-		db.First(&item, item.ID)
+		udb.First(&item, item.ID)
 		c.JSON(http.StatusOK, gin.H{"item": item, "message": "Diperbarui"})
 	}
 }
@@ -369,15 +369,15 @@ func updateMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 func deleteMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 		itemID, _ := strconv.ParseUint(c.Param("itemId"), 10, 32)
-		bot, ok := menuBotOwned(db, userID, uint(id))
+		bot, ok := menuBotOwned(udb, userID, uint(id))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
 		}
-		result := db.Where("id = ? AND menu_bot_id = ?", itemID, bot.ID).Delete(&models.MenuBotItem{})
+		result := udb.Where("id = ? AND menu_bot_id = ?", itemID, bot.ID).Delete(&models.MenuBotItem{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Opsi tidak ditemukan"})
 			return
@@ -389,14 +389,14 @@ func deleteMenuBotItem(db *gorm.DB) gin.HandlerFunc {
 func listMenuBotSessions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-		if _, ok := menuBotOwned(db, userID, uint(id)); !ok {
+		if _, ok := menuBotOwned(udb, userID, uint(id)); !ok {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Menu bot tidak ditemukan"})
 			return
 		}
 		var sessions []models.MenuBotSession
-		db.Where("user_id = ? AND root_menu_id = ?", userID, id).
+		udb.Where("user_id = ? AND root_menu_id = ?", userID, id).
 			Order("last_active_at DESC").
 			Find(&sessions)
 		c.JSON(http.StatusOK, gin.H{"sessions": sessions})
@@ -406,9 +406,9 @@ func listMenuBotSessions(db *gorm.DB) gin.HandlerFunc {
 func deleteMenuBotSession(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
-		db = rls.Scoped(db, userID)
+		udb := rls.Scoped(db, userID)
 		sessionID, _ := strconv.ParseUint(c.Param("sessionId"), 10, 32)
-		result := db.Where("id = ? AND user_id = ?", sessionID, userID).Delete(&models.MenuBotSession{})
+		result := udb.Where("id = ? AND user_id = ?", sessionID, userID).Delete(&models.MenuBotSession{})
 		if result.RowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Sesi tidak ditemukan"})
 			return
