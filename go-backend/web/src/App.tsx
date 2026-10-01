@@ -28,6 +28,7 @@ const Admin = lazy(() => import("@/pages/Admin"));
 const ApiDocs = lazy(() => import("@/pages/ApiDocs"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Langganan = lazy(() => import("@/pages/Langganan"));
+const Afiliasi = lazy(() => import("@/pages/Afiliasi"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -187,7 +188,7 @@ function AppRouter() {
           <Redirect to="/settings?tab=tim" />
         </Route>
         <Route path="/affiliate">
-          <Redirect to="/billing" />
+          <ProtectedRoute><Afiliasi /></ProtectedRoute>
         </Route>
         <Route path="/billing">
           <ProtectedRoute><Langganan /></ProtectedRoute>

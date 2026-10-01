@@ -37,8 +37,11 @@ const TAB_ALIAS: Record<string, string> = {
   tim: "tim",
 };
 
-/** Tab lama yang kini pindah ke halaman /billing. */
-const MOVED_TO_BILLING = new Set(["langganan", "afiliasi"]);
+/** Tab lama yang kini pindah ke halaman sendiri. */
+const MOVED_TABS: Record<string, string> = {
+  langganan: "/billing",
+  afiliasi: "/affiliate",
+};
 
 const VALID_TABS = new Set(TABS.map((t) => t.id));
 const WIDE_TABS = new Set(["tim"]);
@@ -46,9 +49,9 @@ const WIDE_TABS = new Set(["tim"]);
 function initialTab(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("tab");
-    // tab lama yang sudah pindah ke /billing
-    if (q && MOVED_TO_BILLING.has(q)) {
-      window.location.replace("/billing");
+    // tab lama yang sudah pindah ke halaman sendiri
+    if (q && MOVED_TABS[q]) {
+      window.location.replace(MOVED_TABS[q]);
       return "profil";
     }
     const mapped = q ? TAB_ALIAS[q] : undefined;

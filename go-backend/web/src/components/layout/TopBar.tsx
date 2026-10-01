@@ -31,6 +31,7 @@ const routeLabels: Record<string, string> = {
   "/analytics": "Analytics",
   "/anti-banned": "Anti-Banned",
   "/billing": "Langganan",
+  "/affiliate": "Afiliasi",
   "/settings": "Setting",
   "/templates": "Templates",
   "/contact-groups": "Grup Kontak",
