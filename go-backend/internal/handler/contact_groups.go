@@ -22,6 +22,66 @@ func registerContactGroupRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.M
 		g.GET("/:id/members", listGroupMembers(db))
 		g.POST("/:id/members", addGroupMembers(db))
 		g.DELETE("/:id/members/:memberId", removeGroupMember(db))
+		// Fitur 5: setting welcome DM pribadi per grup (hanya grup hasil sync WA).
+		g.GET("/:id/welcome-dm", getWelcomeDMSetting(db))
+		g.PUT("/:id/welcome-dm", updateWelcomeDMSetting(db))
+	}
+}
+
+// getWelcomeDMSetting mengembalikan {enabled, template} welcome DM grup.
+func getWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var group models.ContactGroup
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"enabled":  group.WelcomeDMEnabled,
+			"template": group.WelcomeDMTemplate,
+			"waJid":    group.WAJID,
+		})
+	}
+}
+
+// updateWelcomeDMSetting menyimpan {enabled, template} welcome DM grup.
+// Variabel template yang didukung: {nama} (nama anggota baru) dan {grup}
+// (nama grup). Bila enabled=true tapi template kosong → 400.
+func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var group models.ContactGroup
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
+			return
+		}
+		var req struct {
+			Enabled  bool   `json:"enabled"`
+			Template string `json:"template"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Payload tidak valid"})
+			return
+		}
+		if req.Enabled && req.Template == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Template wajib diisi bila welcome DM diaktifkan"})
+			return
+		}
+		if err := db.Model(&group).Updates(map[string]interface{}{
+			"welcome_dm_enabled":  req.Enabled,
+			"welcome_dm_template": req.Template,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "Pengaturan welcome DM disimpan",
+			"enabled":  req.Enabled,
+			"template": req.Template,
+		})
 	}
 }
 
