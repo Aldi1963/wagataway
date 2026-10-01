@@ -40,6 +40,10 @@ func (s *Scheduler) Start() {
 	// Cleanup expired sessions every hour
 	s.cron.AddFunc("0 0 * * * *", s.cleanupExpiredSessions)
 
+	// Kirim pengingat expired langganan (H-3 / H-1) setiap jam, di menit ke-15
+	// agar tidak bertabrakan dengan job menit-0 lainnya.
+	s.cron.AddFunc("0 15 * * * *", s.processSubscriptionReminders)
+
 	s.cron.Start()
 	log.Info().Msg("Background scheduler started")
 }

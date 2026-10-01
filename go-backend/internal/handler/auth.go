@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/config"
@@ -167,6 +169,7 @@ func handleGetMe(db *gorm.DB) gin.HandlerFunc {
 				"name":         user.Name,
 				"email":        user.Email,
 				"phone":        user.Phone,
+				"notifyWa":     user.NotifyWA,
 				"role":         user.Role,
 				"plan":         user.Plan,
 				"avatar":       user.Avatar,
@@ -186,7 +189,30 @@ func handleLogout() gin.HandlerFunc {
 }
 
 type updateMeRequest struct {
-	Name string `json:"name" binding:"required,min=2,max=100"`
+	Name     *string `json:"name"`
+	NotifyWA *string `json:"notifyWa"`
+}
+
+// normalizeNotifyWA menormalisasi nomor notifikasi WA ke format 62xxxxxxxxxx.
+// Mengembalikan "" bila input kosong (boleh dikosongkan = tidak dikirimi reminder)
+// dan error bila formatnya tidak valid.
+func normalizeNotifyWA(raw string) (string, error) {
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, raw)
+	if digits == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(digits, "0") {
+		digits = "62" + digits[1:]
+	}
+	if len(digits) < 9 || len(digits) > 16 {
+		return "", errors.New("nomor WA harus 9-16 digit")
+	}
+	return digits, nil
 }
 
 func handleUpdateMe(db *gorm.DB) gin.HandlerFunc {
@@ -195,16 +221,38 @@ func handleUpdateMe(db *gorm.DB) gin.HandlerFunc {
 
 		var req updateMeRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Nama tidak valid (min. 2 karakter)", "code": "VALIDATION_ERROR"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid", "code": "VALIDATION_ERROR"})
 			return
 		}
 
-		if err := db.Model(&models.User{}).Where("id = ?", userID).Update("name", req.Name).Error; err != nil {
+		updates := map[string]interface{}{}
+		if req.Name != nil {
+			name := strings.TrimSpace(*req.Name)
+			if len(name) < 2 || len(name) > 100 {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Nama tidak valid (min. 2 karakter)", "code": "VALIDATION_ERROR"})
+				return
+			}
+			updates["name"] = name
+		}
+		if req.NotifyWA != nil {
+			normalized, err := normalizeNotifyWA(strings.TrimSpace(*req.NotifyWA))
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "VALIDATION_ERROR"})
+				return
+			}
+			updates["notify_wa"] = normalized
+		}
+		if len(updates) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tidak ada perubahan", "code": "VALIDATION_ERROR"})
+			return
+		}
+
+		if err := db.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan perubahan", "code": "SERVER_ERROR"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Informasi akun berhasil disimpan", "name": req.Name})
+		c.JSON(http.StatusOK, gin.H{"message": "Informasi akun berhasil disimpan"})
 	}
 }
 

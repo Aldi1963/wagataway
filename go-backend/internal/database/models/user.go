@@ -20,6 +20,9 @@ type User struct {
 	Status    string         `gorm:"size:20;default:active" json:"status"` // active, suspended, banned
 	GoogleID  string         `gorm:"size:255" json:"-"`
 	GithubID  string         `gorm:"size:255" json:"-"`
+	// Nomor notifikasi WA milik user — tujuan pengiriman pengingat expired
+	// langganan otomatis (Fitur 1). Format: 628xxxxxxxxxx. Kosong = tidak dikirimi.
+	NotifyWA  string         `gorm:"size:20" json:"notifyWa"`
 	TwoFASecret string      `gorm:"size:255" json:"-"`
 	TwoFAEnabled bool        `gorm:"default:false" json:"twoFaEnabled"`
 	Timezone  string         `gorm:"size:50;default:Asia/Jakarta" json:"timezone"`

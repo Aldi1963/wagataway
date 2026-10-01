@@ -30,6 +30,11 @@ type Subscription struct {
 	Status    string    `gorm:"size:20;default:active" json:"status"` // active, expired, cancelled
 	StartDate time.Time `gorm:"not null" json:"startDate"`
 	EndDate   time.Time `gorm:"not null" json:"endDate"`
+	// Pengingat expired otomatis (Fitur 1): timestamp kapan reminder H-3 / H-1
+	// dikirim via WA. NULL = belum dikirim untuk periode ini — dipakai sebagai
+	// guard anti-duplikat oleh worker subscription reminder.
+	RemindedH3At *time.Time `json:"remindedH3At,omitempty"`
+	RemindedH1At *time.Time `json:"remindedH1At,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
