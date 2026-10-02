@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /** Bendera Indonesia: merah-putih horizontal. */
 function FlagID({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 16" className={className} aria-hidden>
+    <svg viewBox="0 0 24 16" preserveAspectRatio="xMidYMid slice" className={className} aria-hidden>
       <rect width="24" height="8" fill="#E70011" />
       <rect y="8" width="24" height="8" fill="#F8F8F8" />
     </svg>
@@ -17,7 +17,7 @@ function FlagID({ className }: { className?: string }) {
 /** Bendera Inggris (Union Jack, versi sederhana). */
 function FlagEN({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 16" className={className} aria-hidden>
+    <svg viewBox="0 0 24 16" preserveAspectRatio="xMidYMid slice" className={className} aria-hidden>
       <rect width="24" height="16" fill="#012169" />
       <path d="M0,0 L24,16 M24,0 L0,16" stroke="#FFFFFF" strokeWidth="3" />
       <path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" strokeWidth="1.2" />
@@ -28,8 +28,20 @@ function FlagEN({ className }: { className?: string }) {
 }
 
 function Flag({ lang, className }: { lang: Lang; className?: string }) {
-  const cls = cn("rounded-[3px] ring-1 ring-black/10 shrink-0", className);
-  return lang === "id" ? <FlagID className={cls} /> : <FlagEN className={cls} />;
+  return (
+    <span
+      className={cn(
+        "rounded-full overflow-hidden ring-1 ring-black/10 shrink-0 inline-flex",
+        className
+      )}
+    >
+      {lang === "id" ? (
+        <FlagID className="w-full h-full" />
+      ) : (
+        <FlagEN className="w-full h-full" />
+      )}
+    </span>
+  );
 }
 
 const OPTIONS: { value: Lang; label: string }[] = [
@@ -69,7 +81,7 @@ export function LanguageSwitcher() {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <Flag lang={lang} className="w-5 h-[15px]" />
+        <Flag lang={lang} className="w-5 h-5" />
       </Button>
 
       {open && (
@@ -93,7 +105,7 @@ export function LanguageSwitcher() {
                   : "text-foreground hover:bg-secondary/70"
               )}
             >
-              <Flag lang={o.value} className="w-5 h-[15px]" />
+              <Flag lang={o.value} className="w-5 h-5" />
               <span className="flex-1 text-left">{o.label}</span>
               {lang === o.value && <Check className="w-4 h-4 text-primary" />}
             </button>
