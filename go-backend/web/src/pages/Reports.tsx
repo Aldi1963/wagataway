@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Send, XCircle, Eye, Megaphone } from "lucide-react";
+import { Send, XCircle, Eye, Megaphone, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Dropdown } from "@/components/ui/dropdown";
 import { apiGet } from "@/lib/api";
@@ -153,7 +154,12 @@ export default function Reports({ embedded = false }: { embedded?: boolean }) {
                     </thead>
                     <tbody>
                       {details.length === 0 && (
-                        <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">{t("reports.noData")}</td></tr>
+                        <tr><td colSpan={5} className="py-8 text-center">
+                          <EmptyState
+                            icon={BarChart3}
+                            title={t("reports.noData")}
+                          />
+                        </td></tr>
                       )}
                       {details.map((d) => (
                         <tr key={d.id} className="border-b border-border last:border-0">

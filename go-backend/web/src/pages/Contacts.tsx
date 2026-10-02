@@ -2,6 +2,8 @@ import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
 import { Plus, Search, Pencil, Trash2, X, Upload, RefreshCw, Download, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -532,7 +534,7 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
         <Card>
           <CardContent className="p-5 space-y-3">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-10 rounded-md bg-secondary animate-pulse" />
+              <Skeleton key={i} className="h-10 w-full" />
             ))}
           </CardContent>
         </Card>
@@ -550,23 +552,19 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
         <Card>
           <CardContent className="p-10 text-center">
             {search ? (
-              <>
-                <p className="font-medium mb-1">{t("contacts.noSearchResults")}</p>
-                <p className="text-sm text-muted-foreground">
-                  {t("contacts.tryOtherKeyword")}
-                </p>
-              </>
+              <EmptyState
+                icon={Search}
+                title={t("contacts.noSearchResults")}
+                hint={t("contacts.tryOtherKeyword")}
+              />
             ) : (
-              <div className="space-y-3">
-                <Users className="w-8 h-8 mx-auto text-muted-foreground" />
-                <p className="font-medium">{t("contacts.noContacts")}</p>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  {t("contacts.noContactsHint")}
-                </p>
-                <Button onClick={openAdd} className="gap-1.5">
-                  <Plus className="w-4 h-4" /> {t("contacts.addContact")}
-                </Button>
-              </div>
+              <EmptyState
+                icon={Users}
+                title={t("contacts.noContacts")}
+                hint={t("contacts.noContactsHint")}
+                actionLabel={t("contacts.addContact")}
+                onAction={openAdd}
+              />
             )}
           </CardContent>
         </Card>

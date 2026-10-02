@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -230,17 +231,14 @@ export default function Links() {
 
       {!loading && !error && links.length === 0 && (
         <Card>
-          <CardContent className="p-10 text-center space-y-3">
-            <Link2 className="w-10 h-10 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">
-              {t("links.empty")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t("links.emptyHint")}
-            </p>
-            <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> {t("links.createLink")}
-            </Button>
+          <CardContent className="p-10 text-center">
+            <EmptyState
+              icon={Link2}
+              title={t("links.empty")}
+              hint={t("links.emptyHint")}
+              actionLabel={t("links.createLink")}
+              onAction={() => setShowAdd(true)}
+            />
           </CardContent>
         </Card>
       )}

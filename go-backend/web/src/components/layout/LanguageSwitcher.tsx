@@ -1,8 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import { Globe, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLang, type Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+
+/** Bendera Indonesia: merah-putih horizontal. */
+function FlagID({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 16" className={className} aria-hidden>
+      <rect width="24" height="8" fill="#E70011" />
+      <rect y="8" width="24" height="8" fill="#F8F8F8" />
+    </svg>
+  );
+}
+
+/** Bendera Inggris (Union Jack, versi sederhana). */
+function FlagEN({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 16" className={className} aria-hidden>
+      <rect width="24" height="16" fill="#012169" />
+      <path d="M0,0 L24,16 M24,0 L0,16" stroke="#FFFFFF" strokeWidth="3" />
+      <path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" strokeWidth="1.2" />
+      <path d="M12,0 V16 M0,8 H24" stroke="#FFFFFF" strokeWidth="5" />
+      <path d="M12,0 V16 M0,8 H24" stroke="#C8102E" strokeWidth="3" />
+    </svg>
+  );
+}
+
+function Flag({ lang, className }: { lang: Lang; className?: string }) {
+  const cls = cn("rounded-[3px] ring-1 ring-black/10 shrink-0", className);
+  return lang === "id" ? <FlagID className={cls} /> : <FlagEN className={cls} />;
+}
 
 const OPTIONS: { value: Lang; label: string }[] = [
   { value: "id", label: "Indonesia" },
@@ -41,7 +69,7 @@ export function LanguageSwitcher() {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <Globe className="w-4 h-4" />
+        <Flag lang={lang} className="w-5 h-[15px]" />
       </Button>
 
       {open && (
@@ -59,13 +87,14 @@ export function LanguageSwitcher() {
                 setOpen(false);
               }}
               className={cn(
-                "w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors",
+                "w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
                 lang === o.value
                   ? "bg-secondary font-semibold text-foreground"
                   : "text-foreground hover:bg-secondary/70"
               )}
             >
-              {o.label}
+              <Flag lang={o.value} className="w-5 h-[15px]" />
+              <span className="flex-1 text-left">{o.label}</span>
               {lang === o.value && <Check className="w-4 h-4 text-primary" />}
             </button>
           ))}

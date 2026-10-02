@@ -36,6 +36,7 @@ import (
 type clipkuPay struct {
 	webhookURL string
 	apiKey     string
+	appURL     string
 	db         *gorm.DB
 }
 
@@ -55,6 +56,7 @@ func newClipkuPay(cfg *config.Config, db *gorm.DB) clipkuPay {
 	return clipkuPay{
 		webhookURL: wh,
 		apiKey:     clipkuAPIKeyFromSettings(db),
+		appURL:     strings.TrimSuffix(strings.TrimSpace(cfg.AppURL), "/"),
 		db:         db,
 	}
 }
@@ -265,6 +267,12 @@ func fetchQrisURL(paymentURL string) string {
 func (k clipkuPay) createTransaction(orderID string, amount int64, customerName, customerEmail string) (*clipkuTxData, error) {
 	var out map[string]any
 	var err error
+	// Setelah bayar sukses, halaman Clipku Pay redirect kembali ke WaGataway
+	// (halaman sukses mereka memanggil window.location.replace(d.redirect_url)).
+	redirectURL := ""
+	if k.appURL != "" {
+		redirectURL = k.appURL + "/billing?pay=success&order_id=" + url.QueryEscape(orderID)
+	}
 	if k.apiKey != "" {
 		body := map[string]any{
 			"order_id":        orderID,
@@ -273,6 +281,7 @@ func (k clipkuPay) createTransaction(orderID string, amount int64, customerName,
 			"customer_name":   customerName,
 			"customer_email":  customerEmail,
 			"webhook_url":     k.webhookURL,
+			"redirect_url":    redirectURL,
 		}
 		out, err = k.directCall("POST", "create_transaction", "", body)
 	} else {
@@ -284,6 +293,7 @@ func (k clipkuPay) createTransaction(orderID string, amount int64, customerName,
 			"--name", customerName,
 			"--email", customerEmail,
 			"--webhook-url", k.webhookURL,
+			"--redirect-url", redirectURL,
 		}
 		out, err = k.cliCall(args...)
 	}

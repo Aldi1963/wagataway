@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, X, Users, UserPlus, RefreshCw, ChevronRight, MessageCircleHeart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -305,11 +306,13 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
       ) : groups.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center">
-            <Users className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium mb-1">{t("contactGroups.noGroups")}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("contactGroups.noGroupsHint")}
-            </p>
+            <EmptyState
+              icon={Users}
+              title={t("contactGroups.noGroups")}
+              hint={t("contactGroups.noGroupsHint")}
+              actionLabel={t("contactGroups.createGroup")}
+              onAction={openAdd}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -468,9 +471,10 @@ export default function ContactGroups({ embedded = false }: { embedded?: boolean
               ))}
             </div>
           ) : members.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              {t("contactGroups.noMembers")}
-            </p>
+            <EmptyState
+              icon={Users}
+              title={t("contactGroups.noMembers")}
+            />
           ) : (
             <div className="space-y-2 max-h-[40vh] overflow-y-auto">
               {members.map((m) => {

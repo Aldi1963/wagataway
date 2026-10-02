@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, X, ShieldAlert, RefreshCw, Phone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
@@ -163,11 +164,13 @@ export default function Blacklist({ embedded = false }: { embedded?: boolean }) 
       ) : items.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center">
-            <ShieldAlert className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium mb-1">{t("blacklist.empty")}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("blacklist.emptyHint")}
-            </p>
+            <EmptyState
+              icon={ShieldAlert}
+              title={t("blacklist.empty")}
+              hint={t("blacklist.emptyHint")}
+              actionLabel={t("blacklist.addNumber")}
+              onAction={openAdd}
+            />
           </CardContent>
         </Card>
       ) : (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Clock, X, RefreshCw, Ban, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -445,9 +446,13 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
         />
       ) : schedules.length === 0 ? (
         <div className="rounded-lg border border-border p-8 text-center">
-          <Clock className="w-8 h-8 mx-auto text-muted-foreground" />
-          <p className="text-sm font-medium mt-2">{t("schedule.emptyTitle")}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("schedule.emptyHint")}</p>
+          <EmptyState
+            icon={Clock}
+            title={t("schedule.emptyTitle")}
+            hint={t("schedule.emptyHint")}
+            actionLabel={t("schedule.addNew")}
+            onAction={openAdd}
+          />
         </div>
       ) : (
         <div className="space-y-3">

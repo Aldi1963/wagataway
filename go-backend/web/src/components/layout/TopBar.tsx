@@ -17,8 +17,9 @@ import { useTheme } from "@/hooks/use-theme";
 import { useLang } from "@/lib/i18n";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { CommandPalette } from "../CommandPalette";
 
-const routeTitleKeys: Record<string, string> = {
+export const routeTitleKeys: Record<string, string> = {
   "/": "title.dashboard",
   "/send": "title.send",
   "/bulk": "title.bulk",
@@ -85,6 +86,7 @@ export function TopBar({ onMenu }: TopBarProps) {
   const { theme, toggleTheme } = useTheme();
   const { t } = useLang();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -126,6 +128,7 @@ export function TopBar({ onMenu }: TopBarProps) {
   };
 
   return (
+    <>
     <header className="h-14 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-background sticky top-0 z-30">
       {/* Page title + mobile menu */}
       <div className="flex items-center gap-1 min-w-0">
@@ -144,8 +147,16 @@ export function TopBar({ onMenu }: TopBarProps) {
       {/* Right actions */}
       <div className="flex items-center gap-1 shrink-0">
         {/* Search */}
-        <Button variant="ghost" size="icon" aria-label={t("header.search")} className="text-muted-foreground hidden sm:inline-flex">
+        <Button
+          variant="ghost"
+          aria-label={t("header.search")}
+          onClick={() => setPaletteOpen(true)}
+          className="text-muted-foreground hidden sm:inline-flex items-center gap-2 h-9 px-2.5"
+        >
           <Search className="w-4 h-4" />
+          <kbd className="hidden md:inline-flex text-[10px] border border-border rounded px-1 py-0.5 text-muted-foreground font-sans">
+            Ctrl K
+          </kbd>
         </Button>
 
         {/* Theme toggle */}
@@ -252,5 +263,11 @@ export function TopBar({ onMenu }: TopBarProps) {
         </div>
       </div>
     </header>
+    <CommandPalette
+      open={paletteOpen}
+      onClose={() => setPaletteOpen(false)}
+      onOpen={() => setPaletteOpen(true)}
+    />
+    </>
   );
 }

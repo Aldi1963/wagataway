@@ -2129,6 +2129,10 @@ const id = {
     backToLogin: "Kembali ke halaman masuk",
   },
   onboardingWizard: {
+    startUsing: "Mulai pakai WaGataway",
+    successDevice: "Perangkat terhubung",
+    successMessage: "Pesan tes terkirim",
+    successTitle: "Semua sudah siap!",
     welcome: "Selamat datang di WaGataway",
     welcomeSub: "Selesaikan 3 langkah cepat untuk mulai mengirim pesan",
     step1: "Tambah Perangkat",
@@ -2709,6 +2713,21 @@ const id = {
     statusSuccess: "Sukses",
     statusFailed: "Gagal",
     sending: "Mengirim...",
+  },
+  // ── UI batch 2026-10-02: palette ──
+  palette: {
+    actionAddContact: "Tambah kontak",
+    actionAddDevice: "Tambah perangkat",
+    actionApiDocs: "Buka API docs",
+    actionSchedule: "Jadwalkan pesan",
+    actionSend: "Kirim pesan",
+    clear: "Hapus pencarian",
+    hint: "↑↓ navigasi · Enter buka · Esc tutup",
+    noResults: "Tidak ada hasil yang cocok",
+    placeholder: "Cari halaman, aksi, atau kontak…",
+    sectionActions: "Aksi cepat",
+    sectionContacts: "Kontak",
+    sectionPages: "Halaman",
   },
 };
 
@@ -4831,6 +4850,10 @@ const en: Dict = {
     backToLogin: "Back to sign in",
   },
   onboardingWizard: {
+    startUsing: "Start using WaGataway",
+    successDevice: "Device connected",
+    successMessage: "Test message sent",
+    successTitle: "All set, ready to go!",
     welcome: "Welcome to WaGataway",
     welcomeSub: "Complete 3 quick steps to start sending messages",
     step1: "Add Device",
@@ -5411,6 +5434,21 @@ const en: Dict = {
     statusSuccess: "Successful",
     statusFailed: "Failed",
     sending: "Sending...",
+  },
+  // ── UI batch 2026-10-02: palette ──
+  palette: {
+    actionAddContact: "Add contact",
+    actionAddDevice: "Add device",
+    actionApiDocs: "Open API docs",
+    actionSchedule: "Schedule message",
+    actionSend: "Send message",
+    clear: "Clear search",
+    hint: "↑↓ navigate · Enter open · Esc close",
+    noResults: "No matching results",
+    placeholder: "Search pages, actions, or contacts…",
+    sectionActions: "Quick actions",
+    sectionContacts: "Contacts",
+    sectionPages: "Pages",
   },
 };
 

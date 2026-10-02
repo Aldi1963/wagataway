@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Copy, Gift, Wallet, Users, Plus } from "lucide-react";
+import { Copy, Gift, Wallet, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiGet, apiPost } from "@/lib/api";
@@ -95,12 +96,13 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("affiliate.loading")}</CardContent></Card>
       ) : !info ? (
         <Card>
-          <CardContent className="p-8 text-center space-y-4">
-            <Gift className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
-            <p className="text-sm text-muted-foreground">{t("affiliate.noCode")}</p>
-            <Button onClick={create} disabled={creating} className="gap-1.5">
-              <Plus className="w-4 h-4" /> {creating ? t("affiliate.creating") : t("affiliate.createCode")}
-            </Button>
+          <CardContent className="p-8 text-center">
+            <EmptyState
+              icon={Gift}
+              title={t("affiliate.noCode")}
+              actionLabel={creating ? t("affiliate.creating") : t("affiliate.createCode")}
+              onAction={() => { if (!creating) create(); }}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -179,7 +181,12 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
                   </thead>
                   <tbody>
                     {earnings.length === 0 && (
-                      <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">{t("affiliate.noEarnings")}</td></tr>
+                      <tr><td colSpan={4} className="py-8 text-center">
+                        <EmptyState
+                          icon={Gift}
+                          title={t("affiliate.noEarnings")}
+                        />
+                      </td></tr>
                     )}
                     {earnings.map((e) => (
                       <tr key={e.id} className="border-b border-border last:border-0">

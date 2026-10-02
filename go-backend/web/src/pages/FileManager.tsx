@@ -1,7 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Plus,
   Trash2,
   X,
   RefreshCw,
@@ -16,6 +15,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiDelete } from "@/lib/api";
@@ -341,24 +341,21 @@ export default function FileManager() {
 
       {!loading && !error && filtered.length === 0 && (
         <Card>
-          <CardContent className="p-10 text-center space-y-3">
-            <FolderOpen className="w-8 h-8 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">
-              {query ? t("fileManager.noMatch") : t("fileManager.empty")}
-            </p>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              {query
-                ? t("fileManager.tryOther")
-                : t("fileManager.emptyHint")}
-            </p>
-            {!query && (
-              <Button
-                size="sm"
-                onClick={() => inputRef.current?.click()}
-                className="gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" /> {t("fileManager.uploadFile")}
-              </Button>
+          <CardContent className="p-10 text-center">
+            {!query ? (
+              <EmptyState
+                icon={FolderOpen}
+                title={t("fileManager.empty")}
+                hint={t("fileManager.emptyHint")}
+                actionLabel={t("fileManager.uploadFile")}
+                onAction={() => inputRef.current?.click()}
+              />
+            ) : (
+              <EmptyState
+                icon={FolderOpen}
+                title={t("fileManager.noMatch")}
+                hint={t("fileManager.tryOther")}
+              />
             )}
           </CardContent>
         </Card>

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { History as HistoryIcon, MessageSquareOff, Undo2, ChevronLeft, ChevronRight } from "lucide-react";
+import { History as HistoryIcon, Undo2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiGet, apiDelete } from "@/lib/api";
@@ -124,15 +126,17 @@ export default function History() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t("history.loading")}</p>
-          ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <MessageSquareOff className="h-5 w-5 text-muted-foreground" />
-              </span>
-              <p className="text-sm font-medium text-foreground">{t("history.emptyTitle")}</p>
-              <p className="text-xs text-muted-foreground">{t("history.emptyHint")}</p>
+            <div className="space-y-2">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
             </div>
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={HistoryIcon}
+              title={t("history.emptyTitle")}
+              hint={t("history.emptyHint")}
+            />
           ) : (
             <>
               <div className="overflow-x-auto">

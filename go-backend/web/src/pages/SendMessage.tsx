@@ -17,6 +17,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -307,20 +308,13 @@ export default function SendMessage({ embedded = false }: { embedded?: boolean }
               <div className="h-28 rounded-md bg-muted" />
             </div>
           ) : devices.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <Smartphone className="h-10 w-10 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">
-                  {t("sendMessage.noDevicesTitle")}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t("sendMessage.noDevicesHint")}
-                </p>
-              </div>
-              <Button size="sm" onClick={() => navigate("/")}>
-                {t("sendMessage.goDashboard")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={Smartphone}
+              title={t("sendMessage.noDevicesTitle")}
+              hint={t("sendMessage.noDevicesHint")}
+              actionLabel={t("sendMessage.goDashboard")}
+              onAction={() => navigate("/")}
+            />
           ) : (
             <form onSubmit={handleSend} className="space-y-4">
               {activeDeviceId == null ? (

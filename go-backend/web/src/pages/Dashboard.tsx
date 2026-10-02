@@ -17,6 +17,8 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -735,22 +737,16 @@ export default function Dashboard() {
           {loading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-10 rounded bg-muted animate-pulse" />
+                <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
           ) : devices.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">
-                {t("dashboard.noDevices")}
-              </p>
-              <Button
-                size="sm"
-                className="mt-3 gap-1.5"
-                onClick={() => setShowAdd(true)}
-              >
-                <Plus className="w-4 h-4" /> {t("dashboard.addDevice")}
-              </Button>
-            </div>
+            <EmptyState
+              icon={Smartphone}
+              title={t("dashboard.noDevices")}
+              actionLabel={t("dashboard.addDevice")}
+              onAction={() => setShowAdd(true)}
+            />
           ) : (
             <>
               <div className="overflow-x-auto">

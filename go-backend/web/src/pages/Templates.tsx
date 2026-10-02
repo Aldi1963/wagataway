@@ -1,7 +1,9 @@
 import { toast } from "sonner";
 import { useEffect, useState, type ReactNode } from "react";
-import { Plus, Copy, Trash2, FileText, Pencil, X, RefreshCw, Eye } from "lucide-react";
+import { Plus, Copy, Trash2, FileText, Pencil, X, RefreshCw, Eye, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
@@ -241,9 +243,9 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
           {[0, 1, 2].map((i) => (
             <Card key={i}>
               <CardContent className="p-4">
-                <div className="animate-pulse space-y-3">
-                  <div className="h-4 bg-secondary rounded w-1/2" />
-                  <div className="h-12 bg-secondary rounded w-full" />
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-12 w-full" />
                 </div>
               </CardContent>
             </Card>
@@ -264,17 +266,14 @@ export default function Templates({ embedded = false }: { embedded?: boolean }) 
 
       {!loading && !error && templates.length === 0 && (
         <Card>
-          <CardContent className="p-10 text-center space-y-3">
-            <FileText className="w-8 h-8 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">
-              {t("templates.empty")}
-            </p>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              {t("templates.emptyHint").replace("{var}", "{{nama}}")}.
-            </p>
-            <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> {t("templates.createTemplate")}
-            </Button>
+          <CardContent className="p-10 text-center">
+            <EmptyState
+              icon={LayoutTemplate}
+              title={t("templates.empty")}
+              hint={`${t("templates.emptyHint").replace("{var}", "{{nama}}")}.`}
+              actionLabel={t("templates.createTemplate")}
+              onAction={() => setShowAdd(true)}
+            />
           </CardContent>
         </Card>
       )}

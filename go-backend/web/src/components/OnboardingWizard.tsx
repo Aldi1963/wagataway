@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { X, Smartphone, QrCode, Send, CheckCircle2, RefreshCw } from "lucide-react";
+import { X, Check, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost } from "@/lib/api";
@@ -29,8 +29,6 @@ interface DeviceItem {
   id: number;
   name: string;
 }
-
-const stepIcons = [Smartphone, QrCode, Send];
 
 export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const { t } = useLang();
@@ -195,7 +193,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         type: "text",
       });
       toast.success(t("onboardingWizard.testMessageSent"));
-      finish();
+      setStep(4);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("onboardingWizard.errSendTest"));
     } finally {
@@ -206,7 +204,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" aria-hidden />
-      <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+      <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 sm:p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-1">
           <div>
@@ -227,37 +225,47 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         </div>
 
         {/* Indikator langkah */}
-        <div className="flex items-center gap-1 my-5">
+        <div className="flex items-start my-5">
           {stepLabels.map((label, i) => {
             const n = i + 1;
-            const Icon = stepIcons[i];
             const active = step === n;
             const done = step > n;
+            const last = i === stepLabels.length - 1;
             return (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${
-                    done
-                      ? "bg-emerald-600 border-emerald-600 text-white"
-                      : active
-                        ? "bg-emerald-600/10 border-emerald-600 text-emerald-600"
-                        : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {done ? (
-                    <CheckCircle2 className="w-4 h-4" />
-                  ) : (
-                    <Icon className="w-4 h-4" />
-                  )}
+              <Fragment key={i}>
+                <div className="flex flex-col items-center gap-1.5 shrink-0">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${
+                      done
+                        ? "bg-primary border-primary text-white"
+                        : active
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {done ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <span className="text-sm font-semibold">{n}</span>
+                    )}
+                  </div>
+                  <span
+                    className={`text-[10px] text-center leading-tight max-w-[92px] ${
+                      active ? "font-semibold text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    {label}
+                  </span>
                 </div>
-                <span
-                  className={`text-[10px] text-center leading-tight ${
-                    active ? "font-semibold text-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  {label}
-                </span>
-              </div>
+                {!last && (
+                  <div
+                    aria-hidden
+                    className={`flex-1 h-px mx-1 mt-[17px] ${
+                      done ? "bg-primary" : "bg-border"
+                    }`}
+                  />
+                )}
+              </Fragment>
             );
           })}
         </div>
@@ -280,11 +288,11 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
                 {t("onboardingWizard.deviceHint")}
               </p>
             </div>
-            <div className="flex justify-between">
-              <Button variant="ghost" size="sm" onClick={skip}>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
+              <Button variant="ghost" size="sm" onClick={skip} className="w-full sm:w-auto">
                 {t("onboardingWizard.skip")}
               </Button>
-              <Button size="sm" onClick={createDevice} disabled={saving}>
+              <Button size="sm" onClick={createDevice} disabled={saving} className="w-full sm:w-auto">
                 {saving ? t("onboardingWizard.saving") : t("onboardingWizard.next")}
               </Button>
             </div>
@@ -319,7 +327,7 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
                       qr
                     )}`}
                     alt={t("onboardingWizard.qrAlt")}
-                    className="w-56 h-56 rounded-lg border border-border"
+                    className="w-48 h-48 sm:w-56 sm:h-56 rounded-lg border border-border"
                   />
                   <p className="text-xs text-muted-foreground text-center">
                     {t("onboardingWizard.scanHint")}
@@ -327,14 +335,15 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
                 </>
               )}
             </div>
-            <div className="flex justify-between">
-              <Button variant="ghost" size="sm" onClick={skip}>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
+              <Button variant="ghost" size="sm" onClick={skip} className="w-full sm:w-auto">
                 {t("onboardingWizard.skip")}
               </Button>
               <Button
                 size="sm"
                 onClick={checkConnected}
                 disabled={checking}
+                className="w-full sm:w-auto"
               >
                 {checking ? t("onboardingWizard.checking") : t("onboardingWizard.alreadyConnected")}
               </Button>
@@ -365,14 +374,46 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
                 onChange={(e) => setMessage(e.target.value)}
               />
             </div>
-            <div className="flex justify-between">
-              <Button variant="ghost" size="sm" onClick={skip}>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
+              <Button variant="ghost" size="sm" onClick={skip} className="w-full sm:w-auto">
                 {t("onboardingWizard.skip")}
               </Button>
-              <Button size="sm" onClick={sendTest} disabled={sending}>
+              <Button size="sm" onClick={sendTest} disabled={sending} className="w-full sm:w-auto">
                 {sending ? t("onboardingWizard.sending") : t("onboardingWizard.sendTest")}
               </Button>
             </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-5 py-2 text-center">
+            <div className="flex justify-center">
+              <div className="bg-primary/10 rounded-full p-4">
+                <CheckCircle2 className="w-14 h-14 text-primary" />
+              </div>
+            </div>
+            <div>
+              <h4 className="text-base font-semibold">
+                {t("onboardingWizard.successTitle")}
+              </h4>
+              <div className="mt-4 space-y-2.5 text-left max-w-[240px] mx-auto">
+                <div className="flex items-center gap-2.5 text-sm">
+                  <span className="bg-primary/10 rounded-full p-1 shrink-0">
+                    <Check className="w-3.5 h-3.5 text-primary" />
+                  </span>
+                  <span>{t("onboardingWizard.successDevice")}</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-sm">
+                  <span className="bg-primary/10 rounded-full p-1 shrink-0">
+                    <Check className="w-3.5 h-3.5 text-primary" />
+                  </span>
+                  <span>{t("onboardingWizard.successMessage")}</span>
+                </div>
+              </div>
+            </div>
+            <Button className="w-full" onClick={finish}>
+              {t("onboardingWizard.startUsing")}
+            </Button>
           </div>
         )}
       </div>

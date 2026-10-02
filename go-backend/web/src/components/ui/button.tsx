@@ -44,6 +44,19 @@ const sizeMap: Record<AppSize, "xs" | "sm" | "base" | "lg"> = {
   icon: "base",
 };
 
+// Tinggi & padding eksplisit per size agar konsisten di semua variant.
+// Ditaruh di className (posisi terakhir saat merge ke Kumo) sehingga
+// twMerge selalu memenangkannya atas class size bawaan Kumo
+// (terverifikasi: h-9/px-3/text-base Kumo -> h-10/px-5/text-sm, dst).
+// Icon memakai size-10 (satu grup dengan size-9 bawaan Kumo) agar
+// conflict-resolution twMerge deterministik.
+const sizeClasses: Record<AppSize, string> = {
+  default: "h-10 px-5 text-sm",
+  sm: "h-8 px-4 text-xs",
+  lg: "h-11 px-6",
+  icon: "size-10",
+};
+
 // Soft tint ala MPWA untuk aksi berwanti (di atas Kumo secondary)
 const tintClasses: Partial<Record<AppVariant, string>> = {
   tint: "bg-[#243370]/10 text-[#243370] border border-[#243370]/25 hover:bg-[#243370]/20 dark:bg-[#4c63d2]/15 dark:text-[#aab6f5] dark:border-[#4c63d2]/30 dark:hover:bg-[#4c63d2]/25",
@@ -82,7 +95,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       size: sizeMap[size],
       loading,
       type: type as "submit" | "reset" | "button",
-      className: cn("rounded-full", tintClasses[variant], className),
+      className: cn(
+        "rounded-full",
+        sizeClasses[size],
+        tintClasses[variant],
+        className
+      ),
       ...props,
     } as const;
     if (isIcon) {
