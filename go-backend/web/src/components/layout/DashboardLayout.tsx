@@ -28,7 +28,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [location]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div
+      // h-dvh bukan h-screen: 100vh di Chrome Android melebihi viewport
+      // terlihat saat address bar muncul -> window bisa ke-scroll dan
+      // header ikut kegeser hilang. dvh mengikuti tinggi viewport aktual.
+      className="flex h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background"
+    >
       {/* Mobile backdrop */}
       <div
         aria-hidden
