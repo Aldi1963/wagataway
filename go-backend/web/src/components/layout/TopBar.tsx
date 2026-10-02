@@ -102,6 +102,23 @@ export function TopBar({ onMenu }: TopBarProps) {
 
   const pageLabel = t(routeTitleKeys[location] || "title.dashboard");
   const initials = (user?.name || "U").charAt(0).toUpperCase();
+  const [avatarOk, setAvatarOk] = useState(true);
+
+  // Avatar kartun default; bila gambar gagal dimuat, fallback ke inisial.
+  const AvatarImg = ({ size }: { size: string }) => (
+    <div className={`${size} rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0 overflow-hidden relative`}>
+      {avatarOk ? (
+        <img
+          src="/illustrations/avatar-cartoon.webp"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setAvatarOk(false)}
+        />
+      ) : (
+        initials
+      )}
+    </div>
+  );
 
   const go = (path: string) => {
     setProfileOpen(false);
@@ -162,9 +179,7 @@ export function TopBar({ onMenu }: TopBarProps) {
               profileOpen ? "bg-secondary" : "hover:bg-secondary/70"
             }`}
           >
-            <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
-              {initials}
-            </div>
+            <AvatarImg size="w-7 h-7" />
             <div className="hidden sm:block text-left">
               <p className="text-xs font-medium text-foreground leading-tight">
                 {user?.name || "User"}
@@ -193,9 +208,7 @@ export function TopBar({ onMenu }: TopBarProps) {
               >
                 {/* Identitas */}
                 <div className="p-4 flex items-center gap-3 bg-secondary/40">
-                  <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">
-                    {initials}
-                  </div>
+                  <AvatarImg size="w-10 h-10" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">
                       {user?.name || "User"}
