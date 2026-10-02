@@ -9,6 +9,7 @@ import { apiGet, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
 import { useLang } from "@/lib/i18n";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 interface ScheduleItem {
   id: number;
@@ -491,13 +492,13 @@ export default function Schedule({ embedded = false, forcedView }: { embedded?: 
             </div>
             <div>
               <label className="text-xs font-medium">{t("schedule.sendAtLabel")}</label>
-              <Input
-                className="mt-1"
-                type="datetime-local"
-                value={sendAt}
-                min={toDateTimeLocal(new Date(Date.now() + 60000).toISOString())}
-                onChange={(e) => setSendAt(e.target.value)}
-              />
+              <div className="mt-1">
+                <DateTimePicker
+                  value={sendAt}
+                  onChange={setSendAt}
+                  min={toDateTimeLocal(new Date(Date.now() + 60000).toISOString())}
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
