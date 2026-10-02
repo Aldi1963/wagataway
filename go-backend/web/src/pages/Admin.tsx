@@ -2172,7 +2172,7 @@ function ActivityLogTab() {
 
       {!loading && !error && (
         <>
-          <Card className="hidden md:block">
+          <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[680px]">
                 <thead>
@@ -2209,34 +2209,6 @@ function ActivityLogTab() {
               </table>
             </div>
           </Card>
-
-          {/* Kartu mobile */}
-          <div className="md:hidden space-y-3">
-            {logs.map((l) => (
-              <Card key={l.id}>
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant="secondary">{actionLabel(t, l.action)}</Badge>
-                    <span className="text-xs text-muted-foreground shrink-0">{fmtDate(l.createdAt)}</span>
-                  </div>
-                  <p className="text-sm text-foreground truncate">{l.adminEmail || `Admin #${l.adminId}`}</p>
-                  {(l.targetType || l.detail) && (
-                    <p className="text-xs text-muted-foreground">
-                      {l.targetType ? t("admin.targetLabel").replace("{target}", targetText(l)) : ""}
-                      {l.detail ? `${l.targetType ? " · " : ""}${l.detail}` : ""}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-            {logs.length === 0 && (
-              <Card>
-                <CardContent className="p-8 text-center text-sm text-muted-foreground">
-                  {t("admin.noActivity")}
-                </CardContent>
-              </Card>
-            )}
-          </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <p>
