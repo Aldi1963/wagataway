@@ -201,6 +201,23 @@ type ChatConversation struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+// ── Pengingat follow-up chat ─────────────────────────────────────────────────
+// ChatReminder: pengingat personal untuk menindaklanjuti sebuah percakapan.
+// Saat waktunya tiba, worker membuat notifikasi in-app (bukan pesan ke kontak).
+type ChatReminder struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index;not null" json:"userId"`
+	DeviceID  uint      `gorm:"index;not null" json:"deviceId"`
+	Phone     string    `gorm:"size:20;not null" json:"phone"`
+	Note      string    `gorm:"size:500" json:"note"`
+	RemindAt  time.Time `gorm:"index" json:"remindAt"`
+	IsDone    bool      `gorm:"default:false;index" json:"isDone"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
 // ── Templates ─────────────────────────────────────────────────────────────────
 
 type MessageTemplate struct {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/gin-gonic/gin"
+	"github.com/skip2/go-qrcode"
 	"gorm.io/gorm"
 )
 
@@ -216,9 +218,11 @@ func clipkuDataOf(out map[string]any) *clipkuTxData {
 }
 
 // normalizeQrURL: API Clipku Pay mengembalikan qr_url sebagai payload EMV
-// mentah (string "00020101..."), BUKAN URL gambar. Ubah menjadi URL gambar
-// QR via api.qrserver.com agar bisa langsung dipakai di <img>. Bila sudah
-// berupa URL http(s), dipakai apa adanya.
+// mentah (string "00020101..."), BUKAN URL gambar. Prioritas:
+//  1. Bangun gambar QR dari EMV secara lokal (tanpa layanan pihak ketiga)
+//     → data URL PNG yang langsung bisa dipakai di <img>.
+//  2. Fallback: URL gambar via api.qrserver.com (perilaku lama).
+//  3. Bila sudah berupa URL http(s), dipakai apa adanya.
 func normalizeQrURL(qr string) string {
 	qr = strings.TrimSpace(qr)
 	if qr == "" {
@@ -227,7 +231,25 @@ func normalizeQrURL(qr string) string {
 	if strings.HasPrefix(qr, "http://") || strings.HasPrefix(qr, "https://") {
 		return qr
 	}
+	if dataURL := qrisQRDataURL(qr); dataURL != "" {
+		return dataURL
+	}
 	return "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=" + url.QueryEscape(qr)
+}
+
+// qrisQRDataURL membuat gambar QR PNG dari payload EMV QRIS memakai library
+// lokal (skip2/go-qrcode, sudah dipakai untuk QR 2FA). Mengembalikan data URL
+// "data:image/png;base64,..." atau "" bila gagal.
+func qrisQRDataURL(emv string) string {
+	emv = strings.TrimSpace(emv)
+	if emv == "" {
+		return ""
+	}
+	png, err := qrcode.Encode(emv, qrcode.Medium, 320)
+	if err != nil {
+		return ""
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
 }
 
 // fetchQrisURL mengambil URL gambar QR QRIS dari halaman pembayaran Clipku Pay.

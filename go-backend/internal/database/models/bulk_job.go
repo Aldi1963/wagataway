@@ -19,7 +19,10 @@ type BulkJob struct {
 	Content     string         `gorm:"type:text" json:"content"`
 	MediaURL    string         `gorm:"size:500" json:"mediaUrl"`
 	Caption     string         `gorm:"type:text" json:"caption"`
-	Status      string         `gorm:"size:20;default:pending" json:"status"` // pending, processing, completed, failed, cancelled
+	Status      string         `gorm:"size:20;default:pending" json:"status"` // pending, processing, completed, failed, cancelled, scheduled
+	// ScheduledAt: bila diisi (masa depan), job tidak langsung diproses —
+	// worker scheduler akan menjalankannya saat waktunya tiba.
+	ScheduledAt *time.Time `json:"scheduledAt"`
 	TotalCount  int            `gorm:"default:0" json:"totalCount"`
 	SentCount   int            `gorm:"default:0" json:"sentCount"`
 	FailedCount int            `gorm:"default:0" json:"failedCount"`

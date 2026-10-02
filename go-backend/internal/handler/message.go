@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -23,6 +24,7 @@ func registerMessageRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manage
 		msgs.POST("/send-bulk", middleware.RequireScope("messages:send"), sendBulkMessage(db, wm))
 		msgs.POST("/check-recipients", middleware.RequireScope("messages:send"), checkRecipients(db, wm))
 		msgs.GET("/bulk-jobs", middleware.RequireScope("messages:read"), listBulkJobs(db))
+		msgs.POST("/bulk-jobs/:id/retry", middleware.RequireScope("messages:send"), retryBulkJob(db, wm))
 		msgs.GET("/bulk-stats", middleware.RequireScope("messages:read"), bulkStats(db))
 		registerMessageExtraRoutes(msgs, db, wm)
 		registerPollRoutes(rg, db, wm)
@@ -139,13 +141,28 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 		}
 
+		// Personalisasi variabel template: {nama} dari kontak, {nomor} = tujuan.
+		content := req.Content
+		if strings.Contains(content, "{") {
+			var ct models.Contact
+			name := ""
+			if err := udb.Where("user_id = ? AND phone = ?", userID, req.To).First(&ct).Error; err == nil {
+				name = strings.TrimSpace(ct.Name)
+			}
+			if name == "" {
+				name = req.To
+			}
+			content = strings.ReplaceAll(content, "{nama}", name)
+			content = strings.ReplaceAll(content, "{nomor}", req.To)
+		}
+
 		// Create message record
 		msg := models.Message{
 			UserID:         userID,
 			DeviceID:       req.DeviceID,
 			To:             req.To,
 			Type:           req.Type,
-			Content:        req.Content,
+			Content:        content,
 			MediaURL:       mediaURL,
 			Caption:        req.Caption,
 			Status:         "pending",
@@ -163,7 +180,7 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		go func() {
 			waID, err := wm.SendMessageWithOptions(req.DeviceID, req.To, whatsapp.SendOptions{
 				Type:     req.Type,
-				Content:  req.Content,
+				Content:  content,
 				MediaURL: mediaURL,
 				ReplyTo:  req.ReplyTo,
 			})
@@ -201,6 +218,10 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			// dibuat dan sebelum distribusi round-robin ke device pengirim.
 			// Default false agar perilaku lama tidak berubah.
 			AutoClean bool `json:"autoClean"`
+			// ScheduledAt: ISO datetime (mis. "2026-10-05T14:30"). Bila diisi dan
+			// masih di masa depan, job dibuat dengan status "scheduled" dan
+			// diproses worker saat waktunya tiba (tidak langsung dikirim).
+			ScheduledAt string `json:"scheduledAt"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -260,6 +281,22 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Minimal satu device harus sedang connected, kalau tidak blast langsung gagal.
+		// Dikecualikan untuk blast terjadwal: device boleh online belakangan,
+		// worker yang akan mengeksekusi saat waktunya tiba.
+		isScheduled := false
+		{
+			s := strings.TrimSpace(req.ScheduledAt)
+			if s != "" {
+				var t time.Time
+				var err error
+				if t, err = time.Parse("2006-01-02T15:04", s); err != nil {
+					t, err = time.Parse(time.RFC3339, s)
+				}
+				if err == nil && t.After(time.Now()) {
+					isScheduled = true
+				}
+			}
+		}
 		anyConnected := false
 		for _, id := range deviceIDs {
 			if wm.GetStatus(id) == "connected" {
@@ -267,7 +304,7 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				break
 			}
 		}
-		if !anyConnected {
+		if !anyConnected && !isScheduled {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Tidak ada perangkat pengirim yang terhubung", "code": "NO_DEVICE_CONNECTED"})
 			return
 		}
@@ -326,6 +363,22 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 		// Create bulk job
 		idsJSON, _ := json.Marshal(deviceIDs)
+
+		// Blast terjadwal: parsed dari ISO datetime lokal (sudah divalidasi di atas).
+		var scheduledAt *time.Time
+		jobStatus := "pending"
+		if isScheduled {
+			s := strings.TrimSpace(req.ScheduledAt)
+			if t, err := time.Parse("2006-01-02T15:04", s); err == nil {
+				scheduledAt = &t
+			} else if t, err := time.Parse(time.RFC3339, s); err == nil {
+				scheduledAt = &t
+			}
+			if scheduledAt != nil {
+				jobStatus = "scheduled"
+			}
+		}
+
 		job := models.BulkJob{
 			UserID:         userID,
 			DeviceID:       deviceIDs[0],
@@ -333,7 +386,8 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Type:           req.Type,
 			Content:        req.Content,
 			MediaURL:       mediaURL,
-			Status:         "pending",
+			Status:         jobStatus,
+			ScheduledAt:    scheduledAt,
 			TotalCount:     len(recipients),
 			MinDelay:       req.MinDelay,
 			MaxDelay:       req.MaxDelay,
@@ -347,14 +401,38 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// Nama penerima untuk personalisasi {nama}: ambil dari kontak user.
+		namesByPhone := map[string]string{}
+		if len(recipients) > 0 {
+			var contacts []models.Contact
+			udb.Where("user_id = ? AND phone IN ?", userID, recipients).Find(&contacts)
+			for _, ct := range contacts {
+				if strings.TrimSpace(ct.Name) != "" {
+					namesByPhone[ct.Phone] = strings.TrimSpace(ct.Name)
+				}
+			}
+		}
+
 		// Create recipients
 		for _, phone := range recipients {
 			recipient := models.BulkJobRecipient{
 				BulkJobID: job.ID,
 				Phone:     phone,
+				Name:      namesByPhone[phone],
 				Status:    "pending",
 			}
 			udb.Create(&recipient)
+		}
+
+		if jobStatus == "scheduled" {
+			c.JSON(http.StatusOK, gin.H{
+				"message":     "Blast dijadwalkan",
+				"job":         job,
+				"deviceIds":   deviceIDs,
+				"cleaned":     cleaned,
+				"scheduledAt": scheduledAt,
+			})
+			return
 		}
 
 		// Process in background
@@ -480,9 +558,56 @@ func listBulkJobs(db *gorm.DB) gin.HandlerFunc {
 				"skippedCount":    j.SkippedCount,
 				"skippedNumbers":  skipped,
 				"contentPreview":  content,
+				"scheduledAt":     j.ScheduledAt,
 				"createdAt":       j.CreatedAt,
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"jobs": out})
+	}
+}
+
+// POST /api/messages/bulk-jobs/:id/retry — kirim ulang khusus penerima yang
+// gagal. Reset status failed → pending lalu proses ulang di background.
+// Hanya untuk job milik user yang sudah selesai diproses (completed/failed).
+func retryBulkJob(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil || id <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "ID job tidak valid", "code": "VALIDATION_ERROR"})
+			return
+		}
+		var job models.BulkJob
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&job).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Job tidak ditemukan", "code": "NOT_FOUND"})
+			return
+		}
+		if job.Status == "processing" || job.Status == "pending" || job.Status == "scheduled" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Job masih berjalan / terjadwal — tunggu selesai dulu", "code": "JOB_ACTIVE"})
+			return
+		}
+		var failedCount int64
+		udb.Model(&models.BulkJobRecipient{}).
+			Where("bulk_job_id = ? AND status = ?", job.ID, "failed").
+			Count(&failedCount)
+		if failedCount == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tidak ada penerima yang gagal", "code": "NO_FAILED"})
+			return
+		}
+		udb.Model(&models.BulkJobRecipient{}).
+			Where("bulk_job_id = ? AND status = ?", job.ID, "failed").
+			Updates(map[string]any{"status": "pending", "error_msg": ""})
+		udb.Model(&job).Updates(map[string]any{
+			"status":       "pending",
+			"failed_count": 0,
+			"completed_at": nil,
+		})
+		go wm.ProcessBulkJob(job.ID, udb)
+		c.JSON(http.StatusOK, gin.H{
+			"message":    "Mengirim ulang penerima yang gagal",
+			"retried":    failedCount,
+			"jobId":      job.ID,
+		})
 	}
 }

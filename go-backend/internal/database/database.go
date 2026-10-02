@@ -106,6 +106,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.IntegrationLog{},
 		&models.Session{},
 		&models.LoginHistory{},
+		&models.ChatReminder{},
 	); err != nil {
 		return err
 	}

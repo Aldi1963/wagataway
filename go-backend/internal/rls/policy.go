@@ -13,7 +13,7 @@ var userScopedTables = []string{
 	"affiliates", "ai_reply_configs", "api_keys", "auto_replies",
 	"blacklists", "bot_orders", "bot_products", "bulk_jobs",
 	"canned_responses", "chat_assignments", "chat_conversations",
-	"chat_inboxes", "chat_labels", "contact_groups", "contacts",
+	"chat_inboxes", "chat_labels", "chat_reminders", "contact_groups", "contacts",
 	"cs_bots", "devices", "drip_campaigns", "files", "followups",
 	"group_rules", "integrations", "login_histories", "menu_bot_sessions", "menu_bots",
 	"message_reports", "message_templates", "messages", "notifications",

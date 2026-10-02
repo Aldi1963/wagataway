@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
@@ -35,7 +36,7 @@ func resolveSyncClient(c *gin.Context, db *gorm.DB, wm *whatsapp.Manager, device
 	}
 	client := wm.GetClient(deviceID)
 	if client == nil || wm.GetStatus(deviceID) != "connected" || !client.IsConnected() {
-		return nil, fmt.Errorf("perangkat %q belum terhubung", device.Name)
+		return nil, fmt.Errorf("perangkat %q belum terhubung — hubungkan dulu di Dashboard lalu coba lagi", device.Name)
 	}
 	return client, nil
 }
@@ -91,13 +92,15 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
-		waContacts, err := client.Store.Contacts.GetAllContacts(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		waContacts, err := client.Store.Contacts.GetAllContacts(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca kontak dari WhatsApp", "code": "WA_ERROR"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca kontak dari WhatsApp: " + err.Error(), "code": "WA_ERROR"})
 			return
 		}
 
-		added, filled := 0, 0
+		added, filled, failed := 0, 0, 0
 		for jid, info := range waContacts {
 			// hanya kontak personal (bukan grup g.us / lid / broadcast)
 			if jid.Server != types.DefaultUserServer {
@@ -107,18 +110,31 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			if !digitsOnly.MatchString(phone) {
 				continue
 			}
-			created, nameFilled := upsertSyncContact(udb, userID, phone, waContactName(info, phone))
-			if created {
-				added++
-			} else if nameFilled {
-				filled++
-			}
+			func() {
+				defer func() {
+					// Satu kontak rusak tidak boleh menggagalkan seluruh sync.
+					if r := recover(); r != nil {
+						failed++
+					}
+				}()
+				created, nameFilled := upsertSyncContact(udb, userID, phone, waContactName(info, phone))
+				if created {
+					added++
+				} else if nameFilled {
+					filled++
+				}
+			}()
 		}
 
+		msg := fmt.Sprintf("Sync selesai: %d kontak baru, %d nama dilengkapi", added, filled)
+		if failed > 0 {
+			msg += fmt.Sprintf(", %d dilewati (gagal diproses)", failed)
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"added":   added,
 			"updated": filled,
-			"message": fmt.Sprintf("Sync selesai: %d kontak baru, %d nama dilengkapi", added, filled),
+			"failed":  failed,
+			"message": msg,
 		})
 	}
 }

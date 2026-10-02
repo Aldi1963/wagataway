@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile } from "lucide-react";
+import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile, Download, BellRing, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { apiGet, apiPatch, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
 import { useLang } from "@/lib/i18n";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 interface Template {
   id: number;
@@ -34,6 +35,14 @@ interface ChatLabel {
   id: number;
   name: string;
   color: string;
+}
+
+interface ChatReminder {
+  id: number;
+  deviceId: number;
+  phone: string;
+  note: string;
+  remindAt: string;
 }
 
 interface ChatAssignment {
@@ -226,6 +235,12 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  // Ekspor chat & pengingat follow-up
+  const [exporting, setExporting] = useState(false);
+  const [reminders, setReminders] = useState<ChatReminder[]>([]);
+  const [reminderAt, setReminderAt] = useState("");
+  const [reminderNote, setReminderNote] = useState("");
+  const [savingReminder, setSavingReminder] = useState(false);
 
   /** Bunyi beep sederhana via Web Audio API (tanpa file eksternal). */
   const playNotificationSound = () => {
@@ -425,6 +440,92 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       toast.error(t("liveChat.copyError"));
     }
   };
+
+  // ── Ekspor riwayat chat (TXT/CSV) ──
+  const exportChat = async (format: "txt" | "csv") => {
+    if (!activePhone || !activeDeviceId || exporting) return;
+    setExporting(true);
+    try {
+      const res = await apiFetch(
+        `/chat/export?deviceId=${activeDeviceId}&phone=${encodeURIComponent(activePhone)}&format=${format}`
+      );
+      if (!res.ok) throw new Error(t("liveChat.exportFailed"));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `chat-${activePhone}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(t("liveChat.exported"));
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ── Pengingat follow-up ──
+  const loadReminders = async () => {
+    if (!activeDeviceId) return;
+    try {
+      const res = await apiGet<{ reminders: ChatReminder[] }>(
+        `/chat/reminders?deviceId=${activeDeviceId}`
+      );
+      setReminders(res.reminders ?? []);
+    } catch {
+      // opsional
+    }
+  };
+
+  useEffect(() => {
+    if (showInfo && activePhone) {
+      loadReminders();
+      setReminderAt("");
+      setReminderNote("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInfo, activePhone]);
+
+  const saveReminder = async () => {
+    if (!activePhone || !activeDeviceId || !reminderAt) {
+      toast.error(t("liveChat.reminderNeedTime"));
+      return;
+    }
+    setSavingReminder(true);
+    try {
+      await apiPost("/chat/reminders", {
+        deviceId: activeDeviceId,
+        phone: activePhone,
+        remindAt: reminderAt,
+        note: reminderNote.trim(),
+      });
+      toast.success(t("liveChat.reminderSaved"));
+      setReminderAt("");
+      setReminderNote("");
+      loadReminders();
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    } finally {
+      setSavingReminder(false);
+    }
+  };
+
+  const deleteReminder = async (id: number) => {
+    try {
+      await apiDelete(`/chat/reminders/${id}`);
+      setReminders((prev) => prev.filter((r) => r.id !== id));
+      toast.success(t("liveChat.reminderDeleted"));
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    }
+  };
+
+  const reminderForPhone = activePhone
+    ? reminders.find((r) => r.phone === activePhone)
+    : undefined;
 
   // ── Aksi percakapan: semat, status, label ──
   const togglePin = async () => {
@@ -896,6 +997,94 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                             <ArchiveRestore className="w-3.5 h-3.5" />
                             {t("liveChat.unarchive")}
                           </Button>
+                        )}
+                      </div>
+
+                      {/* Ekspor riwayat */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <Download className="w-3 h-3" />
+                          {t("liveChat.exportTitle")}
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={() => exportChat("txt")}
+                            disabled={exporting}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            TXT
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={() => exportChat("csv")}
+                            disabled={exporting}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            CSV
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Pengingat follow-up */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <BellRing className="w-3 h-3" />
+                          {t("liveChat.reminderTitle")}
+                        </p>
+                        {reminderForPhone ? (
+                          <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5">
+                            <p className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                              {new Date(reminderForPhone.remindAt).toLocaleString("id-ID", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                            {reminderForPhone.note && (
+                              <p className="mt-0.5 text-[11px] text-muted-foreground break-words">
+                                {reminderForPhone.note}
+                              </p>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1 h-7 text-[11px] gap-1 text-red-600 hover:text-red-700 px-1"
+                              onClick={() => deleteReminder(reminderForPhone.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {t("liveChat.reminderCancel")}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            <DateTimePicker
+                              value={reminderAt}
+                              onChange={setReminderAt}
+                              placeholder={t("liveChat.reminderPickTime")}
+                            />
+                            <Input
+                              className="h-8 text-xs"
+                              placeholder={t("liveChat.reminderNotePlaceholder")}
+                              value={reminderNote}
+                              onChange={(e) => setReminderNote(e.target.value)}
+                              maxLength={500}
+                            />
+                            <Button
+                              size="sm"
+                              className="w-full h-8 text-xs gap-1.5"
+                              onClick={saveReminder}
+                              disabled={savingReminder || !reminderAt}
+                            >
+                              <BellRing className="w-3.5 h-3.5" />
+                              {savingReminder ? t("liveChat.saving") : t("liveChat.reminderSet")}
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>

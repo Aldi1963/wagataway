@@ -29,6 +29,12 @@ func (s *Scheduler) Start() {
 	// Process scheduled messages every 30 seconds
 	s.cron.AddFunc("*/30 * * * * *", s.processScheduledMessages)
 
+	// Process scheduled bulk jobs (blast terjadwal) every 30 seconds
+	s.cron.AddFunc("*/30 * * * * *", s.processScheduledBulkJobs)
+
+	// Fire chat reminders (pengingat follow-up) every minute
+	s.cron.AddFunc("0 * * * * *", s.processChatReminders)
+
 	// Process drip campaign steps every minute
 	s.cron.AddFunc("0 * * * * *", s.processDripSteps)
 
@@ -82,6 +88,71 @@ func (s *Scheduler) processScheduledMessages() {
 
 	if len(messages) > 0 {
 		log.Info().Int("count", len(messages)).Msg("Processed scheduled messages")
+	}
+}
+
+// processScheduledBulkJobs menjalankan blast yang dijadwalkan (status
+// "scheduled" dan scheduled_at sudah lewat). Job diklaim atomik via status
+// agar tidak diproses ganda.
+func (s *Scheduler) processScheduledBulkJobs() {
+	var jobs []models.BulkJob
+	now := time.Now()
+	s.db.Where("status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?", "scheduled", now).
+		Limit(20).
+		Find(&jobs)
+
+	for _, job := range jobs {
+		// Klaim: hanya satu worker yang boleh memproses.
+		res := s.db.Model(&models.BulkJob{}).
+			Where("id = ? AND status = ?", job.ID, "scheduled").
+			Update("status", "pending")
+		if res.RowsAffected == 0 {
+			continue
+		}
+		log.Info().Uint("jobID", job.ID).Msg("Menjalankan blast terjadwal")
+		go s.waManager.ProcessBulkJob(job.ID, s.db)
+	}
+}
+
+// processChatReminders memicu pengingat follow-up yang sudah waktunya:
+// buat notifikasi in-app lalu tandai selesai. Idempoten via klaim atomik.
+func (s *Scheduler) processChatReminders() {
+	var items []models.ChatReminder
+	now := time.Now()
+	s.db.Where("is_done = ? AND remind_at <= ?", false, now).
+		Limit(50).
+		Find(&items)
+
+	for _, rem := range items {
+		res := s.db.Model(&models.ChatReminder{}).
+			Where("id = ? AND is_done = ?", rem.ID, false).
+			Update("is_done", true)
+		if res.RowsAffected == 0 {
+			continue
+		}
+		// Nama kontak untuk pesan notifikasi yang ramah.
+		name := rem.Phone
+		var conv models.ChatConversation
+		if err := s.db.Where("user_id = ? AND device_id = ? AND phone = ?",
+			rem.UserID, rem.DeviceID, rem.Phone).Order("updated_at DESC").First(&conv).Error; err == nil {
+			if conv.ContactName != "" {
+				name = conv.ContactName
+			}
+		}
+		title := "Pengingat follow-up: " + name
+		msg := "Waktunya menindaklanjuti chat dengan " + name + " (" + rem.Phone + ")."
+		if rem.Note != "" {
+			msg += " Catatan: " + rem.Note
+		}
+		uid := rem.UserID
+		s.db.Create(&models.Notification{
+			UserID:  &uid,
+			Type:    "chat_reminder",
+			Title:   title,
+			Message: msg,
+			Link:    "/live-chat",
+		})
+		log.Info().Uint("reminderID", rem.ID).Msg("Pengingat follow-up dipicu")
 	}
 }
 

@@ -57,6 +57,10 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 		chat.PATCH("/conversations/:phone/pin", setConversationPin(db))
 		chat.PATCH("/conversations/:phone/status", setConversationStatus(db))
 		chat.GET("/profile-pic", getProfilePic(db, wm))
+		chat.GET("/export", exportChatHistory(db))
+		chat.GET("/reminders", listChatReminders(db))
+		chat.POST("/reminders", createChatReminder(db))
+		chat.DELETE("/reminders/:id", deleteChatReminder(db))
 	}
 }
 

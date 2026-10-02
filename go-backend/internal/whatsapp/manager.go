@@ -416,6 +416,22 @@ func (m *Manager) ProcessBulkJob(jobID uint, db *gorm.DB) {
 	m.finishBulkJob(db, &job)
 }
 
+// personalizeBulkContent mengganti variabel template di konten blast per
+// penerima. Variabel yang didukung: {nama} (nama kontak, fallback nomor HP),
+// {nomor} (nomor penerima). Tanpa variabel, konten dikembalikan apa adanya.
+func personalizeBulkContent(content string, r models.BulkJobRecipient) string {
+	if !strings.Contains(content, "{") {
+		return content
+	}
+	name := strings.TrimSpace(r.Name)
+	if name == "" {
+		name = r.Phone
+	}
+	out := strings.ReplaceAll(content, "{nama}", name)
+	out = strings.ReplaceAll(out, "{nomor}", r.Phone)
+	return out
+}
+
 // processBulkQueue mengirim satu antrean penerima via satu device, dengan jeda
 // acak min–max detik antar pesan (berlaku per device). Mengembalikan sisa
 // antrean bila device disconnect di tengah jalan (untuk failover ke device
@@ -429,7 +445,7 @@ func (m *Manager) processBulkQueue(db *gorm.DB, job *models.BulkJob, deviceID ui
 
 		waMsgID, err := m.SendMessageWithOptions(deviceID, r.Phone, SendOptions{
 			Type:     job.Type,
-			Content:  job.Content,
+			Content:  personalizeBulkContent(job.Content, r),
 			MediaURL: job.MediaURL,
 		})
 

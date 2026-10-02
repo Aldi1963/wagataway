@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, Upload, Users, UsersRound, Loader2, Smartphone, Filter, X, ChevronDown, History } from "lucide-react";
+import { Send, Upload, Users, UsersRound, Loader2, Smartphone, Filter, X, ChevronDown, History, CalendarClock, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { apiGet, apiPost } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { DateTimePicker } from "@/components/DateTimePicker";
+import { TemplatePicker, TemplatePickerLabel } from "@/components/TemplatePicker";
 
 interface SimpleContact {
   id: number;
@@ -51,6 +53,7 @@ interface BulkJobItem {
   skippedCount: number;
   skippedNumbers: string[];
   contentPreview: string;
+  scheduledAt: string | null;
   createdAt: string;
 }
 
@@ -77,6 +80,10 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
   const [history, setHistory] = useState<BulkJobItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [expandedJob, setExpandedJob] = useState<number | null>(null);
+  const [retrying, setRetrying] = useState<number | null>(null);
+  // Blast terjadwal
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadHistory = async () => {
@@ -237,6 +244,10 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
       toast.error(err);
       return;
     }
+    if (scheduleEnabled && !scheduledAt) {
+      toast.error(t("bulkMessages.errNoScheduleTime"));
+      return;
+    }
 
     // Fitur 4: bila toggle aktif, validasi dulu lalu minta konfirmasi.
     if (autoClean) {
@@ -277,6 +288,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
         minDelay: min,
         maxDelay: max,
         autoClean: cleaned,
+        scheduledAt: scheduleEnabled && scheduledAt ? scheduledAt : "",
       });
       const c = res.cleaned;
       if (c?.applied) {
@@ -285,6 +297,10 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
             .replace("{valid}", String(c.valid))
             .replace("{excluded}", String(c.excluded))
             .replace("{jobId}", String(res.job?.id))
+        );
+      } else if (scheduleEnabled && scheduledAt) {
+        toast.success(
+          t("bulkMessages.blastPlanned").replace("{jobId}", String(res.job?.id))
         );
       } else {
         toast.success(
@@ -297,6 +313,8 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
       setRecipients("");
       setMessage("");
       setCheckResult(null);
+      setScheduleEnabled(false);
+      setScheduledAt("");
       loadHistory();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("bulkMessages.scheduleFailed"));
@@ -314,6 +332,24 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
   };
 
   const connectedCount = devices.filter((d) => d.status === "connected").length;
+
+  const handleRetry = async (jobId: number) => {
+    setRetrying(jobId);
+    try {
+      const res = await apiPost<{ message: string; retried: number }>(
+        `/messages/bulk-jobs/${jobId}/retry`,
+        {}
+      );
+      toast.success(
+        t("bulkMessages.retryDone").replace("{n}", String(res.retried))
+      );
+      loadHistory();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("bulkMessages.retryFailed"));
+    } finally {
+      setRetrying(null);
+    }
+  };
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -428,13 +464,17 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-foreground">{t("bulkMessages.labelMessage")}</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-medium text-foreground">{t("bulkMessages.labelMessage")}</label>
+              <TemplatePicker onSelect={(c) => setMessage(c)} />
+            </div>
             <textarea
               className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-[100px] resize-y"
               placeholder={t("bulkMessages.messagePlaceholder")}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />
+            <TemplatePickerLabel />
           </div>
 
           <div className="space-y-2">
@@ -453,10 +493,43 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
             </div>
           </div>
 
+          <label
+            className={`flex items-start gap-3 rounded-lg border border-border px-3 py-2.5 text-sm cursor-pointer hover:bg-muted/50 ${
+              scheduleEnabled ? "border-[#243370] bg-[#243370]/5" : ""
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 mt-0.5 shrink-0 accent-[#243370]"
+              checked={scheduleEnabled}
+              onChange={(e) => setScheduleEnabled(e.target.checked)}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5 font-medium">
+                <CalendarClock className="w-3.5 h-3.5 text-[#243370]" />
+                {t("bulkMessages.scheduleTitle")}
+              </span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                {t("bulkMessages.scheduleDesc")}
+              </span>
+              {scheduleEnabled && (
+                <span className="block mt-2" onClick={(e) => e.stopPropagation()}>
+                  <DateTimePicker value={scheduledAt} onChange={setScheduledAt} />
+                </span>
+              )}
+            </span>
+          </label>
+
           <div className="flex flex-wrap gap-2 pt-2">
             <Button className="gap-2" onClick={handleSend} disabled={sending || checking || devicesLoading}>
               {sending || checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {checking ? t("bulkMessages.checkingLabel") : sending ? t("bulkMessages.schedulingLabel") : t("bulkMessages.sendBlast")}
+              {checking
+                ? t("bulkMessages.checkingLabel")
+                : sending
+                  ? t("bulkMessages.schedulingLabel")
+                  : scheduleEnabled
+                    ? t("bulkMessages.scheduleBlast")
+                    : t("bulkMessages.sendBlast")}
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={loadingNumbers}>
               <Upload className="w-4 h-4" />
@@ -569,6 +642,7 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                     <th className="py-2 pr-3 font-medium text-right">{t("bulkMessages.headerFailed")}</th>
                     <th className="py-2 pr-3 font-medium text-right">{t("bulkMessages.headerExcluded")}</th>
                     <th className="py-2 pr-3 font-medium">{t("bulkMessages.headerCreated")}</th>
+                    <th className="py-2 pr-3 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -578,7 +652,9 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                         <td className="py-2 pr-3 font-mono">#{j.id}</td>
                         <td className="py-2 pr-3">
                           <Badge variant={j.status === "completed" ? "success" : j.status === "failed" ? "destructive" : "secondary"}>
-                            {j.status}
+                            {j.status === "scheduled" && j.scheduledAt
+                              ? `${t("bulkMessages.statusScheduled")} ${new Date(j.scheduledAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`
+                              : j.status}
                           </Badge>
                         </td>
                         <td className="py-2 pr-3 text-right">{j.totalCount}</td>
@@ -600,10 +676,28 @@ export default function BulkMessages({ embedded = false }: { embedded?: boolean 
                         <td className="py-2 pr-3 text-muted-foreground">
                           {new Date(j.createdAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                         </td>
+                        <td className="py-2 pr-3 text-right">
+                          {j.failedCount > 0 && (j.status === "completed" || j.status === "failed") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[11px] gap-1"
+                              onClick={() => handleRetry(j.id)}
+                              disabled={retrying === j.id}
+                            >
+                              {retrying === j.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-3 h-3" />
+                              )}
+                              {t("bulkMessages.retryFailed")}
+                            </Button>
+                          )}
+                        </td>
                       </tr>
                       {expandedJob === j.id && j.skippedNumbers.length > 0 && (
                         <tr>
-                          <td colSpan={7} className="py-2 pr-3">
+                          <td colSpan={8} className="py-2 pr-3">
                             <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2">
                               <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-1">
                                 {t("bulkMessages.excludedListTitle").replace("{n}", String(j.skippedCount))}
