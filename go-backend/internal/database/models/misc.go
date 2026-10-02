@@ -18,14 +18,14 @@ func HashAPIKey(key string) string {
 // ── API Keys ──────────────────────────────────────────────────────────────────
 
 type ApiKey struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	UserID    uint           `gorm:"index;not null" json:"userId"`
-	Name      string         `gorm:"size:100;not null" json:"name"`
-	Key       string         `gorm:"size:64" json:"key"` // legacy plaintext; dikosongkan setelah migrasi ke KeyHash
-	KeyHash   string         `gorm:"size:64;uniqueIndex" json:"-"`
-	IsActive  bool           `gorm:"default:true" json:"isActive"`
-	LastUsed  *time.Time     `json:"lastUsed"`
-	ExpiresAt *time.Time     `json:"expiresAt"`
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserID    uint       `gorm:"index;not null" json:"userId"`
+	Name      string     `gorm:"size:100;not null" json:"name"`
+	Key       string     `gorm:"size:64" json:"key"` // legacy plaintext; dikosongkan setelah migrasi ke KeyHash
+	KeyHash   string     `gorm:"size:64;uniqueIndex" json:"-"`
+	IsActive  bool       `gorm:"default:true" json:"isActive"`
+	LastUsed  *time.Time `json:"lastUsed"`
+	ExpiresAt *time.Time `json:"expiresAt"`
 	// Scopes: array JSON, mis. ["messages:send","messages:read"]. Kosong = full.
 	Scopes    string         `gorm:"type:text" json:"-"`
 	CreatedAt time.Time      `json:"createdAt"`
@@ -185,17 +185,20 @@ type ChatInbox struct {
 }
 
 type ChatConversation struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	UserID       uint      `gorm:"index;not null" json:"userId"`
-	DeviceID     uint      `gorm:"index;not null" json:"deviceId"`
-	Phone        string    `gorm:"size:20;not null" json:"phone"`
-	SenderJID    string    `gorm:"size:60" json:"senderJid"` // JID lengkap, mis. "123@lid" — dipakai untuk balas tanpa lookup PN→LID
-	ContactName  string    `gorm:"size:255" json:"contactName"`
-	LastMessage  string    `gorm:"type:text" json:"lastMessage"`
-	UnreadCount  int       `gorm:"default:0" json:"unreadCount"`
-	LastActivity time.Time `json:"lastActivity"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	UserID          uint      `gorm:"index;not null" json:"userId"`
+	DeviceID        uint      `gorm:"index;not null" json:"deviceId"`
+	Phone           string    `gorm:"size:20;not null" json:"phone"`
+	SenderJID       string    `gorm:"size:60" json:"senderJid"` // JID lengkap, mis. "123@lid" — dipakai untuk balas tanpa lookup PN→LID
+	ContactName     string    `gorm:"size:255" json:"contactName"`
+	LastMessage     string    `gorm:"type:text" json:"lastMessage"`
+	LastMessageType string    `gorm:"size:20;default:text" json:"lastMessageType"` // text,image,video,audio,document,sticker
+	IsPinned        bool      `gorm:"default:false" json:"isPinned"`
+	Status          string    `gorm:"size:20;default:open" json:"status"` // open,done,archived
+	UnreadCount     int       `gorm:"default:0" json:"unreadCount"`
+	LastActivity    time.Time `json:"lastActivity"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────

@@ -11,8 +11,8 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
-	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/realtime"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/Aldi1963/wagataway/internal/service"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
@@ -54,10 +54,11 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 		chat.POST("/ai-reply", aiReplyMessage(db, wm))
 		chat.PATCH("/conversations/:phone/mode", setChatMode(db))
 		chat.PATCH("/conversations/:phone/read", markConversationRead(db))
+		chat.PATCH("/conversations/:phone/pin", setConversationPin(db))
+		chat.PATCH("/conversations/:phone/status", setConversationStatus(db))
 		chat.GET("/profile-pic", getProfilePic(db, wm))
 	}
 }
-
 
 func listConversations(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -71,7 +72,16 @@ func listConversations(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var convos []models.ChatConversation
-		query.Order("last_activity DESC").Limit(100).Find(&convos)
+		// Filter status: open (default), done, archived, all.
+		// Urutan: disematkan dulu, lalu aktivitas terakhir.
+		switch c.DefaultQuery("status", "open") {
+		case "all":
+		case "done", "archived":
+			query = query.Where("status = ?", c.Query("status"))
+		default:
+			query = query.Where("status = ?", "open")
+		}
+		query.Order("is_pinned DESC, last_activity DESC").Limit(100).Find(&convos)
 
 		c.JSON(http.StatusOK, gin.H{"conversations": convos})
 	}
@@ -98,7 +108,6 @@ func getChatMessages(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"messages": messages, "phone": phone})
 	}
 }
-
 
 func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -150,12 +159,12 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		if result.Error != nil {
 			conv = models.ChatConversation{
 				UserID: userID, DeviceID: req.DeviceID, Phone: req.Phone,
-				LastMessage: truncateStr(req.Content, 200), LastActivity: now,
+				LastMessage: truncateStr(req.Content, 200), LastMessageType: req.Type, LastActivity: now,
 			}
 			udb.Create(&conv)
 		} else {
 			udb.Model(&conv).Updates(map[string]interface{}{
-				"last_message": truncateStr(req.Content, 200), "last_activity": now,
+				"last_message": truncateStr(req.Content, 200), "last_message_type": req.Type, "last_activity": now,
 			})
 		}
 
@@ -190,7 +199,6 @@ func resolveSenderJID(db *gorm.DB, userID, deviceID uint, phone string) string {
 	}
 	return phone
 }
-
 
 // aiReplyMessage generates an AI response and sends it via WA
 func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
@@ -318,7 +326,6 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	}
 }
 
-
 // setChatMode switches conversation between "manual", "ai", "hybrid"
 func setChatMode(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -366,6 +373,60 @@ func markConversationRead(db *gorm.DB) gin.HandlerFunc {
 			Update("unread_count", 0)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Ditandai dibaca"})
+	}
+}
+
+// setConversationPin menyematkan / melepas sematan percakapan.
+func setConversationPin(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		phone := c.Param("phone")
+		var req struct {
+			Pinned bool `json:"pinned"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Body tidak valid"})
+			return
+		}
+		r := udb.Model(&models.ChatConversation{}).
+			Where("user_id = ? AND phone = ?", userID, phone).
+			Update("is_pinned", req.Pinned)
+		if r.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "OK", "pinned": req.Pinned})
+	}
+}
+
+// setConversationStatus mengubah status percakapan: open, done, archived.
+func setConversationStatus(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		phone := c.Param("phone")
+		var req struct {
+			Status string `json:"status" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Status wajib diisi"})
+			return
+		}
+		switch req.Status {
+		case "open", "done", "archived":
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Status tidak dikenal"})
+			return
+		}
+		r := udb.Model(&models.ChatConversation{}).
+			Where("user_id = ? AND phone = ?", userID, phone).
+			Update("status", req.Status)
+		if r.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "OK", "status": req.Status})
 	}
 }
 

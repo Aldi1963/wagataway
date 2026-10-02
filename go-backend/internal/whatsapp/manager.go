@@ -877,7 +877,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	m.db.Create(&inbox)
 
 	// Update or create conversation
-	m.updateConversation(sess, sender, senderJID, msg.Info.PushName, text)
+	m.updateConversation(sess, sender, senderJID, msg.Info.PushName, text, getMessageType(msg))
 
 	// Fire webhook
 	go m.fireWebhooks(sess.UserID, sess.DeviceID, "message.received", map[string]interface{}{
@@ -980,7 +980,7 @@ func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
 }
 
 // updateConversation creates or updates a chat conversation record
-func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushName, lastMsg string) {
+func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushName, lastMsg, msgType string) {
 	var conv models.ChatConversation
 	result := m.db.Where("user_id = ? AND device_id = ? AND phone = ?",
 		sess.UserID, sess.DeviceID, phone).First(&conv)
@@ -989,23 +989,25 @@ func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushN
 	if result.Error != nil {
 		// Create new conversation
 		conv = models.ChatConversation{
-			UserID:       sess.UserID,
-			DeviceID:     sess.DeviceID,
-			Phone:        phone,
-			SenderJID:    senderJID,
-			ContactName:  pushName,
-			LastMessage:  truncate(lastMsg, 200),
-			UnreadCount:  1,
-			LastActivity: now,
+			UserID:          sess.UserID,
+			DeviceID:        sess.DeviceID,
+			Phone:           phone,
+			SenderJID:       senderJID,
+			ContactName:     pushName,
+			LastMessage:     truncate(lastMsg, 200),
+			LastMessageType: msgType,
+			UnreadCount:     1,
+			LastActivity:    now,
 		}
 		m.db.Create(&conv)
 	} else {
 		// Update existing — refresh SenderJID juga agar percakapan lama ikut terkoreksi
 		updates := map[string]interface{}{
-			"contact_name":  pushName,
-			"last_message":  truncate(lastMsg, 200),
-			"unread_count":  gorm.Expr("unread_count + 1"),
-			"last_activity": now,
+			"contact_name":      pushName,
+			"last_message":      truncate(lastMsg, 200),
+			"last_message_type": msgType,
+			"unread_count":      gorm.Expr("unread_count + 1"),
+			"last_activity":     now,
 		}
 		if senderJID != "" {
 			updates["sender_j_id"] = senderJID

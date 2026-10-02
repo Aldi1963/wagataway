@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check } from "lucide-react";
+import { Send, Bot, Wifi, Search, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPatch, apiPost, apiFetch } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
 import { useLang } from "@/lib/i18n";
@@ -21,9 +21,25 @@ interface Conversation {
   phone: string;
   contactName: string;
   lastMessage: string;
+  lastMessageType?: string;
+  isPinned?: boolean;
+  status?: string;
   unreadCount: number;
   lastActivity: string;
   deviceId: number;
+}
+
+interface ChatLabel {
+  id: number;
+  name: string;
+  color: string;
+}
+
+interface ChatAssignment {
+  id: number;
+  chatJid: string;
+  labelId?: number | null;
+  label?: ChatLabel | null;
 }
 
 interface ChatMsg {
@@ -138,6 +154,50 @@ function ChatAvatar({
   );
 }
 
+// Waktu relatif: "baru saja", "5 mnt lalu", dst.
+function timeAgo(iso: string, t: (k: string) => string): string {
+  const d = new Date(iso).getTime();
+  if (isNaN(d)) return "";
+  const s = Math.max(0, Math.floor((Date.now() - d) / 1000));
+  if (s < 60) return t("liveChat.justNow");
+  const m = Math.floor(s / 60);
+  if (m < 60) return t("liveChat.minutesAgo").replace("{n}", String(m));
+  const h = Math.floor(m / 60);
+  if (h < 24) return t("liveChat.hoursAgo").replace("{n}", String(h));
+  const days = Math.floor(h / 24);
+  if (days === 1) return t("liveChat.yesterday");
+  if (days < 7) return t("liveChat.daysAgo").replace("{n}", String(days));
+  return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
+// Samakan nomor: buang semua non-digit agar chatJid label cocok dengan phone.
+function normPhone(p: string): string {
+  return (p || "").replace(/\D/g, "");
+}
+
+// Preview pesan terakhir yang sadar media: "📷 Foto" dsb.
+function MediaPreview({ type, text, t }: { type?: string; text: string; t: (k: string) => string }) {
+  if (!type || type === "text") {
+    return <>{text}</>;
+  }
+  const map: Record<string, { icon: React.ReactNode; label: string }> = {
+    image: { icon: <Camera className="w-3 h-3" />, label: t("liveChat.msgImage") },
+    video: { icon: <Video className="w-3 h-3" />, label: t("liveChat.msgVideo") },
+    audio: { icon: <Mic className="w-3 h-3" />, label: t("liveChat.msgAudio") },
+    document: { icon: <FileText className="w-3 h-3" />, label: t("liveChat.msgDocument") },
+    sticker: { icon: <Smile className="w-3 h-3" />, label: t("liveChat.msgSticker") },
+  };
+  const m = map[type];
+  if (!m) return <>{text}</>;
+  return (
+    <span className="inline-flex items-center gap-1">
+      {m.icon}
+      <span className="italic">{m.label}</span>
+      {text ? <span className="not-italic"> · {text}</span> : null}
+    </span>
+  );
+}
+
 export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
   const { activeDeviceId } = useActiveDevice();
   const { t } = useLang();
@@ -151,6 +211,15 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Fitur batch: filter status, label, semat, cari dalam percakapan
+  const [statusFilter, setStatusFilter] = useState<"open" | "done" | "archived">("open");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [labels, setLabels] = useState<ChatLabel[]>([]);
+  const [assignments, setAssignments] = useState<ChatAssignment[]>([]);
+  const [msgSearchOpen, setMsgSearchOpen] = useState(false);
+  const [msgQuery, setMsgQuery] = useState("");
+  const [msgMatchIdx, setMsgMatchIdx] = useState(0);
+  const msgRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const infoRef = useRef<HTMLDivElement>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -203,18 +272,55 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     setShowQuickReplies(false);
   };
 
-  // Conversations selalu mengikuti perangkat aktif di sidebar
-  useEffect(() => {
-    setActivePhone(null);
-    setMessages([]);
-    if (activeDeviceId == null) {
+  // Conversations selalu mengikuti perangkat aktif di sidebar + filter status
+  const loadConversations = (status: string, deviceId: number | null) => {
+    if (deviceId == null) {
       setConversations([]);
       return;
     }
-    apiGet<{ conversations: Conversation[] }>(`/chat/conversations?deviceId=${activeDeviceId}`)
+    apiGet<{ conversations: Conversation[] }>(
+      `/chat/conversations?deviceId=${deviceId}&status=${status}`
+    )
       .then((d) => setConversations(d.conversations || []))
       .catch(() => {});
-  }, [activeDeviceId]);
+  };
+
+  useEffect(() => {
+    setActivePhone(null);
+    setMessages([]);
+    loadConversations(statusFilter, activeDeviceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeviceId, statusFilter]);
+
+  // Label + assignment untuk badge terlihat di daftar
+  useEffect(() => {
+    apiGet<{ labels: ChatLabel[] }>("/chat-labels")
+      .then((d) => setLabels(d.labels || []))
+      .catch(() => {});
+    apiGet<{ assignments: ChatAssignment[] }>("/chat-assignments?limit=200")
+      .then((d) => setAssignments(d.assignments || []))
+      .catch(() => {});
+  }, []);
+
+  const reloadAssignments = () => {
+    apiGet<{ assignments: ChatAssignment[] }>("/chat-assignments?limit=200")
+      .then((d) => setAssignments(d.assignments || []))
+      .catch(() => {});
+  };
+
+  const labelsForPhone = (phone: string): ChatLabel[] => {
+    const np = normPhone(phone);
+    const out: ChatLabel[] = [];
+    for (const a of assignments) {
+      if (normPhone(a.chatJid) !== np) continue;
+      if (a.label) out.push(a.label);
+      else if (a.labelId) {
+        const l = labels.find((x) => x.id === a.labelId);
+        if (l) out.push(l);
+      }
+    }
+    return out;
+  };
 
   // Load messages when active phone changes
   useEffect(() => {
@@ -266,6 +372,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
             ? {
                 ...c,
                 lastMessage: data.content,
+                lastMessageType: data.type || "text",
                 lastActivity: new Date().toISOString(),
                 unreadCount:
                   !isActiveConvo && data.direction === "in"
@@ -318,6 +425,54 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     }
   };
 
+  // ── Aksi percakapan: semat, status, label ──
+  const togglePin = async () => {
+    if (!activePhone || !activeConvo) return;
+    const next = !activeConvo.isPinned;
+    try {
+      await apiPatch(`/chat/conversations/${activePhone}/pin`, { pinned: next });
+      setConversations((prev) =>
+        prev
+          .map((c) => (c.phone === activePhone ? { ...c, isPinned: next } : c))
+          .sort((a, b) => Number(b.isPinned || false) - Number(a.isPinned || false))
+      );
+      toast.success(next ? t("liveChat.pinned") : t("liveChat.unpinned"));
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    }
+  };
+
+  const changeStatus = async (status: "open" | "done" | "archived") => {
+    if (!activePhone) return;
+    try {
+      await apiPatch(`/chat/conversations/${activePhone}/status`, { status });
+      // Hilang dari daftar saat ini (kecuali dibuka lagi)
+      setConversations((prev) => prev.filter((c) => c.phone !== activePhone));
+      setActivePhone(null);
+      toast.success(t("liveChat.statusChanged"));
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    }
+  };
+
+  const toggleLabel = async (label: ChatLabel) => {
+    if (!activePhone) return;
+    const np = normPhone(activePhone);
+    const existing = assignments.find(
+      (a) => normPhone(a.chatJid) === np && (a.labelId === label.id || a.label?.id === label.id)
+    );
+    try {
+      if (existing) {
+        await apiDelete(`/chat-assignments/${existing.id}`);
+      } else {
+        await apiPost("/chat-assignments", { chatJid: activePhone, labelId: label.id });
+      }
+      reloadAssignments();
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !activePhone) return;
     if (activeDeviceId == null) {
@@ -366,13 +521,58 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     }
   };
 
-  const filteredConvos = conversations.filter(
-    (c) =>
+  const filteredConvos = conversations.filter((c) => {
+    if (unreadOnly && !(c.unreadCount > 0)) return false;
+    if (!search) return true;
+    return (
       c.phone.includes(search) ||
       c.contactName?.toLowerCase().includes(search.toLowerCase())
-  );
+    );
+  });
 
   const activeConvo = conversations.find((c) => c.phone === activePhone);
+
+  // Pencarian dalam percakapan aktif: daftar index pesan yang cocok
+  const msgMatches = msgQuery.trim()
+    ? messages
+        .map((m, i) => ({ m, i }))
+        .filter(({ m }) => m.content.toLowerCase().includes(msgQuery.trim().toLowerCase()))
+    : [];
+  const scrollToMatch = (idx: number) => {
+    if (msgMatches.length === 0) return;
+    const safe = ((idx % msgMatches.length) + msgMatches.length) % msgMatches.length;
+    setMsgMatchIdx(safe);
+    const el = msgRefs.current.get(msgMatches[safe].i);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+  useEffect(() => {
+    setMsgMatchIdx(0);
+  }, [msgQuery, activePhone]);
+
+  const highlight = (text: string, q: string) => {
+    const query = q.trim();
+    if (!query) return text;
+    const lower = text.toLowerCase();
+    const lq = query.toLowerCase();
+    const parts: React.ReactNode[] = [];
+    let pos = 0;
+    let key = 0;
+    while (true) {
+      const idx = lower.indexOf(lq, pos);
+      if (idx < 0) {
+        parts.push(text.slice(pos));
+        break;
+      }
+      parts.push(text.slice(pos, idx));
+      parts.push(
+        <mark key={key++} className="bg-yellow-300 dark:bg-yellow-600 rounded-sm px-0.5">
+          {text.slice(idx, idx + query.length)}
+        </mark>
+      );
+      pos = idx + query.length;
+    }
+    return <>{parts}</>;
+  };
 
   return (
     <div className="flex h-[calc(100vh-7rem)] border border-border rounded-lg overflow-hidden">
@@ -382,7 +582,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
         activePhone ? "hidden md:flex md:w-80" : "flex w-full md:w-80"
       )}>
         {/* Search */}
-        <div className="p-3 border-b border-border">
+        <div className="p-3 border-b border-border space-y-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
@@ -391,6 +591,40 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+          </div>
+          {/* Filter: status + belum dibaca */}
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { id: "open", label: t("liveChat.filterAll") },
+                { id: "done", label: t("liveChat.filterDone") },
+                { id: "archived", label: t("liveChat.filterArchived") },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setStatusFilter(f.id)}
+                className={cn(
+                  "h-6 px-2.5 rounded-full text-[10px] font-medium transition-colors",
+                  statusFilter === f.id
+                    ? "bg-[#243370] dark:bg-[#4c63d2] text-white"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setUnreadOnly((v) => !v)}
+              className={cn(
+                "h-6 px-2.5 rounded-full text-[10px] font-medium transition-colors",
+                unreadOnly
+                  ? "bg-[#243370] dark:bg-[#4c63d2] text-white"
+                  : "bg-secondary text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t("liveChat.filterUnread")}
+            </button>
           </div>
         </div>
 
@@ -401,7 +635,9 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
           ) : filteredConvos.length === 0 ? (
             <div className="p-6 text-center text-xs text-muted-foreground">{t("liveChat.noConversations")}</div>
           ) : (
-            filteredConvos.map((convo) => (
+            filteredConvos.map((convo) => {
+              const rowLabels = labelsForPhone(convo.phone);
+              return (
               <button
                 key={convo.phone}
                 onClick={() => setActivePhone(convo.phone)}
@@ -418,22 +654,48 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   name={convo.contactName || convo.phone}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-foreground truncate">
-                      {convo.contactName || convo.phone}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground truncate flex items-center gap-1 min-w-0">
+                      {convo.isPinned && (
+                        <Pin className="w-3 h-3 text-[#243370] dark:text-[#8b9cf0] shrink-0" />
+                      )}
+                      <span className="truncate">{convo.contactName || convo.phone}</span>
                     </span>
-                    {convo.unreadCount > 0 && (
-                      <Badge className="h-4 px-1.5 text-[9px] bg-[#243370] dark:bg-[#4c63d2] text-white border-transparent">
-                        {convo.unreadCount}
-                      </Badge>
-                    )}
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-muted-foreground">
+                        {timeAgo(convo.lastActivity, t)}
+                      </span>
+                      {convo.unreadCount > 0 && (
+                        <Badge className="h-4 px-1.5 text-[9px] bg-[#243370] dark:bg-[#4c63d2] text-white border-transparent">
+                          {convo.unreadCount}
+                        </Badge>
+                      )}
+                    </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                    {convo.lastMessage}
+                    <MediaPreview type={convo.lastMessageType} text={convo.lastMessage} t={t} />
                   </p>
+                  {rowLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {rowLabels.slice(0, 3).map((l) => (
+                        <span
+                          key={l.id}
+                          className="inline-flex items-center gap-1 text-[9px] px-1.5 py-px rounded-full border"
+                          style={{ borderColor: l.color, color: l.color }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: l.color }}
+                          />
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </button>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -469,6 +731,20 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                {/* Cari dalam percakapan */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  aria-label={t("liveChat.searchInChat")}
+                  title={t("liveChat.searchInChat")}
+                  onClick={() => {
+                    setMsgSearchOpen((v) => !v);
+                    setMsgQuery("");
+                  }}
+                >
+                  <Search className="w-4 h-4" />
+                </Button>
                 {/* AI Toggle */}
                 <Button
                   variant={aiMode ? "default" : "outline"}
@@ -490,8 +766,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   >
                     <MoreHorizontal className="w-4 h-4" />
                   </Button>
-                  {showInfo && (
-                    <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-border bg-card shadow-xl z-30 p-4">
+                  {showInfo && activePhone && (
+                    <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-border bg-card shadow-xl z-30 p-4 max-h-[70vh] overflow-y-auto">
                       <div className="flex flex-col items-center text-center">
                         <ChatAvatar
                           deviceId={activeDeviceId}
@@ -516,6 +792,108 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                           {copied ? t("liveChat.copied") : t("liveChat.copyNumber")}
                         </Button>
                       </div>
+
+                      {/* Label */}
+                      <div className="mt-4 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <Tag className="w-3 h-3" />
+                          {t("liveChat.labels")}
+                        </p>
+                        {labels.length === 0 ? (
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">
+                            {t("liveChat.noLabelsHint")}
+                          </p>
+                        ) : (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {labels.map((l) => {
+                              const has = labelsForPhone(activePhone).some((x) => x.id === l.id);
+                              return (
+                                <button
+                                  key={l.id}
+                                  onClick={() => toggleLabel(l)}
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border transition-colors",
+                                    has
+                                      ? "text-white border-transparent"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                  style={
+                                    has
+                                      ? { backgroundColor: l.color }
+                                      : { borderColor: l.color }
+                                  }
+                                >
+                                  <span
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: has ? "#fff" : l.color }}
+                                  />
+                                  {l.name}
+                                  {has && <Check className="w-3 h-3" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Aksi percakapan */}
+                      <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 justify-start text-xs gap-2"
+                          onClick={togglePin}
+                        >
+                          {activeConvo?.isPinned ? (
+                            <PinOff className="w-3.5 h-3.5" />
+                          ) : (
+                            <Pin className="w-3.5 h-3.5" />
+                          )}
+                          {activeConvo?.isPinned ? t("liveChat.unpin") : t("liveChat.pin")}
+                        </Button>
+                        {statusFilter !== "done" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 justify-start text-xs gap-2"
+                            onClick={() => changeStatus("done")}
+                          >
+                            <CircleCheck className="w-3.5 h-3.5" />
+                            {t("liveChat.markDone")}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 justify-start text-xs gap-2"
+                            onClick={() => changeStatus("open")}
+                          >
+                            <Circle className="w-3.5 h-3.5" />
+                            {t("liveChat.reopen")}
+                          </Button>
+                        )}
+                        {statusFilter !== "archived" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 justify-start text-xs gap-2"
+                            onClick={() => changeStatus("archived")}
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                            {t("liveChat.archive")}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 justify-start text-xs gap-2"
+                            onClick={() => changeStatus("open")}
+                          >
+                            <ArchiveRestore className="w-3.5 h-3.5" />
+                            {t("liveChat.unarchive")}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -523,10 +901,70 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
             </div>
 
             {/* Messages */}
+            {msgSearchOpen && (
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    placeholder={t("liveChat.searchInChatPlaceholder")}
+                    className="pl-8 h-8 text-xs"
+                    value={msgQuery}
+                    onChange={(e) => setMsgQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") scrollToMatch(msgMatchIdx + 1);
+                    }}
+                  />
+                </div>
+                {msgQuery.trim() && (
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    {msgMatches.length === 0
+                      ? t("liveChat.noMatch")
+                      : `${msgMatchIdx + 1}/${msgMatches.length}`}
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={msgMatches.length === 0}
+                  onClick={() => scrollToMatch(msgMatchIdx - 1)}
+                  aria-label={t("liveChat.prevMatch")}
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={msgMatches.length === 0}
+                  onClick={() => scrollToMatch(msgMatchIdx + 1)}
+                  aria-label={t("liveChat.nextMatch")}
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    setMsgSearchOpen(false);
+                    setMsgQuery("");
+                  }}
+                  aria-label={t("liveChat.closeSearch")}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-background">
-              {messages.map((msg) => (
+              {messages.map((msg, i) => (
                 <div
                   key={msg.id}
+                  ref={(el) => {
+                    if (el) msgRefs.current.set(i, el);
+                    else msgRefs.current.delete(i);
+                  }}
                   className={cn(
                     "flex",
                     msg.direction === "out" ? "justify-end" : "justify-start"
@@ -540,7 +978,9 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                         : "bg-secondary text-foreground border border-border"
                     )}
                   >
-                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    <p className="whitespace-pre-wrap break-words">
+                      {msgQuery.trim() ? highlight(msg.content, msgQuery) : msg.content}
+                    </p>
                     <p
                       className={cn(
                         "text-[9px] mt-1",
