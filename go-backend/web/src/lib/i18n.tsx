@@ -585,6 +585,8 @@ const id = {
     connShowKey: "Tampilkan",
     connHideKey: "Sembunyikan",
     saving: "Menyimpan...",
+    guardTitle: "Proteksi Injection",
+    guardHint: "Tolak otomatis pesan yang mencoba mengerjain bot (prompt injection), tanpa memanggil AI.",
   },
   analytics: {
     activeDevices: "Perangkat Aktif",
@@ -3404,6 +3406,8 @@ const en: Dict = {
     connShowKey: "Show",
     connHideKey: "Hide",
     saving: "Saving...",
+    guardTitle: "Injection Protection",
+    guardHint: "Auto-reject messages that try to trick the bot (prompt injection) without calling the AI.",
   },
   analytics: {
     activeDevices: "Active Devices",

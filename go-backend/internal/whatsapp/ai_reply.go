@@ -33,7 +33,21 @@ func (m *Manager) checkAIReply(sess *SessionState, senderJID, text string, isGro
 			continue
 		}
 
-		reply, err := m.askAIForUser(sess.UserID, cfg.SystemPrompt, text)
+		// Proteksi prompt injection: pola jailbreak ditolak langsung dengan
+		// pesan sopan tanpa memanggil AI (hemat biaya & deterministik).
+		if cfg.InjectionGuard && service.DetectPromptInjection(text) {
+			log.Warn().
+				Uint("deviceID", sess.DeviceID).
+				Uint("configID", cfg.ID).
+				Str("to", senderJID).
+				Msg("AI reply blocked: prompt injection detected")
+			if err := m.SendMessage(sess.DeviceID, senderJID, "text", service.InjectionRefusalMessage, ""); err != nil {
+				log.Error().Err(err).Msg("AI injection refusal send failed")
+			}
+			return
+		}
+
+		reply, err := m.askAIForUser(sess.UserID, &cfg, text)
 		if err != nil {
 			log.Error().Err(err).
 				Uint("deviceID", sess.DeviceID).
@@ -73,7 +87,14 @@ func matchTriggerKeywords(text, keywords string) bool {
 // askAIForUser mengirim prompt ke AI memakai koneksi milik user (provider +
 // API key + model pilihannya sendiri). Bila user belum mengonfigurasi koneksi,
 // fallback ke backend AI global (legacy AskAI via 9router/settings).
-func (m *Manager) askAIForUser(userID uint, systemPrompt, userMessage string) (string, error) {
+// Bila cfg.InjectionGuard aktif: system prompt diperkuat akhiran keamanan dan
+// pesan user dibungkus sebagai data eksplisit.
+func (m *Manager) askAIForUser(userID uint, cfg *models.AIReplyConfig, userMessage string) (string, error) {
+	systemPrompt, guardedMsg := cfg.SystemPrompt, userMessage
+	if cfg.InjectionGuard {
+		systemPrompt = service.GuardedSystemPrompt(systemPrompt)
+		guardedMsg = service.GuardedUserMessage(userMessage)
+	}
 	if conn := service.ConnectionForUser(m.db, userID); conn != nil {
 		if svc := service.ServiceForConnection(conn); svc != nil {
 			resp, err := svc.Complete(service.ChatRequest{
@@ -81,7 +102,7 @@ func (m *Manager) askAIForUser(userID uint, systemPrompt, userMessage string) (s
 				Model:      service.EffectiveModel(conn, ""),
 				Messages: []service.ChatMessage{
 					{Role: "system", Content: systemPrompt},
-					{Role: "user", Content: userMessage},
+					{Role: "user", Content: guardedMsg},
 				},
 				MaxTokens:   500,
 				Temperature: 0.7,
@@ -93,5 +114,5 @@ func (m *Manager) askAIForUser(userID uint, systemPrompt, userMessage string) (s
 		}
 		log.Warn().Uint("userID", userID).Msg("AI connection key undecryptable, falling back to global AI backend")
 	}
-	return AskAI(m.db, systemPrompt, userMessage)
+	return AskAI(m.db, systemPrompt, guardedMsg)
 }

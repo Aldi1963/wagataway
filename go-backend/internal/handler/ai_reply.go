@@ -57,6 +57,7 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 			SystemPrompt    string `json:"systemPrompt"`
 			TriggerKeywords string `json:"triggerKeywords"`
 			IgnoreGroups    *bool  `json:"ignoreGroups"`
+			InjectionGuard  *bool  `json:"injectionGuard"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
@@ -71,12 +72,17 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 		if req.IgnoreGroups != nil {
 			ignoreGroups = *req.IgnoreGroups
 		}
+		injectionGuard := true
+		if req.InjectionGuard != nil {
+			injectionGuard = *req.InjectionGuard
+		}
 		cfg := models.AIReplyConfig{
 			UserID:          userID,
 			DeviceID:        req.DeviceID,
 			SystemPrompt:    req.SystemPrompt,
 			TriggerKeywords: req.TriggerKeywords,
 			IgnoreGroups:    ignoreGroups,
+			InjectionGuard:  injectionGuard,
 			IsEnabled:       true,
 		}
 		if err := udb.Create(&cfg).Error; err != nil {

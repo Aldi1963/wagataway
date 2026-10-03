@@ -18,6 +18,7 @@ interface AIReplyConfig {
   systemPrompt: string;
   triggerKeywords: string;
   ignoreGroups: boolean;
+  injectionGuard: boolean;
   createdAt: string;
 }
 
@@ -61,6 +62,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [triggerKeywords, setTriggerKeywords] = useState("");
   const [ignoreGroups, setIgnoreGroups] = useState(true);
+  const [injectionGuard, setInjectionGuard] = useState(true);
   const [isEnabled, setIsEnabled] = useState(true);
   const [deleting, setDeleting] = useState<number | null>(null);
 
@@ -95,6 +97,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
     setSystemPrompt(c?.systemPrompt ?? "");
     setTriggerKeywords(c?.triggerKeywords ?? "");
     setIgnoreGroups(c?.ignoreGroups ?? true);
+    setInjectionGuard(c?.injectionGuard ?? true);
     setIsEnabled(c?.isEnabled ?? true);
     setShowModal(true);
   };
@@ -108,6 +111,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
         systemPrompt: systemPrompt.trim(),
         triggerKeywords: triggerKeywords.trim(),
         ignoreGroups,
+        injectionGuard,
         ...(editing ? { isEnabled } : {}),
       };
       if (editing) { await apiPut(`/ai-reply/${editing.id}`, payload); toast.success(t("aiReply.configUpdated")); }
@@ -257,6 +261,13 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
                 <p className="text-xs text-muted-foreground">{t("aiReply.ignoreGroupsHint")}</p>
               </div>
               <Toggle checked={ignoreGroups} label={t("aiReply.ignoreGroupsAria")} onToggle={setIgnoreGroups} />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">{t("aiReply.guardTitle")}</p>
+                <p className="text-xs text-muted-foreground">{t("aiReply.guardHint")}</p>
+              </div>
+              <Toggle checked={injectionGuard} label={t("aiReply.guardTitle")} onToggle={setInjectionGuard} />
             </div>
             {editing && (
               <div className="flex items-center justify-between gap-2">

@@ -384,8 +384,9 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Order("created_at DESC").Limit(10).Find(&history)
 
 		// Build messages for AI (reverse to chronological)
+		// System prompt selalu diperkuat akhiran anti prompt-injection.
 		messages := []service.ChatMessage{
-			{Role: "system", Content: systemPrompt},
+			{Role: "system", Content: service.GuardedSystemPrompt(systemPrompt)},
 		}
 		for i := len(history) - 1; i >= 0; i-- {
 			role := "user"

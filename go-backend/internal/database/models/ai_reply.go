@@ -17,6 +17,7 @@ type AIReplyConfig struct {
 	SystemPrompt    string         `gorm:"type:text" json:"systemPrompt"`
 	TriggerKeywords string         `gorm:"size:500" json:"triggerKeywords"` // koma-dipisah, kosong = semua pesan
 	IgnoreGroups    bool           `gorm:"default:true" json:"ignoreGroups"`
+	InjectionGuard  bool           `gorm:"default:true" json:"injectionGuard"` // proteksi prompt injection
 	CreatedAt       time.Time      `json:"createdAt"`
 	UpdatedAt       time.Time      `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
