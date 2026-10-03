@@ -114,10 +114,29 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := migrateDeviceWebhookSecrets(db); err != nil {
 		return err
 	}
+	if err := migrateDeviceWebhookEnabled(db); err != nil {
+		return err
+	}
 	if err := migratePlanQuotaDefaults(db); err != nil {
 		return err
 	}
 	return migrateAPIKeyHashes(db)
+}
+
+// migrateDeviceWebhookEnabled mengaktifkan webhook untuk device lama yang
+// sudah punya webhook_url (kolom baru default-nya hanya berlaku untuk baris
+// baru; tanpa ini device lama tiba-tiba nonaktif). Idempoten.
+func migrateDeviceWebhookEnabled(db *gorm.DB) error {
+	res := db.Model(&models.Device{}).
+		Where("webhook_url <> ? AND webhook_enabled = ?", "", false).
+		Update("webhook_enabled", true)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		log.Info().Int64("count", res.RowsAffected).Msg("Backfilled device webhook_enabled=true")
+	}
+	return nil
 }
 
 // migrateDeviceWebhookSecrets mengisi webhook_secret untuk device yang sudah

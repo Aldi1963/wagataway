@@ -147,6 +147,7 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Name            *string `json:"name"`
 			AutoOnline      *bool   `json:"autoOnline"`
 			WebhookURL      *string `json:"webhookUrl"`
+			WebhookEnabled  *bool   `json:"webhookEnabled"`
 			ReadReceipts    *bool   `json:"readReceipts"`
 			RejectCall      *bool   `json:"rejectCall"`
 			TypingIndicator *bool   `json:"typingIndicator"`
@@ -178,6 +179,9 @@ func updateDevice(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				}
 			}
 			updates["webhook_url"] = *req.WebhookURL
+		}
+		if req.WebhookEnabled != nil {
+			updates["webhook_enabled"] = *req.WebhookEnabled
 		}
 		if req.ReadReceipts != nil {
 			updates["read_receipts"] = *req.ReadReceipts

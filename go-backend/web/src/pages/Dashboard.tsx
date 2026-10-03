@@ -38,6 +38,7 @@ interface Device {
   phone: string;
   status: "connected" | "connecting" | "disconnected";
   webhookUrl: string;
+  webhookEnabled: boolean;
   webhookSecret: string;
   autoOnline: boolean;
   readReceipts: boolean;
@@ -80,7 +81,7 @@ interface QuotaInfo {
   graceDailyLimit?: number;
 }
 
-type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator";
+type ToggleField = "readReceipts" | "rejectCall" | "autoOnline" | "typingIndicator" | "webhookEnabled";
 
 function Modal({
   title,

@@ -1053,7 +1053,7 @@ func (m *Manager) handleChatPresenceEvent(sess *SessionState, v *events.ChatPres
 // JID bila server-nya s.whatsapp.net, else "" (frontend bisa cocokkan via jid).
 func (m *Manager) resolvePresencePhone(sess *SessionState, jid types.JID) string {
 	var conv models.ChatConversation
-	if err := m.db.Select("phone").Where("user_id = ? AND device_id = ? AND sender_jid = ?",
+	if err := m.db.Select("phone").Where("user_id = ? AND device_id = ? AND sender_j_id = ?",
 		sess.UserID, sess.DeviceID, jid.String()).First(&conv).Error; err == nil && conv.Phone != "" {
 		return conv.Phone
 	}
@@ -1314,8 +1314,12 @@ func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[
 	}
 
 	// Webhook URL per-device (diisi dari modal Tambah/Edit Perangkat).
+	// Dihormati hanya bila webhook_enabled = true.
 	var dev models.Device
-	if err := m.db.Select("webhook_url", "webhook_secret").Where("id = ?", deviceID).First(&dev).Error; err == nil {
+	if err := m.db.Select("webhook_url", "webhook_secret", "webhook_enabled").Where("id = ?", deviceID).First(&dev).Error; err == nil {
+		if !dev.WebhookEnabled {
+			return
+		}
 		if url := strings.TrimSpace(dev.WebhookURL); url != "" {
 			// Backfill: device lama yang belum punya secret dibuatkan sekali di sini
 			// (selain migrasi startup) agar pengiriman pertama pun sudah bertanda.

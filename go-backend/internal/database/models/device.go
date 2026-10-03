@@ -19,6 +19,7 @@ type Device struct {
 	TypingIndicator bool           `gorm:"default:false" json:"typingIndicator"`
 	SentCount       int64          `gorm:"-" json:"sentCount"`
 	WebhookURL  string         `gorm:"size:500" json:"webhookUrl"`
+	WebhookEnabled bool        `gorm:"default:true" json:"webhookEnabled"` // toggle aktif/nonaktif webhook per-device
 	WebhookSecret string       `gorm:"size:128" json:"webhookSecret"` // HMAC-SHA256 signing key untuk webhook per-device
 	MaxRetries  int            `gorm:"default:3" json:"maxRetries"`
 	RetryDelay  int            `gorm:"default:5" json:"retryDelay"` // seconds
