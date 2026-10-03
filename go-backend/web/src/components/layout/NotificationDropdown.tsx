@@ -134,24 +134,24 @@ export function NotificationDropdown() {
       {open && (
         <div
           role="menu"
-          className="fixed top-[3.75rem] right-2 sm:right-4 w-[320px] max-w-[calc(100vw-1rem)] z-50 rounded-xl border border-border bg-card shadow-xl overflow-hidden"
+          className="fixed top-[3.75rem] right-2 sm:right-4 w-[290px] max-w-[calc(100vw-1rem)] z-50 rounded-xl border border-border bg-card shadow-xl overflow-hidden"
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <p className="text-sm font-semibold text-foreground">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+            <p className="text-[13px] font-semibold text-foreground">
               {t("header.notifications")}
             </p>
             {unreadCount > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-xs font-medium text-primary hover:underline flex items-center gap-1"
+                className="text-[11px] font-medium text-primary hover:underline flex items-center gap-1"
               >
-                <CheckCheck className="w-3.5 h-3.5" />
+                <CheckCheck className="w-3 h-3" />
                 {t("header.markAllRead")}
               </button>
             )}
           </div>
 
-          <div className="max-h-[380px] overflow-y-auto">
+          <div className="max-h-[320px] overflow-y-auto">
             {items.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <Bell className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
@@ -170,34 +170,34 @@ export function NotificationDropdown() {
                     key={n.id}
                     role="menuitem"
                     onClick={() => openItem(n)}
-                    className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/60 transition-colors border-b border-border/50 last:border-0"
+                    className="w-full flex items-start gap-2.5 px-3 py-2 text-left hover:bg-secondary/60 transition-colors border-b border-border/50 last:border-0"
                   >
                     <div
                       className={cn(
-                        "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
+                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
                         n.isRead ? "bg-secondary" : "bg-primary/10"
                       )}
                     >
                       <Icon
                         className={cn(
-                          "w-4 h-4",
+                          "w-3.5 h-3.5",
                           n.isRead ? "text-muted-foreground" : "text-primary"
                         )}
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-[13px] font-semibold text-foreground truncate">
+                        <p className="text-xs font-semibold text-foreground truncate">
                           {n.title}
                         </p>
                         {!n.isRead && (
-                          <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
                         {n.message}
                       </p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
                         {timeAgo(n.createdAt, lang)}
                       </p>
                     </div>
@@ -212,10 +212,10 @@ export function NotificationDropdown() {
               setOpen(false);
               navigate("/notifications");
             }}
-            className="w-full flex items-center justify-center gap-1 px-4 py-2.5 text-xs font-semibold text-primary hover:bg-secondary/60 border-t border-border transition-colors"
+            className="w-full flex items-center justify-center gap-1 px-3 py-2 text-[11px] font-semibold text-primary hover:bg-secondary/60 border-t border-border transition-colors"
           >
             {t("common.viewAll")}
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="w-3 h-3" />
           </button>
         </div>
       )}
