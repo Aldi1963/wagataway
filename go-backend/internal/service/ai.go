@@ -229,6 +229,12 @@ func (s *AIService) postChatCompletions(url, key, model string, messages []ChatM
 		return nil, fmt.Errorf("AI error %d: %s", resp.StatusCode, truncateAIError(string(respBody)))
 	}
 
+	// Beberapa proxy OpenAI-compatible mengembalikan SSE stream ("data: {...}")
+	// alih-alih satu JSON utuh — tangani keduanya.
+	if looksLikeSSE(respBody) {
+		return parseSSEChatResponse(respBody)
+	}
+
 	var result struct {
 		Choices []struct {
 			Message struct {
@@ -240,7 +246,7 @@ func (s *AIService) postChatCompletions(url, key, model string, messages []ChatM
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse AI response: %w", err)
+		return nil, fmt.Errorf("failed to parse AI response: %v (body: %s)", err, truncateAIError(string(respBody)))
 	}
 
 	if len(result.Choices) == 0 {
@@ -251,6 +257,53 @@ func (s *AIService) postChatCompletions(url, key, model string, messages []ChatM
 		Content: result.Choices[0].Message.Content,
 		Tokens:  result.Usage.TotalTokens,
 	}, nil
+}
+
+// looksLikeSSE melaporkan apakah body tampak seperti Server-Sent Events.
+func looksLikeSSE(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	return bytes.HasPrefix(trimmed, []byte("data:"))
+}
+
+// parseSSEChatResponse merangkai potongan delta.content dari SSE stream
+// format OpenAI chat completions.
+func parseSSEChatResponse(body []byte) (*ChatResponse, error) {
+	var sb strings.Builder
+	tokens := 0
+	for _, line := range bytes.Split(body, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if !bytes.HasPrefix(line, []byte("data:")) {
+			continue
+		}
+		payload := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
+		if len(payload) == 0 || string(payload) == "[DONE]" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+			Usage struct {
+				TotalTokens int `json:"total_tokens"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(payload, &chunk); err != nil {
+			continue // lewati baris yang bukan JSON valid
+		}
+		if len(chunk.Choices) > 0 {
+			sb.WriteString(chunk.Choices[0].Delta.Content)
+		}
+		if chunk.Usage.TotalTokens > 0 {
+			tokens = chunk.Usage.TotalTokens
+		}
+	}
+	content := strings.TrimSpace(sb.String())
+	if content == "" {
+		return nil, fmt.Errorf("AI returned empty SSE stream (body: %s)", truncateAIError(string(body)))
+	}
+	return &ChatResponse{Content: content, Tokens: tokens}, nil
 }
 
 // truncateAIError memotong pesan error agar tidak membocorkan seluruh body.
