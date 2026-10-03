@@ -3,7 +3,6 @@ import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Co
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPatch, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -60,6 +59,50 @@ interface ChatMsg {
   direction: "in" | "out";
   isRead: boolean;
   createdAt: string;
+}
+
+// ── Tema ala WhatsApp Web ───────────────────────────────────────────────────
+interface DeviceLite {
+  id: number;
+  name: string;
+  phone?: string;
+  status?: string;
+}
+// Doodle background khas WA (SVG ringan, di-tile).
+const WA_DOODLE_LIGHT =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23111b21' stroke-opacity='0.05' stroke-width='1.6'%3E%3Ccircle cx='22' cy='24' r='9'/%3E%3Cpath d='M68 12 q11 11 0 22 q-11 11 0 22'/%3E%3Crect x='104' y='70' width='18' height='18' rx='4'/%3E%3Cpath d='M14 104 l16 16 M30 104 l-16 16'/%3E%3Ccircle cx='116' cy='24' r='3.5'/%3E%3Cpath d='M52 96 q8 -8 16 0 q-8 8 -16 0'/%3E%3C/g%3E%3C/svg%3E\")";
+const WA_DOODLE_DARK =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23e9edef' stroke-opacity='0.045' stroke-width='1.6'%3E%3Ccircle cx='22' cy='24' r='9'/%3E%3Cpath d='M68 12 q11 11 0 22 q-11 11 0 22'/%3E%3Crect x='104' y='70' width='18' height='18' rx='4'/%3E%3Cpath d='M14 104 l16 16 M30 104 l-16 16'/%3E%3Ccircle cx='116' cy='24' r='3.5'/%3E%3Cpath d='M52 96 q8 -8 16 0 q-8 8 -16 0'/%3E%3C/g%3E%3C/svg%3E\")";
+
+// Ekor bubble khas WA.
+function BubbleTail({ out }: { out: boolean }) {
+  return out ? (
+    <svg viewBox="0 0 8 13" className="absolute -right-[7px] top-0 w-2 h-[13px] fill-[#d9fdd3] dark:fill-[#005c4b]">
+      <path d="M0 0 L8 0 L0 13 Z" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 8 13" className="absolute -left-[7px] top-0 w-2 h-[13px] fill-white dark:fill-[#1f2c34]">
+      <path d="M8 0 L0 0 L8 13 Z" />
+    </svg>
+  );
+}
+
+// Centang ganda ala WA untuk pesan keluar.
+function Ticks({ read }: { read: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 18 14"
+      className={cn("w-4 h-3.5 shrink-0", read ? "text-[#53bdeb]" : "text-[#8696a0]")}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M1 7.5 4 10.5 11 3" />
+      <path d="M7 7.5 10 10.5 17 3" />
+    </svg>
+  );
 }
 
 // Avatar kontak: coba foto profil WA asli, fallback ke inisial nama.
@@ -209,9 +252,12 @@ function MediaPreview({ type, text, t }: { type?: string; text: string; t: (k: s
 }
 
 export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
-  const { activeDeviceId } = useActiveDevice();
+  const { activeDeviceId, activeDevice, setActiveDevice } = useActiveDevice();
   const { t } = useLang();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [devices, setDevices] = useState<DeviceLite[]>([]);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  const deviceMenuRef = useRef<HTMLDivElement>(null);
   const [activePhone, setActivePhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
@@ -350,6 +396,25 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       prev.map((c) => (c.phone === activePhone ? { ...c, unreadCount: 0 } : c))
     );
   }, [activePhone]);
+
+  // Daftar device untuk header akun ala WA
+  useEffect(() => {
+    apiGet<{ devices: DeviceLite[] }>("/devices")
+      .then((d) => setDevices(d.devices ?? []))
+      .catch(() => {});
+  }, []);
+
+  // Tutup dropdown device saat klik di luar
+  useEffect(() => {
+    if (!deviceMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (deviceMenuRef.current && !deviceMenuRef.current.contains(e.target as Node)) {
+        setDeviceMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [deviceMenuOpen]);
 
   // SSE for real-time messages (auth via single-use ticket, bukan JWT di URL)
   useEffect(() => {
@@ -677,19 +742,77 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   };
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] border border-border rounded-lg overflow-hidden">
+    <div className="flex h-[calc(100vh-7rem)] overflow-hidden bg-[#eae6df] dark:bg-[#0b141a]">
       {/* ── Conversation List ─────────────────────────── */}
       <div className={cn(
-        "border-r border-border flex-col bg-card",
+        "border-r border-black/10 dark:border-white/10 flex-col bg-white dark:bg-[#111b21]",
         activePhone ? "hidden md:flex md:w-80" : "flex w-full md:w-80"
       )}>
+        {/* Header akun ala WA: titik online + nama device + ganti device */}
+        <div className="relative bg-[#f0f2f5] dark:bg-[#1f2c34] px-3 pt-2.5" ref={deviceMenuRef}>
+          <button
+            onClick={() => setDeviceMenuOpen((v) => !v)}
+            className="w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left"
+          >
+            <span className="relative shrink-0">
+              <span className={cn(
+                "block w-2.5 h-2.5 rounded-full",
+                activeDevice?.status === "connected" ? "bg-[#25d366]" : "bg-[#8696a0]"
+              )} />
+              {activeDevice?.status === "connected" && (
+                <span className="absolute inset-0 rounded-full bg-[#25d366] animate-ping opacity-40" />
+              )}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13px] font-medium text-[#111b21] dark:text-[#e9edef] truncate">
+                {activeDevice?.name || t("liveChat.selectDeviceFirst")}
+              </span>
+              {activeDevice?.phone && (
+                <span className="block text-[10px] text-[#667781] dark:text-[#8696a0] truncate">
+                  {activeDevice.phone}
+                </span>
+              )}
+            </span>
+            <ChevronDown className={cn("w-4 h-4 text-[#667781] dark:text-[#8696a0] transition-transform", deviceMenuOpen && "rotate-180")} />
+          </button>
+          {deviceMenuOpen && (
+            <div className="absolute left-3 right-3 top-full mt-1 z-30 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-[#233138] shadow-xl py-1 max-h-64 overflow-y-auto">
+              {devices.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-[#667781] dark:text-[#8696a0]">{t("liveChat.noDevices")}</p>
+              ) : (
+                devices.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setActiveDevice({ id: d.id, name: d.name, phone: d.phone ?? "", status: d.status ?? "" });
+                      setDeviceMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-black/5 dark:hover:bg-white/10 text-left"
+                  >
+                    <span className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      d.status === "connected" ? "bg-[#25d366]" : "bg-[#8696a0]"
+                    )} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] text-[#111b21] dark:text-[#e9edef] truncate">{d.name}</span>
+                      {d.phone && (
+                        <span className="block text-[10px] text-[#667781] dark:text-[#8696a0] truncate">{d.phone}</span>
+                      )}
+                    </span>
+                    {d.id === activeDeviceId && <Check className="w-4 h-4 text-[#00a884] shrink-0" />}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
         {/* Search */}
-        <div className="p-3 border-b border-border space-y-2">
+        <div className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#1f2c34] space-y-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#667781] dark:text-[#8696a0]" />
+            <input
               placeholder={t("liveChat.searchPlaceholder")}
-              className="pl-8 h-8 text-xs"
+              className="w-full h-8 pl-10 pr-3 rounded-lg bg-white dark:bg-[#2a3942] text-[13px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#667781] dark:placeholder:text-[#8696a0] focus:outline-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -709,8 +832,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 className={cn(
                   "h-6 px-2.5 rounded-full text-[10px] font-medium transition-colors",
                   statusFilter === f.id
-                    ? "bg-[#243370] dark:bg-[#4c63d2] text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                    ? "bg-[#00a884] text-white"
+                    : "bg-black/5 dark:bg-white/10 text-[#667781] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef]"
                 )}
               >
                 {f.label}
@@ -721,8 +844,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
               className={cn(
                 "h-6 px-2.5 rounded-full text-[10px] font-medium transition-colors",
                 unreadOnly
-                  ? "bg-[#243370] dark:bg-[#4c63d2] text-white"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
+                  ? "bg-[#00a884] text-white"
+                  : "bg-black/5 dark:bg-white/10 text-[#667781] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef]"
               )}
             >
               {t("liveChat.filterUnread")}
@@ -731,9 +854,9 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-[#111b21]">
           {activeDeviceId == null ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">{t("liveChat.selectDeviceFirst")}</div>
+            <div className="p-6 text-center text-xs text-[#667781] dark:text-[#8696a0]">{t("liveChat.selectDeviceFirst")}</div>
           ) : filteredConvos.length === 0 ? (
             <EmptyState
               icon={MessageCircle}
@@ -747,10 +870,10 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 key={convo.phone}
                 onClick={() => setActivePhone(convo.phone)}
                 className={cn(
-                  "w-full flex items-start gap-3 px-3 py-3 border-b border-border text-left transition-colors",
+                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
                   activePhone === convo.phone
-                    ? "bg-secondary"
-                    : "hover:bg-secondary/50"
+                    ? "bg-[#f0f2f5] dark:bg-[#2a3942]"
+                    : "hover:bg-[#f5f6f6] dark:hover:bg-[#1f2c34]"
                 )}
               >
                 <ChatAvatar
@@ -758,28 +881,33 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   phone={convo.phone}
                   name={convo.contactName || convo.phone}
                 />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 border-b border-black/5 dark:border-white/5 pb-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-foreground truncate flex items-center gap-1 min-w-0">
+                    <span className="text-[13px] text-[#111b21] dark:text-[#e9edef] truncate flex items-center gap-1 min-w-0">
                       {convo.isPinned && (
-                        <Pin className="w-3 h-3 text-[#243370] dark:text-[#8b9cf0] shrink-0" />
+                        <Pin className="w-3 h-3 text-[#667781] dark:text-[#8696a0] shrink-0" />
                       )}
                       <span className="truncate">{convo.contactName || convo.phone}</span>
                     </span>
                     <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className={cn(
+                        "text-[11px]",
+                        convo.unreadCount > 0 ? "text-[#00a884] font-medium" : "text-[#667781] dark:text-[#8696a0]"
+                      )}>
                         {timeAgo(convo.lastActivity, t)}
                       </span>
-                      {convo.unreadCount > 0 && (
-                        <Badge className="h-4 px-1.5 text-[9px] bg-[#243370] dark:bg-[#4c63d2] text-white border-transparent">
-                          {convo.unreadCount}
-                        </Badge>
-                      )}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                    <MediaPreview type={convo.lastMessageType} text={convo.lastMessage} t={t} />
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <p className="text-[12px] text-[#667781] dark:text-[#8696a0] truncate flex-1 min-w-0">
+                      <MediaPreview type={convo.lastMessageType} text={convo.lastMessage} t={t} />
+                    </p>
+                    {convo.unreadCount > 0 && (
+                      <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] text-white text-[11px] font-medium inline-flex items-center justify-center">
+                        {convo.unreadCount}
+                      </span>
+                    )}
+                  </div>
                   {rowLabels.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {rowLabels.slice(0, 3).map((l) => (
@@ -810,14 +938,14 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
         {activePhone ? (
           <>
             {/* Chat Header */}
-            <div className="min-h-12 flex items-center justify-between gap-2 px-4 py-1.5 border-b border-border bg-card">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="min-h-[60px] flex items-center justify-between gap-2 pl-3 pr-2 py-1.5 bg-[#f0f2f5] dark:bg-[#1f2c34]">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <Button
                   variant="ghost"
                   size="icon"
                   aria-label={t("liveChat.back")}
                   onClick={() => setActivePhone(null)}
-                  className="md:hidden -ml-2 h-8 w-8 shrink-0"
+                  className="md:hidden -ml-2 h-8 w-8 shrink-0 text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10"
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
@@ -827,20 +955,20 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   name={activeConvo?.contactName || activePhone}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-foreground truncate leading-tight">
+                  <p className="text-[15px] text-[#111b21] dark:text-[#e9edef] truncate leading-tight">
                     {activeConvo?.contactName || activePhone}
                   </p>
-                  <p className="text-[11px] text-muted-foreground font-mono truncate">
+                  <p className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
                     {activePhone}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-0.5 shrink-0 text-[#54656f] dark:text-[#aebac1]">
                 {/* Cari dalam percakapan */}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-9 w-9 hover:bg-black/5 dark:hover:bg-white/10"
                   aria-label={t("liveChat.searchInChat")}
                   title={t("liveChat.searchInChat")}
                   onClick={() => {
@@ -848,28 +976,33 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                     setMsgQuery("");
                   }}
                 >
-                  <Search className="w-4 h-4" />
+                  <Search className="w-[18px] h-[18px]" />
                 </Button>
                 {/* AI Toggle */}
                 <Button
-                  variant={aiMode ? "default" : "outline"}
+                  variant="ghost"
                   size="sm"
-                  className="h-7 text-[10px] gap-1"
+                  className={cn(
+                    "h-8 text-[11px] gap-1 px-2.5 rounded-full",
+                    aiMode
+                      ? "bg-[#00a884] text-white hover:bg-[#00a884]/90"
+                      : "hover:bg-black/5 dark:hover:bg-white/10"
+                  )}
                   onClick={() => setAiMode(!aiMode)}
                 >
-                  <Bot className="w-3 h-3" />
+                  <Bot className="w-3.5 h-3.5" />
                   {aiMode ? t("liveChat.aiOn") : t("liveChat.aiOff")}
                 </Button>
                 <div className="relative" ref={infoRef}>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7"
+                    className="h-9 w-9 hover:bg-black/5 dark:hover:bg-white/10"
                     aria-label={t("liveChat.contactInfo")}
                     title={t("liveChat.contactInfo")}
                     onClick={() => setShowInfo((v) => !v)}
                   >
-                    <MoreHorizontal className="w-4 h-4" />
+                    <MoreHorizontal className="w-[18px] h-[18px]" />
                   </Button>
                   {showInfo && activePhone && (
                     <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-border bg-card shadow-xl z-30 p-4 max-h-[70vh] overflow-y-auto">
@@ -1150,8 +1283,22 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 </Button>
               </div>
             )}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-background">
-              {messages.map((msg, i) => (
+            <div className="relative flex-1 overflow-y-auto bg-[#efeae2] dark:bg-[#0b141a]">
+              {/* Doodle khas WA */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 dark:hidden"
+                style={{ backgroundImage: WA_DOODLE_LIGHT }}
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 hidden dark:block"
+                style={{ backgroundImage: WA_DOODLE_DARK }}
+              />
+              <div className="relative p-4 space-y-1.5">
+              {messages.map((msg, i) => {
+                const out = msg.direction === "out";
+                return (
                 <div
                   key={msg.id}
                   ref={(el) => {
@@ -1160,41 +1307,40 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   }}
                   className={cn(
                     "flex",
-                    msg.direction === "out" ? "justify-end" : "justify-start"
+                    out ? "justify-end" : "justify-start"
                   )}
                 >
-                  <div
-                    className={cn(
-                      "max-w-[70%] rounded-lg px-3 py-2 text-sm",
-                      msg.direction === "out"
-                        ? "bg-foreground text-background"
-                        : "bg-secondary text-foreground border border-border"
-                    )}
-                  >
-                    <p className="whitespace-pre-wrap break-words">
-                      {msgQuery.trim() ? highlight(msg.content, msgQuery) : msg.content}
-                    </p>
-                    <p
+                  <div className="relative max-w-[75%] md:max-w-[65%]">
+                    <BubbleTail out={out} />
+                    <div
                       className={cn(
-                        "text-[9px] mt-1",
-                        msg.direction === "out"
-                          ? "text-background/60"
-                          : "text-muted-foreground"
+                        "px-2.5 pt-1.5 pb-1 text-[13.5px] leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.12)]",
+                        out
+                          ? "bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-[7.5px] rounded-tr-none"
+                          : "bg-white dark:bg-[#1f2c34] text-[#111b21] dark:text-[#e9edef] rounded-[7.5px] rounded-tl-none"
                       )}
                     >
-                      {new Date(msg.createdAt).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                      <span className={cn("float-right flex items-center gap-1 ml-2 mt-2.5 text-[10px] leading-none", out ? "text-[#667781] dark:text-[#e9edef]/70" : "text-[#667781] dark:text-[#8696a0]")}>
+                        {new Date(msg.createdAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {out && <Ticks read={msg.isRead} />}
+                      </span>
+                      <p className="whitespace-pre-wrap break-words">
+                        {msgQuery.trim() ? highlight(msg.content, msgQuery) : msg.content}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
+              </div>
             </div>
 
             {/* Input Area */}
-            <div className="p-3 border-t border-border bg-card relative">
+            <div className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#1f2c34] relative">
               {/* Quick replies popover */}
               {showQuickReplies && (
                 <div className="absolute left-3 right-3 bottom-full mb-2 z-20 rounded-lg border border-border bg-card shadow-xl max-h-64 overflow-y-auto">
@@ -1238,54 +1384,67 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
               )}
               <div className="flex items-center gap-2">
               {aiMode ? (
-                <Button
+                <button
                   onClick={handleAIReply}
                   disabled={loading}
-                  className="flex-1 gap-2"
+                  className="flex-1 h-10 rounded-full bg-[#00a884] text-white text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   <Bot className="w-4 h-4" />
                   {loading ? t("liveChat.generating") : t("liveChat.generateAiReply")}
-                </Button>
+                </button>
               ) : (
                 <>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
+                  <button
                     onClick={toggleQuickReplies}
                     aria-label={t("liveChat.quickReplies")}
                     title={t("liveChat.quickReplies")}
+                    className="w-10 h-10 shrink-0 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10"
                   >
-                    <Zap className="w-4 h-4" />
-                  </Button>
-                  <Input
+                    <Zap className="w-5 h-5" />
+                  </button>
+                  <input
                     placeholder={t("liveChat.typeMessage")}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                    className="flex-1 h-9"
+                    className="flex-1 h-10 px-4 rounded-full bg-white dark:bg-[#2a3942] text-[14px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#667781] dark:placeholder:text-[#8696a0] focus:outline-none min-w-0"
                     disabled={loading}
                   />
-                  <Button
-                    size="icon"
+                  <button
                     onClick={handleSend}
                     disabled={!input.trim() || loading}
+                    aria-label={t("liveChat.send")}
+                    className="w-10 h-10 shrink-0 rounded-full bg-[#00a884] text-white inline-flex items-center justify-center disabled:opacity-40 hover:bg-[#06cf9c] transition-colors"
                   >
-                    <Send className="w-4 h-4" />
-                  </Button>
+                    <Send className="w-5 h-5" />
+                  </button>
                 </>
               )}
               </div>
             </div>
           </>
         ) : (
-          /* Empty State */
-          <div className="flex-1 flex items-center justify-center">
-            <EmptyState
-              icon={MessageCircle}
-              title="Live Chat"
-              hint={t("liveChat.emptyHint")}
+          /* Empty State ala WA */
+          <div className="relative flex-1 flex items-center justify-center overflow-hidden bg-[#f8f9fa] dark:bg-[#0b141a] border-b-8 border-[#25d366]/60 dark:border-[#00a884]/40">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 dark:hidden opacity-60"
+              style={{ backgroundImage: WA_DOODLE_LIGHT }}
             />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 hidden dark:block opacity-60"
+              style={{ backgroundImage: WA_DOODLE_DARK }}
+            />
+            <div className="relative text-center px-8 max-w-sm">
+              <div className="mx-auto w-20 h-20 rounded-full bg-[#25d366]/15 dark:bg-[#00a884]/15 inline-flex items-center justify-center mb-4">
+                <MessageCircle className="w-10 h-10 text-[#00a884]" />
+              </div>
+              <p className="text-xl font-light text-[#111b21] dark:text-[#e9edef]">WaGataway Chat</p>
+              <p className="text-[13px] text-[#667781] dark:text-[#8696a0] mt-2">
+                {t("liveChat.emptyHint")}
+              </p>
+            </div>
           </div>
         )}
       </div>
