@@ -104,7 +104,13 @@ func upsertAIConnection(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var conn models.AIConnection
-		isNew := udb.Where("user_id = ?", userID).First(&conn).Error != nil
+		// Unscoped: temukan juga baris yang soft-deleted agar bisa dihidupkan
+		// kembali (bukan INSERT baru yang nabrak unique index user_id).
+		res := udb.Unscoped().Where("user_id = ?", userID).First(&conn)
+		isNew := res.Error != nil
+		if !isNew && conn.DeletedAt.Valid {
+			conn.DeletedAt = gorm.DeletedAt{}
+		}
 
 		// API key: wajib saat pertama kali; boleh kosong saat update (key lama dipertahankan).
 		if strings.TrimSpace(req.APIKey) != "" {
