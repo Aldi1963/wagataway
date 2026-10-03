@@ -97,6 +97,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerAntiBannedRoutes(protected, db, waManager)
 			registerNotificationRoutes(protected, db)
 			registerUploadRoutes(protected)
+			InitLiveChat(cfg, db, waManager)
 			registerChatRoutes(protected, db, waManager)
 			registerAnalyticsRoutes(protected, db)
 			registerStatsRoutes(protected, db)
