@@ -260,4 +260,4 @@ Tidak perlu Node.js, tidak perlu microservice terpisah. Satu binary handle semua
 
 ## License
 
-Private — Aldi1963
+MIT — lihat [LICENSE](LICENSE). Copyright © 2026 Aldi1963.
