@@ -180,7 +180,22 @@ function Ticks({ read }: { read: boolean }) {
 // Avatar kontak: coba foto profil WA asli, fallback ke inisial nama.
 // Cache foto profil per device+phone + antrean max 3 fetch bersamaan
 // (daftar percakapan bisa puluhan baris; jangan hantam WhatsApp sekaligus).
-const photoCache = new Map<string, string | null>();
+const photoCache = new Map<string, { url: string | null; exp: number }>();
+// Hasil gagal (null) hanya di-cache 60 detik agar kegagalan sementara
+// (server restart, device reconnect, dsb.) pulih sendiri tanpa reload halaman.
+const PHOTO_NEG_TTL = 60_000;
+function photoCacheGet(key: string): string | null | undefined {
+  const e = photoCache.get(key);
+  if (!e) return undefined;
+  if (e.url == null && Date.now() > e.exp) {
+    photoCache.delete(key);
+    return undefined;
+  }
+  return e.url;
+}
+function photoCacheSet(key: string, url: string | null) {
+  photoCache.set(key, { url, exp: url == null ? Date.now() + PHOTO_NEG_TTL : Infinity });
+}
 const photoQueue: (() => void)[] = [];
 let photoQueueRunning = 0;
 function pumpPhotoQueue() {
@@ -211,8 +226,9 @@ function ChatAvatar({
       return;
     }
     const key = `${deviceId}:${phone}`;
-    if (photoCache.has(key)) {
-      setPhotoUrl(photoCache.get(key) ?? null);
+    const cached = photoCacheGet(key);
+    if (cached !== undefined) {
+      setPhotoUrl(cached);
       return;
     }
     let alive = true;
@@ -224,19 +240,19 @@ function ChatAvatar({
           { signal: ctrl.signal }
         );
         if (!res.ok) {
-          photoCache.set(key, null);
+          photoCacheSet(key, null);
           return;
         }
         const blob = await res.blob();
         if (alive && blob.size > 0) {
           const url = URL.createObjectURL(blob);
-          photoCache.set(key, url);
+          photoCacheSet(key, url);
           setPhotoUrl(url);
         } else {
-          photoCache.set(key, null);
+          photoCacheSet(key, null);
         }
       } catch {
-        photoCache.set(key, null);
+        photoCacheSet(key, null);
       } finally {
         photoQueueRunning--;
         pumpPhotoQueue();
