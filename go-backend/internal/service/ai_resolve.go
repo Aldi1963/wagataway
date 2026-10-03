@@ -47,7 +47,7 @@ func EffectiveModel(conn *models.AIConnection, override string) string {
 }
 
 // ValidProviders adalah daftar provider yang didukung.
-var ValidProviders = []AIProvider{ProviderOpenAI, ProviderGemini, ProviderAnthropic, ProviderCustom}
+var ValidProviders = []AIProvider{ProviderOpenAI, ProviderGemini, ProviderAnthropic, ProviderDeepSeek, ProviderZAI, ProviderNineRouter, ProviderCustom}
 
 // IsValidProvider memeriksa nama provider.
 func IsValidProvider(p string) bool {

@@ -27,6 +27,9 @@ const PROVIDERS = [
   { value: "openai", label: "OpenAI (ChatGPT)" },
   { value: "gemini", label: "Google Gemini" },
   { value: "anthropic", label: "Anthropic (Claude)" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "zai", label: "Z.ai (Zhipu)" },
+  { value: "9router", label: "9router" },
   { value: "custom", label: "Custom (OpenAI-compatible)" },
 ];
 
@@ -34,7 +37,18 @@ const CURATED_MODELS: Record<string, string[]> = {
   openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
   gemini: ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"],
   anthropic: ["claude-3-5-haiku-20241022", "claude-sonnet-4-20250514"],
+  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  zai: ["glm-4.5", "glm-4.5-air", "glm-4"],
+  "9router": [],
   custom: [],
+};
+
+// Provider yang base URL-nya bisa diubah (custom wajib isi).
+const EDITABLE_BASE_URL: Record<string, string> = {
+  deepseek: "https://api.deepseek.com",
+  zai: "https://api.z.ai/api/paas/v4",
+  "9router": "https://ai.clipku.com/v1",
+  custom: "",
 };
 
 const CUSTOM_MODEL = "__custom__";
@@ -100,7 +114,7 @@ export default function AIConnectionCard({ onChanged }: { onChanged?: () => void
         provider,
         apiKey: apiKey.trim(),
         model,
-        baseUrl: provider === "custom" ? baseUrl.trim() : "",
+        baseUrl: provider in EDITABLE_BASE_URL ? baseUrl.trim() : "",
       });
       setConn(r.connection);
       setApiKey("");
@@ -122,7 +136,7 @@ export default function AIConnectionCard({ onChanged }: { onChanged?: () => void
         provider,
         apiKey: apiKey.trim(),
         model,
-        baseUrl: provider === "custom" ? baseUrl.trim() : "",
+        baseUrl: provider in EDITABLE_BASE_URL ? baseUrl.trim() : "",
       });
       setTestResult(r);
       if (r.ok) toast.success(`${t("aiReply.connTestOk")} (${r.latencyMs}ms)`);
@@ -186,6 +200,7 @@ export default function AIConnectionCard({ onChanged }: { onChanged?: () => void
                   const ms = CURATED_MODELS[p] || [];
                   setModelSel(ms[0] ?? CUSTOM_MODEL);
                   setCustomModel("");
+                  setBaseUrl("");
                   setTestResult(null);
                 }}
               >
@@ -246,14 +261,14 @@ export default function AIConnectionCard({ onChanged }: { onChanged?: () => void
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">{t("aiReply.connApiKeyHint")}</p>
             </div>
-            {provider === "custom" && (
+            {provider in EDITABLE_BASE_URL && (
               <div className="sm:col-span-2">
                 <label className={labelCls}>{t("aiReply.connBaseUrl")}</label>
                 <Input
                   className={inputCls}
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder={t("aiReply.connBaseUrlPlaceholder")}
+                  placeholder={EDITABLE_BASE_URL[provider] || t("aiReply.connBaseUrlPlaceholder")}
                   inputMode="url"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">{t("aiReply.connBaseUrlHint")}</p>

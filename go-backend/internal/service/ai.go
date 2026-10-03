@@ -10,14 +10,17 @@ import (
 	"time"
 )
 
-// AIProvider represents an AI provider (openai, gemini, anthropic, custom)
+// AIProvider represents an AI provider
 type AIProvider string
 
 const (
-	ProviderOpenAI    AIProvider = "openai"
-	ProviderGemini    AIProvider = "gemini"
-	ProviderAnthropic AIProvider = "anthropic"
-	ProviderCustom    AIProvider = "custom" // OpenAI-compatible endpoint (base URL sendiri)
+	ProviderOpenAI     AIProvider = "openai"
+	ProviderGemini     AIProvider = "gemini"
+	ProviderAnthropic  AIProvider = "anthropic"
+	ProviderDeepSeek   AIProvider = "deepseek"
+	ProviderZAI        AIProvider = "zai"      // Zhipu AI (z.ai), OpenAI-compatible
+	ProviderNineRouter AIProvider = "9router"  // 9router, OpenAI-compatible, endpoint bisa diganti
+	ProviderCustom     AIProvider = "custom"   // OpenAI-compatible endpoint bebas
 )
 
 // ProviderDefaults: model bawaan + base URL tiap provider.
@@ -25,19 +28,39 @@ var ProviderDefaults = map[AIProvider]struct {
 	BaseURL string
 	Model   string
 }{
-	ProviderOpenAI:    {"https://api.openai.com/v1", "gpt-4o-mini"},
-	ProviderGemini:    {"https://generativelanguage.googleapis.com/v1beta", "gemini-2.0-flash"},
-	ProviderAnthropic: {"https://api.anthropic.com/v1", "claude-3-5-haiku-20241022"},
-	ProviderCustom:    {"", "default"},
+	ProviderOpenAI:     {"https://api.openai.com/v1", "gpt-4o-mini"},
+	ProviderGemini:     {"https://generativelanguage.googleapis.com/v1beta", "gemini-2.0-flash"},
+	ProviderAnthropic:  {"https://api.anthropic.com/v1", "claude-3-5-haiku-20241022"},
+	ProviderDeepSeek:   {"https://api.deepseek.com", "deepseek-chat"},
+	ProviderZAI:        {"https://api.z.ai/api/paas/v4", "glm-4.5"},
+	ProviderNineRouter: {"https://ai.clipku.com/v1", "default"},
+	ProviderCustom:     {"", "default"},
 }
 
 // CuratedModels: daftar model yang ditawarkan di dropdown UI per provider.
 // Pengguna tetap bisa mengetik nama model lain secara manual.
 var CuratedModels = map[AIProvider][]string{
-	ProviderOpenAI:    {"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"},
-	ProviderGemini:    {"gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"},
-	ProviderAnthropic: {"claude-3-5-haiku-20241022", "claude-sonnet-4-20250514"},
-	ProviderCustom:    {},
+	ProviderOpenAI:     {"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"},
+	ProviderGemini:     {"gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"},
+	ProviderAnthropic:  {"claude-3-5-haiku-20241022", "claude-sonnet-4-20250514"},
+	ProviderDeepSeek:   {"deepseek-chat", "deepseek-reasoner"},
+	ProviderZAI:        {"glm-4.5", "glm-4.5-air", "glm-4"},
+	ProviderNineRouter: {},
+	ProviderCustom:     {},
+}
+
+// baseURLEditable: provider yang base URL-nya boleh diubah user di UI.
+// (custom wajib isi; lainnya opsional — kosong = pakai bawaan.)
+var baseURLEditable = map[AIProvider]bool{
+	ProviderDeepSeek:   true,
+	ProviderZAI:        true,
+	ProviderNineRouter: true,
+	ProviderCustom:     true,
+}
+
+// IsBaseURLEditable melaporkan apakah base URL provider bisa diubah user.
+func IsBaseURLEditable(p AIProvider) bool {
+	return baseURLEditable[p]
 }
 
 // AIService handles AI chat completions
@@ -96,7 +119,7 @@ func (s *AIService) apiKeyFor(p AIProvider) string {
 		return s.APIKey
 	}
 	switch p {
-	case ProviderOpenAI, ProviderCustom:
+	case ProviderOpenAI, ProviderCustom, ProviderDeepSeek, ProviderZAI, ProviderNineRouter:
 		return s.OpenAIKey
 	case ProviderAnthropic:
 		return s.AnthropicKey
@@ -133,7 +156,7 @@ func (s *AIService) Complete(req ChatRequest) (*ChatResponse, error) {
 		return s.completeAnthropic(req)
 	case ProviderGemini:
 		return s.completeGemini(req)
-	case ProviderCustom:
+	case ProviderCustom, ProviderDeepSeek, ProviderZAI, ProviderNineRouter:
 		return s.completeOpenAICompatible(req)
 	default:
 		return s.completeOpenAI(req)
@@ -165,11 +188,11 @@ func (s *AIService) completeOpenAI(req ChatRequest) (*ChatResponse, error) {
 	return s.postChatCompletions(s.baseURLFor(ProviderOpenAI)+"/chat/completions", key, model, req.Messages, maxTokens, temp)
 }
 
-// completeOpenAICompatible dipakai untuk provider=custom: endpoint
-// OpenAI-compatible (9router, OpenRouter, Ollama, dsb.).
+// completeOpenAICompatible dipakai untuk provider OpenAI-compatible:
+// custom, deepseek, zai, 9router (format /chat/completions + Bearer).
 func (s *AIService) completeOpenAICompatible(req ChatRequest) (*ChatResponse, error) {
-	key := s.apiKeyFor(ProviderCustom)
-	base := s.baseURLFor(ProviderCustom)
+	key := s.apiKeyFor(req.Provider)
+	base := s.baseURLFor(req.Provider)
 	if base == "" {
 		return nil, fmt.Errorf("custom AI base URL not configured")
 	}

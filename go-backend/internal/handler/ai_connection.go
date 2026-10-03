@@ -85,18 +85,22 @@ func upsertAIConnection(db *gorm.DB) gin.HandlerFunc {
 			model = service.DefaultModelFor(service.AIProvider(provider))
 		}
 		baseURL := strings.TrimSpace(req.BaseURL)
+		prov := service.AIProvider(provider)
 		if provider == string(service.ProviderCustom) {
 			if baseURL == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Base URL wajib diisi untuk provider custom"})
 				return
 			}
+		}
+		if baseURL != "" {
 			if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Base URL harus diawali http:// atau https://"})
 				return
 			}
 			baseURL = strings.TrimSuffix(baseURL, "/")
-		} else {
-			baseURL = ""
+		}
+		if !service.IsBaseURLEditable(prov) {
+			baseURL = "" // provider fixed: abaikan base URL kiriman
 		}
 
 		var conn models.AIConnection
