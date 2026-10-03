@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/realtime"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
@@ -68,6 +69,17 @@ type Manager struct {
 	welcomeDMClaims map[string]time.Time
 	welcomeDMMu     sync.Mutex
 	welcomeDMOnce   sync.Once
+	// Presence live chat: deviceID → JID string → state.
+	presenceMu sync.RWMutex
+	presence   map[uint]map[string]PresenceState
+}
+
+// PresenceState menyimpan status online/mengetik terakhir sebuah kontak
+// untuk satu device. Diisi dari events.Presence & events.ChatPresence.
+type PresenceState struct {
+	Online   bool
+	Typing   bool
+	LastSeen time.Time
 }
 
 // NewManager creates a new WhatsApp session manager
@@ -82,6 +94,7 @@ func NewManager(sessionDir string, db *gorm.DB) *Manager {
 		db:         db,
 		retryGen:   make(map[uint]int),
 		manualStop: make(map[uint]bool),
+		presence:   make(map[uint]map[string]PresenceState),
 	}
 
 	// Auto-reconnect previously connected devices
@@ -724,6 +737,12 @@ func (m *Manager) reconnectWithBackoff(deviceID, userID uint) {
 func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
+		// Reaksi emoji ditangkap di sini (SEBELUM handleIncomingMessage)
+		// agar tidak masuk alur bot/menu/AI/webhook.
+		if v.Message.GetReactionMessage() != nil {
+			go m.handleIncomingReaction(sess, v)
+			return
+		}
 		// Vote polling ditangkap di sini (SEBELUM handleIncomingMessage)
 		// agar tidak masuk ke alur bot/menu/AI/webhook termasuk webhook bot PPOB.
 		if v.Message.GetPollUpdateMessage() != nil {
@@ -811,8 +830,14 @@ func (m *Manager) handleEvent(sess *SessionState, evt interface{}) {
 		go m.handleGroupParticipantChange(sess, v)
 
 	case *events.Presence:
-		// Online/offline presence updates
-		log.Debug().Uint("deviceID", sess.DeviceID).Str("from", v.From.String()).Msg("Presence update")
+		// Online/offline presence updates — disimpan ke presence store
+		// dan disiarkan via SSE (live chat ala WA native).
+		go m.handlePresenceEvent(sess, v)
+
+	case *events.ChatPresence:
+		// Notifikasi "mengetik..." — disimpan ke presence store
+		// dan disiarkan via SSE.
+		go m.handleChatPresenceEvent(sess, v)
 
 	case *events.CallOffer:
 		// Panggilan WhatsApp masuk — tolak otomatis bila flag rejectCall aktif
@@ -879,16 +904,20 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		Msg("Incoming message")
 
 	// Save to chat inbox
+	replyTo, replyContent := extractQuoteInfo(msg)
 	inbox := models.ChatInbox{
-		UserID:    sess.UserID,
-		DeviceID:  sess.DeviceID,
-		Phone:     sender,
-		SenderJID: senderJID,
-		Name:      msg.Info.PushName,
-		Content:   text,
-		Type:      getMessageType(msg),
-		Direction: "in",
-		IsRead:    false,
+		UserID:       sess.UserID,
+		DeviceID:     sess.DeviceID,
+		Phone:        sender,
+		SenderJID:    senderJID,
+		Name:         msg.Info.PushName,
+		Content:      text,
+		Type:         getMessageType(msg),
+		Direction:    "in",
+		IsRead:       false,
+		WaMessageID:  string(msg.Info.ID),
+		ReplyTo:      replyTo,
+		ReplyContent: replyContent,
 	}
 	m.db.Create(&inbox)
 
@@ -912,6 +941,162 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 
 	// Tandai sudah dibaca bila flag readReceipts aktif (non-blocking)
 	go m.maybeMarkRead(sess, msg)
+}
+
+// handleIncomingReaction memproses reaksi emoji masuk: update kolom Reactions
+// pada pesan yang dituju (dicocokkan via wa_message_id + device) lalu
+// disiarkan via SSE. Tidak masuk alur bot/menu/AI/webhook.
+func (m *Manager) handleIncomingReaction(sess *SessionState, v *events.Message) {
+	rm := v.Message.GetReactionMessage()
+	if rm == nil || rm.GetKey() == nil {
+		return
+	}
+	targetID := rm.GetKey().GetID()
+	if targetID == "" {
+		return
+	}
+	emoji := rm.GetText() // "" = hapus reaksi
+
+	var inbox models.ChatInbox
+	if err := m.db.Where("device_id = ? AND wa_message_id = ? AND user_id = ?",
+		sess.DeviceID, targetID, sess.UserID).First(&inbox).Error; err != nil {
+		// Pesan yang dituju tidak tercatat di live chat — abaikan.
+		log.Debug().Uint("deviceID", sess.DeviceID).Str("targetID", targetID).
+			Msg("Reaction untuk pesan yang tidak dikenal, diabaikan")
+		return
+	}
+
+	reactions := AddChatReaction(inbox.Reactions, emoji, false)
+	m.db.Model(&inbox).Update("reactions", reactions)
+
+	log.Debug().Uint("deviceID", sess.DeviceID).Str("targetID", targetID).
+		Str("emoji", emoji).Msg("Incoming reaction")
+
+	realtime.DefaultHub.SendToUser(sess.UserID, realtime.Event{
+		Type: "chat:reaction",
+		Payload: map[string]interface{}{
+			"deviceId":    sess.DeviceID,
+			"phone":       inbox.Phone,
+			"waMessageId": targetID,
+			"emoji":       emoji,
+			"fromMe":      false,
+		},
+	})
+}
+
+// handlePresenceEvent menyimpan status online/offline kontak dan menyiarkannya via SSE.
+func (m *Manager) handlePresenceEvent(sess *SessionState, v *events.Presence) {
+	jidStr := v.From.String()
+	m.presenceMu.Lock()
+	if m.presence[sess.DeviceID] == nil {
+		m.presence[sess.DeviceID] = make(map[string]PresenceState)
+	}
+	st := m.presence[sess.DeviceID][jidStr]
+	st.Online = !v.Unavailable
+	st.LastSeen = time.Now()
+	m.presence[sess.DeviceID][jidStr] = st
+	typing := st.Typing
+	m.presenceMu.Unlock()
+
+	log.Debug().Uint("deviceID", sess.DeviceID).Str("from", jidStr).
+		Bool("online", st.Online).Msg("Presence update")
+
+	realtime.DefaultHub.SendToUser(sess.UserID, realtime.Event{
+		Type: "chat:presence",
+		Payload: map[string]interface{}{
+			"deviceId": sess.DeviceID,
+			"jid":      jidStr,
+			"phone":    m.resolvePresencePhone(sess, v.From),
+			"online":   st.Online,
+			"typing":   typing,
+		},
+	})
+}
+
+// handleChatPresenceEvent menyimpan status "mengetik..." kontak dan menyiarkannya via SSE.
+func (m *Manager) handleChatPresenceEvent(sess *SessionState, v *events.ChatPresence) {
+	// Untuk DM, Chat = JID lawan bicara.
+	jidStr := v.Chat.String()
+	m.presenceMu.Lock()
+	if m.presence[sess.DeviceID] == nil {
+		m.presence[sess.DeviceID] = make(map[string]PresenceState)
+	}
+	st := m.presence[sess.DeviceID][jidStr]
+	st.Typing = v.State == types.ChatPresenceComposing
+	st.LastSeen = time.Now()
+	m.presence[sess.DeviceID][jidStr] = st
+	online := st.Online
+	m.presenceMu.Unlock()
+
+	realtime.DefaultHub.SendToUser(sess.UserID, realtime.Event{
+		Type: "chat:presence",
+		Payload: map[string]interface{}{
+			"deviceId": sess.DeviceID,
+			"jid":      jidStr,
+			"phone":    m.resolvePresencePhone(sess, v.Chat),
+			"online":   online,
+			"typing":   st.Typing,
+		},
+	})
+}
+
+// resolvePresencePhone mencocokkan JID presence ke nomor phone yang dipakai
+// live chat. Best effort: cari percakapan via sender_jid, fallback ke user
+// JID bila server-nya s.whatsapp.net, else "" (frontend bisa cocokkan via jid).
+func (m *Manager) resolvePresencePhone(sess *SessionState, jid types.JID) string {
+	var conv models.ChatConversation
+	if err := m.db.Select("phone").Where("user_id = ? AND device_id = ? AND sender_jid = ?",
+		sess.UserID, sess.DeviceID, jid.String()).First(&conv).Error; err == nil && conv.Phone != "" {
+		return conv.Phone
+	}
+	if jid.Server == types.DefaultUserServer {
+		return jid.User
+	}
+	return ""
+}
+
+// GetPresence mengembalikan state presence terakhir sebuah JID untuk device.
+// JID kosong bila belum ada data.
+func (m *Manager) GetPresence(deviceID uint, jid string) PresenceState {
+	m.presenceMu.RLock()
+	defer m.presenceMu.RUnlock()
+	if m.presence[deviceID] == nil {
+		return PresenceState{}
+	}
+	return m.presence[deviceID][jid]
+}
+
+// SubscribePresenceTo meminta update presence (online/mengetik) untuk sebuah
+// kontak. `to` boleh berupa nomor HP maupun JID lengkap. Best effort:
+// kegagalan tidak fatal bagi pemanggil.
+func (m *Manager) SubscribePresenceTo(deviceID uint, to string) error {
+	m.mu.RLock()
+	sess, exists := m.sessions[deviceID]
+	m.mu.RUnlock()
+
+	if !exists || sess.Status != "connected" || sess.Client == nil {
+		return fmt.Errorf("device %d tidak terhubung", deviceID)
+	}
+
+	var jid types.JID
+	var err error
+	if strings.Contains(to, "@") {
+		jid, err = types.ParseJID(to)
+	} else {
+		jid, err = parseJID(to)
+	}
+	if err != nil {
+		return fmt.Errorf("tujuan tidak valid: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// WhatsApp hanya mengirim update ChatPresence bila kita menandai diri online.
+	if err := sess.Client.SendPresence(ctx, types.PresenceAvailable); err != nil {
+		log.Warn().Err(err).Uint("deviceID", deviceID).Msg("Gagal menandai presence available (best effort)")
+	}
+	return sess.Client.SubscribePresence(ctx, jid)
 }
 
 // handleReceipt processes message delivery receipts

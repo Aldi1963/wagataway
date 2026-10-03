@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile, Download, BellRing, Trash2 } from "lucide-react";
+import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile, Download, BellRing, Trash2, Paperclip, Undo2, Forward, Square, Loader2, Link as LinkIcon } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,78 @@ interface ChatMsg {
   direction: "in" | "out";
   isRead: boolean;
   createdAt: string;
+  waMessageId?: string;
+  mediaUrl?: string;
+  fileName?: string;
+  replyTo?: string;
+  replyContent?: string;
+  isDeleted?: boolean;
+  reactions?: ChatReaction[];
+}
+
+interface ChatReaction {
+  emoji: string;
+  fromMe: boolean;
+}
+
+interface ChatMediaItem {
+  id: number;
+  type: string;
+  mediaUrl: string;
+  content: string;
+  createdAt: string;
+}
+
+// reactions bisa berupa array objek atau JSON string — parse defensif.
+function parseReactions(r: unknown): ChatReaction[] {
+  if (Array.isArray(r)) {
+    return r
+      .filter((x) => x && typeof (x as ChatReaction).emoji === "string")
+      .map((x) => ({ emoji: (x as ChatReaction).emoji, fromMe: !!(x as ChatReaction).fromMe }));
+  }
+  if (typeof r === "string" && r.trim()) {
+    try {
+      return parseReactions(JSON.parse(r));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+// Normalisasi satu pesan dari backend/SSE ke bentuk ChatMsg penuh.
+function normalizeMsg(m: any): ChatMsg {
+  return {
+    id: typeof m.id === "number" ? m.id : Date.now() + Math.random(),
+    phone: m.phone,
+    content: m.content ?? "",
+    type: m.type || "text",
+    direction: m.direction,
+    isRead: !!m.isRead,
+    createdAt: m.createdAt || new Date().toISOString(),
+    waMessageId: m.waMessageId,
+    mediaUrl: m.mediaUrl,
+    fileName: m.fileName,
+    replyTo: m.replyTo,
+    replyContent: m.replyContent,
+    isDeleted: !!m.isDeleted,
+    reactions: parseReactions(m.reactions),
+  };
+}
+
+// Label pemisah tanggal ala WA: "HARI INI" / "KEMARIN" / "12 Sep 2026".
+function dayKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+function dayChipLabel(iso: string, today: string, yesterday: string, locale: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  if (dayKeyOf(d) === dayKeyOf(now)) return today;
+  if (dayKeyOf(d) === dayKeyOf(y)) return yesterday;
+  return d.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
 }
 
 // ── Tema ala WhatsApp Web ───────────────────────────────────────────────────
@@ -237,6 +309,7 @@ function MediaPreview({ type, text, t }: { type?: string; text: string; t: (k: s
     image: { icon: <Camera className="w-3 h-3" />, label: t("liveChat.msgImage") },
     video: { icon: <Video className="w-3 h-3" />, label: t("liveChat.msgVideo") },
     audio: { icon: <Mic className="w-3 h-3" />, label: t("liveChat.msgAudio") },
+    voicenote: { icon: <Mic className="w-3 h-3" />, label: t("liveChat.msgAudio") },
     document: { icon: <FileText className="w-3 h-3" />, label: t("liveChat.msgDocument") },
     sticker: { icon: <Smile className="w-3 h-3" />, label: t("liveChat.msgSticker") },
   };
@@ -253,7 +326,8 @@ function MediaPreview({ type, text, t }: { type?: string; text: string; t: (k: s
 
 export default function LiveChat({ embedded: _embedded = false }: { embedded?: boolean }) {
   const { activeDeviceId, activeDevice, setActiveDevice } = useActiveDevice();
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const dateLocale = lang === "id" ? "id-ID" : "en-US";
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [devices, setDevices] = useState<DeviceLite[]>([]);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
@@ -287,6 +361,38 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const [reminderAt, setReminderAt] = useState("");
   const [reminderNote, setReminderNote] = useState("");
   const [savingReminder, setSavingReminder] = useState(false);
+  // Balas/quote
+  const [replyTo, setReplyTo] = useState<{ waMessageId: string; content: string; name: string } | null>(null);
+  // Hover/tap toolbar di atas bubble + popover reaksi
+  const [toolbarMsg, setToolbarMsg] = useState<number | null>(null);
+  const [reactionFor, setReactionFor] = useState<number | null>(null);
+  // Teruskan pesan
+  const [forwardMsg, setForwardMsg] = useState<ChatMsg | null>(null);
+  const [forwarding, setForwarding] = useState(false);
+  // Kirim media (paperclip)
+  const [attachOpen, setAttachOpen] = useState(false);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachKindRef = useRef<"image" | "video" | "document">("image");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaKind, setMediaKind] = useState<"image" | "video" | "document">("image");
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const [mediaCaption, setMediaCaption] = useState("");
+  const [uploading, setUploading] = useState(false);
+  // Voice note
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+  const recTimerRef = useRef<number | null>(null);
+  const mediaRecRef = useRef<MediaRecorder | null>(null);
+  const recChunksRef = useRef<Blob[]>([]);
+  const recStreamRef = useRef<MediaStream | null>(null);
+  const [sendingVoice, setSendingVoice] = useState(false);
+  // Online/mengetik
+  const [presence, setPresence] = useState<{ online: boolean; typing: boolean } | null>(null);
+  // Tab info kontak: info | media | dokumen | tautan
+  const [infoTab, setInfoTab] = useState<"info" | "media" | "documents" | "links">("info");
+  const [tabItems, setTabItems] = useState<ChatMediaItem[] | null>(null);
+  const [tabLoading, setTabLoading] = useState(false);
 
   /** Bunyi beep sederhana via Web Audio API (tanpa file eksternal). */
   const playNotificationSound = () => {
@@ -387,8 +493,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   // Load messages when active phone changes
   useEffect(() => {
     if (!activePhone) return;
-    apiGet<{ messages: ChatMsg[] }>(`/chat/messages/${activePhone}`)
-      .then((d) => setMessages(d.messages || []))
+    apiGet<{ messages: any[] }>(`/chat/messages/${activePhone}`)
+      .then((d) => setMessages((d.messages || []).map(normalizeMsg)))
       .catch(() => {});
     // Mark as read (backend: PATCH)
     apiPatch(`/chat/conversations/${activePhone}/read`).catch(() => {});
@@ -396,6 +502,52 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       prev.map((c) => (c.phone === activePhone ? { ...c, unreadCount: 0 } : c))
     );
   }, [activePhone]);
+
+  // Online/mengetik: subscribe + ambil status awal saat percakapan aktif berubah
+  useEffect(() => {
+    setPresence(null);
+    if (!activePhone || activeDeviceId == null) return;
+    apiPost("/chat/presence/subscribe", { deviceId: activeDeviceId, phone: activePhone }).catch(
+      () => {}
+    );
+    apiGet<{ online: boolean; typing: boolean }>(
+      `/chat/presence?deviceId=${activeDeviceId}&phone=${encodeURIComponent(activePhone)}`
+    )
+      .then((d) => setPresence({ online: !!d.online, typing: !!d.typing }))
+      .catch(() => {});
+  }, [activePhone, activeDeviceId]);
+
+  // Tutup menu paperclip saat klik di luar
+  useEffect(() => {
+    if (!attachOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setAttachOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [attachOpen]);
+
+  // Bersihkan object URL preview media saat diganti/dilepas
+  useEffect(() => {
+    return () => {
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    };
+  }, [mediaPreviewUrl]);
+
+  // Hentikan rekaman bila komponen dilepas
+  useEffect(() => {
+    return () => {
+      if (recTimerRef.current) window.clearInterval(recTimerRef.current);
+      try {
+        mediaRecRef.current?.stop();
+      } catch {
+        /* abaikan */
+      }
+      recStreamRef.current?.getTracks().forEach((tr) => tr.stop());
+    };
+  }, []);
 
   // Daftar device untuk header akun ala WA
   useEffect(() => {
@@ -430,42 +582,98 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
           if (!gotMessage) es?.close();
         };
         es.addEventListener("chat:message", (e) => {
-      const data = JSON.parse(e.data);
-      const isActiveConvo = data.phone === activePhone;
-      if (isActiveConvo) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now(),
-            phone: data.phone,
-            content: data.content,
-            type: data.type || "text",
-            direction: data.direction,
-            isRead: true,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-      }
-      // Update conversation list; naikkan badge unread untuk pesan masuk di percakapan lain
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.phone === data.phone
-            ? {
-                ...c,
-                lastMessage: data.content,
-                lastMessageType: data.type || "text",
-                lastActivity: new Date().toISOString(),
-                unreadCount:
-                  !isActiveConvo && data.direction === "in"
-                    ? c.unreadCount + 1
-                    : c.unreadCount,
-              }
-            : c
-        )
-      );
-      if (data.direction === "in") playNotificationSound();
-        gotMessage = true;
-      });
+          const data = JSON.parse(e.data);
+          const isActiveConvo = data.phone === activePhone;
+          if (isActiveConvo) {
+            const incoming = normalizeMsg(data);
+            setMessages((prev) => {
+              // Hindari duplikat: backend kadang meng-echo pesan yang baru dikirim
+              const dup = prev.some(
+                (m) =>
+                  (incoming.waMessageId && m.waMessageId === incoming.waMessageId) ||
+                  (incoming.id && m.id === incoming.id)
+              );
+              return dup ? prev : [...prev, incoming];
+            });
+          }
+          // Update conversation list; naikkan badge unread untuk pesan masuk di percakapan lain
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.phone === data.phone
+                ? {
+                    ...c,
+                    lastMessage: data.content,
+                    lastMessageType: data.type || "text",
+                    lastActivity: new Date().toISOString(),
+                    unreadCount:
+                      !isActiveConvo && data.direction === "in"
+                        ? c.unreadCount + 1
+                        : c.unreadCount,
+                  }
+                : c
+            )
+          );
+          if (data.direction === "in") playNotificationSound();
+          gotMessage = true;
+        });
+        // Online/mengetik lawan bicara
+        es.addEventListener("chat:presence", (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.phone === activePhone) {
+              setPresence({ online: !!data.online, typing: !!data.typing });
+            }
+          } catch {
+            /* abaikan payload rusak */
+          }
+        });
+        // Reaksi emoji masuk
+        es.addEventListener("chat:reaction", (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.phone !== activePhone || !data.waMessageId) return;
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.waMessageId !== data.waMessageId) return m;
+                const cur = m.reactions ?? [];
+                if (!data.emoji) {
+                  // hapus reaksi dari sisi pengirim event
+                  return {
+                    ...m,
+                    reactions: cur.filter((r) => r.fromMe !== !!data.fromMe),
+                  };
+                }
+                const exists = cur.some(
+                  (r) => r.emoji === data.emoji && r.fromMe === !!data.fromMe
+                );
+                if (exists) return m;
+                return {
+                  ...m,
+                  reactions: [...cur, { emoji: data.emoji, fromMe: !!data.fromMe }],
+                };
+              })
+            );
+          } catch {
+            /* abaikan payload rusak */
+          }
+        });
+        // Pesan dihapus untuk semua
+        es.addEventListener("chat:delete", (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.phone !== activePhone) return;
+            setMessages((prev) =>
+              prev.map((m) =>
+                (data.waMessageId && m.waMessageId === data.waMessageId) ||
+                (data.id && m.id === data.id)
+                  ? { ...m, isDeleted: true }
+                  : m
+              )
+            );
+          } catch {
+            /* abaikan payload rusak */
+          }
+        });
       })
       .catch(() => {
         if (!cancelled) toast.error(t("liveChat.realtimeError"));
@@ -485,6 +693,9 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   useEffect(() => {
     setShowInfo(false);
     setCopied(false);
+    setInfoTab("info");
+    setReplyTo(null);
+    clearMedia();
   }, [activePhone]);
   useEffect(() => {
     if (!showInfo) return;
@@ -659,9 +870,11 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
           phone: activePhone,
           content: input,
           type: "text",
+          ...(replyTo ? { replyTo: replyTo.waMessageId } : {}),
         });
       }
       setInput("");
+      setReplyTo(null);
     } catch (err: any) {
       toast.error(err?.message || t("liveChat.sendError"));
     } finally {
@@ -687,6 +900,313 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       setLoading(false);
     }
   };
+
+  // ── Balas / quote ──
+  const startReply = (msg: ChatMsg) => {
+    if (!msg.waMessageId) {
+      toast.error(t("liveChat.replyOldNotSupported"));
+      return;
+    }
+    const name =
+      msg.direction === "out" ? t("liveChat.you") : activeConvo?.contactName || activePhone || "";
+    setReplyTo({
+      waMessageId: msg.waMessageId,
+      content: msg.content || (msg.type !== "text" ? t("liveChat.msgMediaGeneric") : ""),
+      name,
+    });
+    setToolbarMsg(null);
+  };
+
+  // ── Upload file chat (multipart; Content-Type dibiarkan browser agar boundary benar) ──
+  const uploadChatFile = async (file: File): Promise<{ url: string; mime: string; size: number }> => {
+    const token = localStorage.getItem("token");
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/chat/upload", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (res.status === 401) {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+      throw new Error(t("liveChat.sessionExpired"));
+    }
+    if (!res.ok) throw new Error(t("liveChat.uploadFailed"));
+    return res.json();
+  };
+
+  const openAttach = (kind: "image" | "video" | "document") => {
+    attachKindRef.current = kind;
+    setAttachOpen(false);
+    const el = fileInputRef.current;
+    if (el) {
+      el.accept =
+        kind === "document"
+          ? ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          : "image/*,video/*";
+      el.click();
+    }
+  };
+
+  const onAttachFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    setMediaFile(f);
+    setMediaKind(f.type.startsWith("video/") ? "video" : attachKindRef.current);
+    setMediaPreviewUrl(f.type.startsWith("image/") ? URL.createObjectURL(f) : null);
+    setMediaCaption("");
+  };
+
+  const clearMedia = () => {
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    setMediaPreviewUrl(null);
+    setMediaFile(null);
+    setMediaCaption("");
+  };
+
+  const sendMedia = async () => {
+    if (!mediaFile || !activePhone || uploading) return;
+    if (activeDeviceId == null) {
+      toast.error(t("liveChat.selectDeviceFirst"));
+      return;
+    }
+    setUploading(true);
+    try {
+      const up = await uploadChatFile(mediaFile);
+      await apiPost("/chat/send", {
+        deviceId: activeDeviceId,
+        phone: activePhone,
+        content: mediaCaption.trim(),
+        type: mediaKind,
+        mediaUrl: up.url,
+        fileName: mediaFile.name,
+        ...(replyTo ? { replyTo: replyTo.waMessageId } : {}),
+      });
+      clearMedia();
+      setReplyTo(null);
+    } catch (err: any) {
+      toast.error(err?.message || t("liveChat.sendError"));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── Teruskan pesan ──
+  const doForward = async (targetPhone: string) => {
+    if (!forwardMsg || !targetPhone || forwarding) return;
+    if (activeDeviceId == null) {
+      toast.error(t("liveChat.selectDeviceFirst"));
+      return;
+    }
+    setForwarding(true);
+    try {
+      await apiPost("/chat/send", {
+        deviceId: activeDeviceId,
+        phone: targetPhone,
+        content: forwardMsg.content,
+        type: forwardMsg.type,
+        ...(forwardMsg.mediaUrl ? { mediaUrl: forwardMsg.mediaUrl } : {}),
+        ...(forwardMsg.fileName ? { fileName: forwardMsg.fileName } : {}),
+      });
+      toast.success(t("liveChat.forwardSuccess"));
+      setForwardMsg(null);
+    } catch (err: any) {
+      toast.error(err?.message || t("liveChat.sendError"));
+    } finally {
+      setForwarding(false);
+    }
+  };
+
+  // ── Hapus untuk semua (pesan keluar) ──
+  const deleteMessage = async (msg: ChatMsg) => {
+    setToolbarMsg(null);
+    if (!window.confirm(t("liveChat.deleteConfirm"))) return;
+    try {
+      await apiDelete(`/chat/messages/${msg.id}`);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, isDeleted: true } : m))
+      );
+    } catch (err: any) {
+      toast.error(err?.message || t("liveChat.deleteError"));
+    }
+  };
+
+  // ── Reaksi emoji ──
+  const QUICK_EMOJIS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
+  const reactTo = async (msg: ChatMsg, emoji: string) => {
+    setReactionFor(null);
+    setToolbarMsg(null);
+    if (!msg.waMessageId) {
+      toast.error(t("liveChat.reactOldNotSupported"));
+      return;
+    }
+    if (activeDeviceId == null || !activePhone) return;
+    try {
+      await apiPost("/chat/react", {
+        deviceId: activeDeviceId,
+        phone: activePhone,
+        waMessageId: msg.waMessageId,
+        emoji,
+      });
+      // Optimistic: tampilkan reaksi sendiri langsung
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== msg.id) return m;
+          const cur = m.reactions ?? [];
+          if (!emoji) return { ...m, reactions: cur.filter((r) => !r.fromMe) };
+          const exists = cur.some((r) => r.emoji === emoji && r.fromMe);
+          if (exists) return m;
+          return { ...m, reactions: [...cur.filter((r) => !r.fromMe), { emoji, fromMe: true }] };
+        })
+      );
+    } catch (err: any) {
+      toast.error(err?.message || t("liveChat.actionFailed"));
+    }
+  };
+
+  // ── Voice note ──
+  const fmtRecSecs = (s: number) => {
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, "0")}`;
+  };
+
+  const startRecording = async () => {
+    if (recording || sendingVoice) return;
+    try {
+      if (!window.MediaRecorder) throw new Error("unsupported");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime =
+        ["audio/ogg;codecs=opus", "audio/webm;codecs=opus"].find((mt) =>
+          MediaRecorder.isTypeSupported(mt)
+        ) || "";
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recChunksRef.current = [];
+      recStreamRef.current = stream;
+      rec.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) recChunksRef.current.push(ev.data);
+      };
+      rec.onstop = () => {
+        stream.getTracks().forEach((tr) => tr.stop());
+      };
+      rec.start();
+      mediaRecRef.current = rec;
+      setRecSecs(0);
+      setRecording(true);
+      recTimerRef.current = window.setInterval(() => setRecSecs((s) => s + 1), 1000);
+    } catch {
+      toast.error(t("liveChat.micDenied"));
+    }
+  };
+
+  const stopRecording = (cancel: boolean) => {
+    if (!recording) return;
+    if (recTimerRef.current) {
+      window.clearInterval(recTimerRef.current);
+      recTimerRef.current = null;
+    }
+    const rec = mediaRecRef.current;
+    mediaRecRef.current = null;
+    setRecording(false);
+    if (cancel) {
+      try {
+        rec?.stop();
+      } catch {
+        /* abaikan */
+      }
+      recChunksRef.current = [];
+      recStreamRef.current?.getTracks().forEach((tr) => tr.stop());
+      recStreamRef.current = null;
+      return;
+    }
+    if (!rec) return;
+    rec.onstop = () => {
+      recStreamRef.current?.getTracks().forEach((tr) => tr.stop());
+      recStreamRef.current = null;
+      const chunks = recChunksRef.current;
+      recChunksRef.current = [];
+      if (chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      void sendVoiceNote(blob);
+    };
+    try {
+      rec.stop();
+    } catch {
+      /* abaikan */
+    }
+  };
+
+  const sendVoiceNote = async (blob: Blob) => {
+    if (!activePhone || sendingVoice) return;
+    if (activeDeviceId == null) {
+      toast.error(t("liveChat.selectDeviceFirst"));
+      return;
+    }
+    setSendingVoice(true);
+    try {
+      const ext = blob.type.includes("ogg") ? "ogg" : "webm";
+      const file = new File([blob], `voice-note.${ext}`, { type: blob.type });
+      const up = await uploadChatFile(file);
+      await apiPost("/chat/send", {
+        deviceId: activeDeviceId,
+        phone: activePhone,
+        content: "",
+        type: "voicenote",
+        mediaUrl: up.url,
+        fileName: file.name,
+      });
+    } catch (err: any) {
+      toast.error(err?.message || t("liveChat.sendError"));
+    } finally {
+      setSendingVoice(false);
+    }
+  };
+
+  // ── Tab Media/Dokumen di info kontak ──
+  const loadTabMedia = (kind: "image" | "document") => {
+    if (!activePhone || activeDeviceId == null) return;
+    setTabLoading(true);
+    setTabItems(null);
+    apiGet<{ items: ChatMediaItem[] }>(
+      `/chat/media?deviceId=${activeDeviceId}&phone=${encodeURIComponent(activePhone)}&type=${kind}`
+    )
+      .then((d) => setTabItems(d.items || []))
+      .catch(() => setTabItems([]))
+      .finally(() => setTabLoading(false));
+  };
+
+  const switchInfoTab = (tab: "info" | "media" | "documents" | "links") => {
+    setInfoTab(tab);
+    if (tab === "media") loadTabMedia("image");
+    else if (tab === "documents") loadTabMedia("document");
+    else {
+      setTabItems(null);
+      setTabLoading(false);
+    }
+  };
+
+  // Ekstrak URL dari pesan teks (tab Tautan) — tanpa duplikat, terbaru dulu
+  const chatLinks = (() => {
+    const seen = new Set<string>();
+    const out: { url: string; createdAt: string }[] = [];
+    const re = /https?:\/\/[^\s<>"']+/g;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.isDeleted || m.type !== "text" || !m.content) continue;
+      const found = m.content.match(re);
+      if (!found) continue;
+      for (const u of found) {
+        const clean = u.replace(/[.,;:!?)]+$/, "");
+        if (seen.has(clean)) continue;
+        seen.add(clean);
+        out.push({ url: clean, createdAt: m.createdAt });
+      }
+    }
+    return out;
+  })();
 
   const filteredConvos = conversations.filter((c) => {
     if (unreadOnly && !(c.unreadCount > 0)) return false;
@@ -958,8 +1478,19 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   <p className="text-[15px] text-[#111b21] dark:text-[#e9edef] truncate leading-tight">
                     {activeConvo?.contactName || activePhone}
                   </p>
-                  <p className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
-                    {activePhone}
+                  <p
+                    className={cn(
+                      "text-[11px] truncate",
+                      presence?.typing
+                        ? "text-[#00a884] dark:text-[#06cf9c]"
+                        : "text-[#667781] dark:text-[#8696a0]"
+                    )}
+                  >
+                    {presence?.typing
+                      ? t("liveChat.typing")
+                      : presence?.online
+                        ? t("liveChat.online")
+                        : activePhone}
                   </p>
                 </div>
               </div>
@@ -1031,6 +1562,33 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                         </Button>
                       </div>
 
+                      {/* Tab: Info | Media | Dokumen | Tautan */}
+                      <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-secondary/60 p-1">
+                        {(
+                          [
+                            { id: "info", label: t("liveChat.tabInfo") },
+                            { id: "media", label: t("liveChat.tabMedia") },
+                            { id: "documents", label: t("liveChat.tabDocuments") },
+                            { id: "links", label: t("liveChat.tabLinks") },
+                          ] as const
+                        ).map((tb) => (
+                          <button
+                            key={tb.id}
+                            onClick={() => switchInfoTab(tb.id)}
+                            className={cn(
+                              "h-7 rounded-md text-[10px] font-medium transition-colors",
+                              infoTab === tb.id
+                                ? "bg-card text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {tb.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {infoTab === "info" && (
+                      <>
                       {/* Label */}
                       <div className="mt-4 pt-3 border-t border-border">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
@@ -1220,6 +1778,115 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                           </div>
                         )}
                       </div>
+                      </>)}
+
+                      {/* Tab Media & Dokumen */}
+                      {(infoTab === "media" || infoTab === "documents") && (
+                        <div className="mt-3">
+                          {tabLoading ? (
+                            <div className="py-8 flex items-center justify-center gap-2 text-[12px] text-muted-foreground">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              {t("liveChat.loadingMedia")}
+                            </div>
+                          ) : !tabItems || tabItems.length === 0 ? (
+                            <p className="py-8 text-center text-[12px] text-muted-foreground">
+                              {infoTab === "media" ? t("liveChat.noMedia") : t("liveChat.noDocuments")}
+                            </p>
+                          ) : infoTab === "media" ? (
+                            <div className="grid grid-cols-3 gap-1">
+                              {tabItems.map((it) => (
+                                <a
+                                  key={it.id}
+                                  href={it.mediaUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={it.content || it.mediaUrl}
+                                >
+                                  <img
+                                    src={it.mediaUrl}
+                                    alt=""
+                                    loading="lazy"
+                                    className="w-full h-20 object-cover rounded-md hover:opacity-90 transition-opacity"
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="space-y-1 max-h-64 overflow-y-auto">
+                              {tabItems.map((it) => (
+                                <div
+                                  key={it.id}
+                                  className="flex items-center gap-2.5 rounded-md p-1.5 hover:bg-secondary/60"
+                                >
+                                  <span className="w-9 h-9 rounded-full bg-secondary inline-flex items-center justify-center shrink-0">
+                                    <FileText className="w-4 h-4 text-muted-foreground" />
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[12px] truncate text-foreground">
+                                      {it.content || it.mediaUrl.split("/").pop()}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {new Date(it.createdAt).toLocaleDateString(dateLocale, {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                      })}
+                                    </p>
+                                  </div>
+                                  <a
+                                    href={it.mediaUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download
+                                    aria-label={t("liveChat.download")}
+                                    title={t("liveChat.download")}
+                                    className="w-8 h-8 shrink-0 rounded-full inline-flex items-center justify-center text-muted-foreground hover:bg-secondary"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tab Tautan */}
+                      {infoTab === "links" && (
+                        <div className="mt-3">
+                          {chatLinks.length === 0 ? (
+                            <p className="py-8 text-center text-[12px] text-muted-foreground">
+                              {t("liveChat.noLinks")}
+                            </p>
+                          ) : (
+                            <div className="space-y-1 max-h-64 overflow-y-auto">
+                              {chatLinks.map((l) => (
+                                <a
+                                  key={l.url}
+                                  href={l.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-2.5 rounded-md p-1.5 hover:bg-secondary/60"
+                                >
+                                  <LinkIcon className="w-4 h-4 text-[#00a884] shrink-0" />
+                                  <span className="flex-1 min-w-0">
+                                    <span className="block text-[12px] text-[#00a884] dark:text-[#06cf9c] truncate hover:underline">
+                                      {l.url}
+                                    </span>
+                                    <span className="block text-[10px] text-muted-foreground">
+                                      {new Date(l.createdAt).toLocaleDateString(dateLocale, {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                      })}
+                                    </span>
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1296,51 +1963,326 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                 style={{ backgroundImage: WA_DOODLE_DARK }}
               />
               <div className="relative p-4 space-y-1.5">
-              {messages.map((msg, i) => {
-                const out = msg.direction === "out";
-                return (
-                <div
-                  key={msg.id}
-                  ref={(el) => {
-                    if (el) msgRefs.current.set(i, el);
-                    else msgRefs.current.delete(i);
-                  }}
-                  className={cn(
-                    "flex",
-                    out ? "justify-end" : "justify-start"
-                  )}
-                >
-                  <div className="relative max-w-[75%] md:max-w-[65%]">
-                    <BubbleTail out={out} />
-                    <div
-                      className={cn(
-                        "px-2.5 pt-1.5 pb-1 text-[13.5px] leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.12)]",
-                        out
-                          ? "bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-[7.5px] rounded-tr-none"
-                          : "bg-white dark:bg-[#1f2c34] text-[#111b21] dark:text-[#e9edef] rounded-[7.5px] rounded-tl-none"
+              {(() => {
+                let lastDay = "";
+                return messages.map((msg, i) => {
+                  const out = msg.direction === "out";
+                  const day = dayKeyOf(new Date(msg.createdAt));
+                  const showChip = day !== lastDay;
+                  lastDay = day;
+                  const showToolbar = toolbarMsg === msg.id && !msg.isDeleted;
+                  const showReactions = reactionFor === msg.id;
+                  const grouped: { emoji: string; count: number }[] = [];
+                  (msg.reactions ?? []).forEach((r) => {
+                    const g = grouped.find((x) => x.emoji === r.emoji);
+                    if (g) g.count++;
+                    else grouped.push({ emoji: r.emoji, count: 1 });
+                  });
+                  const bubbleCls = cn(
+                    "px-2.5 pt-1.5 pb-1 text-[13.5px] leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.12)]",
+                    out
+                      ? "bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-[7.5px] rounded-tr-none"
+                      : "bg-white dark:bg-[#1f2c34] text-[#111b21] dark:text-[#e9edef] rounded-[7.5px] rounded-tl-none"
+                  );
+                  const timeCls = cn(
+                    "float-right flex items-center gap-1 ml-2 mt-2.5 text-[10px] leading-none",
+                    out ? "text-[#667781] dark:text-[#e9edef]/70" : "text-[#667781] dark:text-[#8696a0]"
+                  );
+                  const msgTime = new Date(msg.createdAt).toLocaleTimeString(dateLocale, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  const tbBtn =
+                    "w-7 h-7 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10 transition-colors";
+                  return (
+                    <>
+                      {showChip && (
+                        <div key={`chip-${msg.id}`} className="flex justify-center py-1">
+                          <span className="px-3 py-1 rounded-md bg-white/95 dark:bg-[#1f2c34] shadow-sm text-[11px] font-medium uppercase text-[#54656f] dark:text-[#aebac1]">
+                            {dayChipLabel(
+                              msg.createdAt,
+                              t("liveChat.todayLabel"),
+                              t("liveChat.yesterdayLabel"),
+                              dateLocale
+                            )}
+                          </span>
+                        </div>
                       )}
-                    >
-                      <span className={cn("float-right flex items-center gap-1 ml-2 mt-2.5 text-[10px] leading-none", out ? "text-[#667781] dark:text-[#e9edef]/70" : "text-[#667781] dark:text-[#8696a0]")}>
-                        {new Date(msg.createdAt).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                        {out && <Ticks read={msg.isRead} />}
-                      </span>
-                      <p className="whitespace-pre-wrap break-words">
-                        {msgQuery.trim() ? highlight(msg.content, msgQuery) : msg.content}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
+                      <div
+                        key={msg.id}
+                        ref={(el) => {
+                          if (el) msgRefs.current.set(i, el);
+                          else msgRefs.current.delete(i);
+                        }}
+                        className={cn("flex", out ? "justify-end" : "justify-start")}
+                      >
+                        <div
+                          className="relative max-w-[75%] md:max-w-[65%]"
+                          onMouseEnter={() => {
+                            if (!msg.isDeleted) setToolbarMsg(msg.id);
+                          }}
+                          onMouseLeave={() => {
+                            setToolbarMsg((v) => (v === msg.id ? null : v));
+                            setReactionFor((v) => (v === msg.id ? null : v));
+                          }}
+                          onClick={() =>
+                            setToolbarMsg((v) => (v === msg.id ? null : msg.isDeleted ? null : msg.id))
+                          }
+                        >
+                          {/* Toolbar aksi: muncul saat hover / tap bubble */}
+                          {showToolbar && !showReactions && (
+                            <div
+                              className="absolute -top-4 z-10 flex items-center gap-0.5 rounded-full bg-white dark:bg-[#1f2c34] shadow-lg border border-black/10 dark:border-white/10 px-1 py-0.5"
+                              style={out ? { right: 0 } : { left: 0 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                className={tbBtn}
+                                aria-label={t("liveChat.reply")}
+                                title={t("liveChat.reply")}
+                                onClick={() => startReply(msg)}
+                              >
+                                <Undo2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                className={tbBtn}
+                                aria-label={t("liveChat.forward")}
+                                title={t("liveChat.forward")}
+                                onClick={() => {
+                                  setForwardMsg(msg);
+                                  setToolbarMsg(null);
+                                }}
+                              >
+                                <Forward className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                className={tbBtn}
+                                aria-label={t("liveChat.react")}
+                                title={t("liveChat.react")}
+                                onClick={() => setReactionFor(msg.id)}
+                              >
+                                <Smile className="w-3.5 h-3.5" />
+                              </button>
+                              {out && (
+                                <button
+                                  className={cn(tbBtn, "text-red-500")}
+                                  aria-label={t("liveChat.deleteForEveryone")}
+                                  title={t("liveChat.deleteForEveryone")}
+                                  onClick={() => deleteMessage(msg)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {/* Popover reaksi cepat */}
+                          {showReactions && (
+                            <div
+                              className="absolute -top-4 z-10 flex items-center gap-1 rounded-full bg-white dark:bg-[#1f2c34] shadow-lg border border-black/10 dark:border-white/10 px-2 py-1"
+                              style={out ? { right: 0 } : { left: 0 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {QUICK_EMOJIS.map((em) => (
+                                <button
+                                  key={em}
+                                  onClick={() => reactTo(msg, em)}
+                                  className="text-lg leading-none hover:scale-125 transition-transform"
+                                  aria-label={em}
+                                >
+                                  {em}
+                                </button>
+                              ))}
+                              <button
+                                onClick={() => setReactionFor(null)}
+                                className={cn(tbBtn, "w-6 h-6")}
+                                aria-label={t("liveChat.closeReactions")}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          <BubbleTail out={out} />
+                          <div className={bubbleCls}>
+                            {msg.isDeleted ? (
+                              <>
+                                <span className={timeCls}>
+                                  {msgTime}
+                                  {out && <Ticks read={msg.isRead} />}
+                                </span>
+                                <p className="italic text-[#667781] dark:text-[#8696a0] flex items-center gap-1.5">
+                                  <span aria-hidden>🚫</span>
+                                  {t("liveChat.deletedMessage")}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <span className={timeCls}>
+                                  {msgTime}
+                                  {out && <Ticks read={msg.isRead} />}
+                                </span>
+                                {/* Kutipan balasan ala WA */}
+                                {msg.replyContent && (
+                                  <div className="mb-1 rounded border-l-[3px] border-[#00a884] bg-black/5 dark:bg-white/5 px-2 py-1">
+                                    <p className="text-[12px] text-[#667781] dark:text-[#aebac1] line-clamp-3 break-words">
+                                      {msg.replyContent}
+                                    </p>
+                                  </div>
+                                )}
+                                {/* Media */}
+                                {msg.mediaUrl && (msg.type === "image" || msg.type === "sticker") && (
+                                  <img
+                                    src={msg.mediaUrl}
+                                    alt=""
+                                    className="rounded-md max-h-64 w-full object-cover mb-1"
+                                    loading="lazy"
+                                  />
+                                )}
+                                {msg.mediaUrl && msg.type === "video" && (
+                                  <video
+                                    src={msg.mediaUrl}
+                                    controls
+                                    className="rounded-md max-h-64 w-full mb-1 bg-black"
+                                  />
+                                )}
+                                {msg.mediaUrl && (msg.type === "audio" || msg.type === "voicenote") && (
+                                  <audio src={msg.mediaUrl} controls className="w-56 max-w-full my-1" />
+                                )}
+                                {msg.mediaUrl && msg.type === "document" && (
+                                  <div className="flex items-center gap-2.5 py-1 min-w-[180px]">
+                                    <span className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 inline-flex items-center justify-center shrink-0">
+                                      <FileText className="w-5 h-5 text-[#667781] dark:text-[#aebac1]" />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[13px] truncate">
+                                        {msg.fileName || t("liveChat.document")}
+                                      </p>
+                                      {msg.content && msg.fileName && (
+                                        <p className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
+                                          {msg.content}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <a
+                                      href={msg.mediaUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      download
+                                      aria-label={t("liveChat.download")}
+                                      title={t("liveChat.download")}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="w-8 h-8 shrink-0 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </a>
+                                  </div>
+                                )}
+                                {/* Teks / caption */}
+                                {(!msg.mediaUrl || msg.type === "text" || msg.type === "image" || msg.type === "video" || msg.type === "sticker") &&
+                                  msg.content && (
+                                    <p className="whitespace-pre-wrap break-words">
+                                      {msgQuery.trim() ? highlight(msg.content, msgQuery) : msg.content}
+                                    </p>
+                                  )}
+                              </>
+                            )}
+                          </div>
+                          {/* Chips reaksi */}
+                          {grouped.length > 0 && !msg.isDeleted && (
+                            <div className={cn("flex flex-wrap gap-1 mt-1", out ? "justify-end" : "justify-start")}>
+                              {grouped.map((g) => (
+                                <span
+                                  key={g.emoji}
+                                  className="inline-flex items-center gap-0.5 rounded-full bg-white dark:bg-[#1f2c34] border border-black/10 dark:border-white/10 px-1.5 py-0.5 text-[11px] shadow-sm"
+                                >
+                                  {g.emoji}
+                                  {g.count > 1 && (
+                                    <span className="text-[#667781] dark:text-[#8696a0]">{g.count}</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                });
+              })()}
               <div ref={messagesEndRef} />
               </div>
             </div>
 
             {/* Input Area */}
             <div className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#1f2c34] relative">
+              {/* Preview balasan */}
+              {replyTo && (
+                <div className="mb-2 rounded-md bg-white dark:bg-[#2a3942] border-l-4 border-[#00a884] px-3 py-1.5 flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-[#00a884] dark:text-[#06cf9c] truncate">
+                      {replyTo.name}
+                    </p>
+                    <p className="text-[12px] text-[#667781] dark:text-[#aebac1] truncate">
+                      {replyTo.content}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setReplyTo(null)}
+                    aria-label={t("liveChat.cancelReply")}
+                    className="w-6 h-6 shrink-0 rounded-full inline-flex items-center justify-center text-[#667781] dark:text-[#8696a0] hover:bg-black/5 dark:hover:bg-white/10"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              {/* Preview media sebelum dikirim */}
+              {mediaFile && (
+                <div className="mb-2 rounded-lg bg-white dark:bg-[#2a3942] p-2 flex items-center gap-3">
+                  {mediaPreviewUrl ? (
+                    <img
+                      src={mediaPreviewUrl}
+                      alt=""
+                      className="w-12 h-12 rounded-md object-cover shrink-0"
+                    />
+                  ) : (
+                    <span className="w-12 h-12 rounded-md bg-black/5 dark:bg-white/10 inline-flex items-center justify-center shrink-0">
+                      {mediaKind === "video" ? (
+                        <Video className="w-6 h-6 text-[#667781] dark:text-[#8696a0]" />
+                      ) : (
+                        <FileText className="w-6 h-6 text-[#667781] dark:text-[#8696a0]" />
+                      )}
+                    </span>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
+                      {mediaFile.name}
+                    </p>
+                    <input
+                      placeholder={t("liveChat.addCaption")}
+                      value={mediaCaption}
+                      onChange={(e) => setMediaCaption(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) sendMedia();
+                      }}
+                      disabled={uploading}
+                      className="w-full bg-transparent text-[13px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#667781] dark:placeholder:text-[#8696a0] focus:outline-none"
+                    />
+                  </div>
+                  {uploading ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-[#667781] dark:text-[#8696a0] shrink-0">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {t("liveChat.uploading")}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={clearMedia}
+                      aria-label={t("liveChat.cancelMedia")}
+                      className="w-8 h-8 shrink-0 rounded-full inline-flex items-center justify-center text-[#667781] dark:text-[#8696a0] hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
               {/* Quick replies popover */}
               {showQuickReplies && (
                 <div className="absolute left-3 right-3 bottom-full mb-2 z-20 rounded-lg border border-border bg-card shadow-xl max-h-64 overflow-y-auto">
@@ -1392,8 +2334,77 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                   <Bot className="w-4 h-4" />
                   {loading ? t("liveChat.generating") : t("liveChat.generateAiReply")}
                 </button>
+              ) : recording || sendingVoice ? (
+                /* UI merekam voice note */
+                <>
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0 ml-1" />
+                  <span className="text-[14px] tabular-nums text-[#111b21] dark:text-[#e9edef] shrink-0">
+                    {fmtRecSecs(recSecs)}
+                  </span>
+                  <span className="text-[12px] text-[#667781] dark:text-[#8696a0]">
+                    {sendingVoice ? t("liveChat.uploading") : t("liveChat.recording")}
+                  </span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => stopRecording(true)}
+                    disabled={sendingVoice}
+                    aria-label={t("liveChat.cancelRecording")}
+                    title={t("liveChat.cancelRecording")}
+                    className="w-10 h-10 shrink-0 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-40"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => stopRecording(false)}
+                    disabled={sendingVoice}
+                    aria-label={t("liveChat.stopRecording")}
+                    title={t("liveChat.stopRecording")}
+                    className="w-10 h-10 shrink-0 rounded-full bg-[#00a884] text-white inline-flex items-center justify-center hover:bg-[#06cf9c] transition-colors disabled:opacity-40"
+                  >
+                    {sendingVoice ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Square className="w-4 h-4 fill-current" />
+                    )}
+                  </button>
+                </>
               ) : (
                 <>
+                  {/* Paperclip: kirim media */}
+                  <div className="relative shrink-0" ref={attachMenuRef}>
+                    <button
+                      onClick={() => setAttachOpen((v) => !v)}
+                      aria-label={t("liveChat.attach")}
+                      title={t("liveChat.attach")}
+                      className="w-10 h-10 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <Paperclip className="w-5 h-5" />
+                    </button>
+                    {attachOpen && (
+                      <div className="absolute left-0 bottom-full mb-2 z-20 w-44 rounded-lg border border-border bg-card shadow-xl py-1">
+                        <button
+                          onClick={() => openAttach("image")}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-secondary text-left"
+                        >
+                          <Camera className="w-4 h-4 text-[#00a884]" />
+                          {t("liveChat.photoVideo")}
+                        </button>
+                        <button
+                          onClick={() => openAttach("document")}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-secondary text-left"
+                        >
+                          <FileText className="w-4 h-4 text-[#00a884]" />
+                          {t("liveChat.document")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={onAttachFile}
+                  />
                   <button
                     onClick={toggleQuickReplies}
                     aria-label={t("liveChat.quickReplies")}
@@ -1406,18 +2417,42 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                     placeholder={t("liveChat.typeMessage")}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (mediaFile ? sendMedia() : handleSend())}
                     className="flex-1 h-10 px-4 rounded-full bg-white dark:bg-[#2a3942] text-[14px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#667781] dark:placeholder:text-[#8696a0] focus:outline-none min-w-0"
-                    disabled={loading}
+                    disabled={loading || uploading}
                   />
-                  <button
-                    onClick={handleSend}
-                    disabled={!input.trim() || loading}
-                    aria-label={t("liveChat.send")}
-                    className="w-10 h-10 shrink-0 rounded-full bg-[#00a884] text-white inline-flex items-center justify-center disabled:opacity-40 hover:bg-[#06cf9c] transition-colors"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
+                  {mediaFile ? (
+                    <button
+                      onClick={sendMedia}
+                      disabled={uploading}
+                      aria-label={t("liveChat.send")}
+                      className="w-10 h-10 shrink-0 rounded-full bg-[#00a884] text-white inline-flex items-center justify-center disabled:opacity-40 hover:bg-[#06cf9c] transition-colors"
+                    >
+                      {uploading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5" />
+                      )}
+                    </button>
+                  ) : input.trim() ? (
+                    <button
+                      onClick={handleSend}
+                      disabled={loading}
+                      aria-label={t("liveChat.send")}
+                      className="w-10 h-10 shrink-0 rounded-full bg-[#00a884] text-white inline-flex items-center justify-center disabled:opacity-40 hover:bg-[#06cf9c] transition-colors"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startRecording}
+                      aria-label={t("liveChat.voiceNote")}
+                      title={t("liveChat.voiceNote")}
+                      className="w-10 h-10 shrink-0 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+                  )}
                 </>
               )}
               </div>
@@ -1448,6 +2483,68 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
           </div>
         )}
       </div>
+
+      {/* Modal teruskan pesan */}
+      {forwardMsg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setForwardMsg(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-white dark:bg-[#1f2c34] shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-black/10 dark:border-white/10">
+              <p className="text-[14px] font-semibold text-[#111b21] dark:text-[#e9edef]">
+                {t("liveChat.forwardTo")}
+              </p>
+              <button
+                onClick={() => setForwardMsg(null)}
+                aria-label={t("liveChat.closeSearch")}
+                className="w-8 h-8 rounded-full inline-flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-4 py-2 border-b border-black/5 dark:border-white/5 bg-[#f0f2f5] dark:bg-[#111b21]">
+              <p className="text-[12px] text-[#667781] dark:text-[#8696a0] truncate">
+                <MediaPreview type={forwardMsg.type} text={forwardMsg.content} t={t} />
+              </p>
+            </div>
+            <div className="max-h-80 overflow-y-auto py-1">
+              {filteredConvos.length === 0 ? (
+                <p className="px-4 py-6 text-center text-[12px] text-[#667781] dark:text-[#8696a0]">
+                  {t("liveChat.noConversations")}
+                </p>
+              ) : (
+                filteredConvos.map((c) => (
+                  <button
+                    key={c.phone}
+                    disabled={forwarding}
+                    onClick={() => doForward(c.phone)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50 transition-colors"
+                  >
+                    <ChatAvatar
+                      deviceId={activeDeviceId}
+                      phone={c.phone}
+                      name={c.contactName || c.phone}
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] text-[#111b21] dark:text-[#e9edef] truncate">
+                        {c.contactName || c.phone}
+                      </span>
+                      <span className="block text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
+                        {c.phone}
+                      </span>
+                    </span>
+                    {forwarding && <Loader2 className="w-4 h-4 animate-spin text-[#00a884]" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -167,18 +167,24 @@ type LoginHistory struct {
 // ── Chat Inbox ────────────────────────────────────────────────────────────────
 
 type ChatInbox struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index;not null" json:"userId"`
-	DeviceID  uint      `gorm:"index;not null" json:"deviceId"`
-	Phone     string    `gorm:"size:20;not null;index" json:"phone"`
-	SenderJID string    `gorm:"size:60" json:"senderJid"` // JID lengkap pengirim, mis. "123@lid" — dipakai untuk balas tanpa lookup PN→LID
-	Name      string    `gorm:"size:255" json:"name"`
-	Content   string    `gorm:"type:text" json:"content"`
-	Type      string    `gorm:"size:20;default:text" json:"type"`
-	Direction string    `gorm:"size:10;not null" json:"direction"` // in, out
-	MediaURL  string    `gorm:"size:500" json:"mediaUrl"`
-	IsRead    bool      `gorm:"default:false" json:"isRead"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	UserID    uint   `gorm:"index;not null" json:"userId"`
+	DeviceID  uint   `gorm:"index;not null" json:"deviceId"`
+	Phone     string `gorm:"size:20;not null;index" json:"phone"`
+	SenderJID string `gorm:"size:60" json:"senderJid"` // JID lengkap pengirim, mis. "123@lid" — dipakai untuk balas tanpa lookup PN→LID
+	Name      string `gorm:"size:255" json:"name"`
+	Content   string `gorm:"type:text" json:"content"`
+	Type      string `gorm:"size:20;default:text" json:"type"`
+	Direction string `gorm:"size:10;not null" json:"direction"` // in, out
+	MediaURL  string `gorm:"size:500" json:"mediaUrl"`
+	IsRead    bool   `gorm:"default:false" json:"isRead"`
+	// Native chat (2026-10-03): identitas & fitur ala WhatsApp.
+	WaMessageID  string    `gorm:"size:64;index" json:"waMessageId"` // ID pesan di sisi WhatsApp (stanza ID)
+	ReplyTo      string    `gorm:"size:64" json:"replyTo"`           // waMessageId pesan yang dikutip
+	ReplyContent string    `gorm:"type:text" json:"replyContent"`    // cuplikan teks pesan yang dikutip
+	IsDeleted    bool      `json:"isDeleted"`                        // true bila di-revoke ("hapus untuk semua")
+	Reactions    string    `gorm:"type:text" json:"reactions"`       // JSON array [{emoji,fromMe}]
+	CreatedAt    time.Time `json:"createdAt"`
 
 	User   User   `gorm:"foreignKey:UserID" json:"-"`
 	Device Device `gorm:"foreignKey:DeviceID" json:"-"`

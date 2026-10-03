@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -49,7 +50,7 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 	{
 		chat.GET("/conversations", listConversations(db))
 		chat.GET("/history", getChatHistory(db))
-		chat.GET("/messages/:phone", getChatMessages(db))
+		chat.GET("/messages/:phone", getChatMessages(db, wm))
 		chat.POST("/send", sendChatMessage(db, wm))
 		chat.POST("/ai-reply", aiReplyMessage(db, wm))
 		chat.PATCH("/conversations/:phone/mode", setChatMode(db))
@@ -61,6 +62,14 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 		chat.GET("/reminders", listChatReminders(db))
 		chat.POST("/reminders", createChatReminder(db))
 		chat.DELETE("/reminders/:id", deleteChatReminder(db))
+		// Native chat (2026-10-03): upload media, reaksi, hapus untuk semua,
+		// tab media, presence.
+		chat.POST("/upload", uploadChatMedia(db))
+		chat.POST("/react", reactToMessage(db, wm))
+		chat.DELETE("/messages/:id", deleteChatMessage(db, wm))
+		chat.GET("/media", listChatMedia(db))
+		chat.POST("/presence/subscribe", subscribePresence(db, wm))
+		chat.GET("/presence", getPresenceState(db, wm))
 	}
 }
 
@@ -91,7 +100,7 @@ func listConversations(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func getChatMessages(db *gorm.DB) gin.HandlerFunc {
+func getChatMessages(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		udb := rls.Scoped(db, userID)
@@ -99,14 +108,25 @@ func getChatMessages(db *gorm.DB) gin.HandlerFunc {
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
+		q := udb.Where("user_id = ? AND phone = ?", userID, phone)
+		var deviceID uint
+		if _, err := fmt.Sscan(c.Query("deviceId"), &deviceID); err == nil && deviceID != 0 {
+			q = q.Where("device_id = ?", deviceID)
+		}
 		var messages []models.ChatInbox
-		udb.Where("user_id = ? AND phone = ?", userID, phone).
-			Order("created_at DESC").Offset(offset).Limit(limit).
+		q.Order("created_at DESC").Offset(offset).Limit(limit).
 			Find(&messages)
 
 		// Reverse for chronological order
 		for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 			messages[i], messages[j] = messages[j], messages[i]
+		}
+
+		// Auto-subscribe presence (online/mengetik) secara best-effort —
+		// kegagalan tidak menggagalkan request.
+		if deviceID != 0 && phone != "" && wm != nil {
+			to := resolveSenderJID(udb, userID, deviceID, phone)
+			go func() { _ = wm.SubscribePresenceTo(deviceID, to) }()
 		}
 
 		c.JSON(http.StatusOK, gin.H{"messages": messages, "phone": phone})
@@ -120,8 +140,11 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		var req struct {
 			DeviceID uint   `json:"deviceId" binding:"required"`
 			Phone    string `json:"phone" binding:"required"`
-			Content  string `json:"content" binding:"required"`
-			Type     string `json:"type"`
+			Content  string `json:"content"` // boleh kosong bila ada media
+			Type     string `json:"type"`    // text|image|video|document|audio|voicenote
+			ReplyTo  string `json:"replyTo"` // WA message ID pesan yang dikutip
+			MediaURL string `json:"mediaUrl"`
+			FileName string `json:"fileName"` // untuk dokumen
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
@@ -130,6 +153,42 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		if req.Type == "" {
 			req.Type = "text"
 		}
+		switch req.Type {
+		case "text", "image", "video", "document", "audio", "voicenote":
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tipe pesan tidak didukung"})
+			return
+		}
+
+		// Media: ubah URL publik /uploads/chat/xxx menjadi path file:// server-side.
+		// JANGAN percaya input mentah user — hanya path hasil konversi yang dipakai.
+		mediaPathOrURL := req.MediaURL
+		if strings.HasPrefix(req.MediaURL, "/uploads/chat/") {
+			local, ok := chatMediaURLToLocalPath(req.MediaURL)
+			if !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "URL media tidak valid"})
+				return
+			}
+			mediaPathOrURL = local
+		}
+		if req.Type != "text" && mediaPathOrURL == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "mediaUrl wajib untuk tipe " + req.Type})
+			return
+		}
+		if req.Type == "text" && req.Content == "" && mediaPathOrURL == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Isi pesan tidak boleh kosong"})
+			return
+		}
+
+		// Lookup konten pesan yang dikutip (best effort).
+		replyContent := ""
+		if req.ReplyTo != "" {
+			var quoted models.ChatInbox
+			if err := udb.Where("user_id = ? AND device_id = ? AND wa_message_id = ?",
+				userID, req.DeviceID, req.ReplyTo).First(&quoted).Error; err == nil {
+				replyContent = quoted.Content
+			}
+		}
 
 		// Send via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
 		to := resolveSenderJID(udb, userID, req.DeviceID, req.Phone)
@@ -137,25 +196,40 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		if !requireMessageQuota(c, udb, userID, 1) {
 			return
 		}
-		err := wm.SendMessage(req.DeviceID, to, req.Type, req.Content, "")
+		waMsgID, err := wm.SendMessageWithOptions(req.DeviceID, to, whatsapp.SendOptions{
+			Type:        req.Type,
+			Content:     req.Content,
+			MediaURL:    mediaPathOrURL,
+			ReplyTo:     req.ReplyTo,
+			FileName:    req.FileName,
+			QuotaUserID: userID,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengirim: " + err.Error()})
 			return
 		}
 
-		// Save to inbox
+		// Save to inbox (MediaURL = URL publik agar bisa ditampilkan frontend)
 		msg := models.ChatInbox{
-			UserID:    userID,
-			DeviceID:  req.DeviceID,
-			Phone:     req.Phone,
-			Content:   req.Content,
-			Type:      req.Type,
-			Direction: "out",
-			IsRead:    true,
+			UserID:       userID,
+			DeviceID:     req.DeviceID,
+			Phone:        req.Phone,
+			Content:      req.Content,
+			Type:         req.Type,
+			Direction:    "out",
+			MediaURL:     req.MediaURL,
+			IsRead:       true,
+			WaMessageID:  waMsgID,
+			ReplyTo:      req.ReplyTo,
+			ReplyContent: replyContent,
 		}
 		udb.Create(&msg)
 
 		// Update conversation
+		lastMsg := req.Content
+		if lastMsg == "" {
+			lastMsg = chatMediaLabel(req.Type)
+		}
 		var conv models.ChatConversation
 		result := udb.Where("user_id = ? AND device_id = ? AND phone = ?",
 			userID, req.DeviceID, req.Phone).First(&conv)
@@ -163,12 +237,12 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		if result.Error != nil {
 			conv = models.ChatConversation{
 				UserID: userID, DeviceID: req.DeviceID, Phone: req.Phone,
-				LastMessage: truncateStr(req.Content, 200), LastMessageType: req.Type, LastActivity: now,
+				LastMessage: truncateStr(lastMsg, 200), LastMessageType: req.Type, LastActivity: now,
 			}
 			udb.Create(&conv)
 		} else {
 			udb.Model(&conv).Updates(map[string]interface{}{
-				"last_message": truncateStr(req.Content, 200), "last_message_type": req.Type, "last_activity": now,
+				"last_message": truncateStr(lastMsg, 200), "last_message_type": req.Type, "last_activity": now,
 			})
 		}
 
@@ -176,12 +250,34 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		realtime.DefaultHub.SendToUser(userID, realtime.Event{
 			Type: "chat:message",
 			Payload: map[string]interface{}{
+				"id": msg.ID, "waMessageId": waMsgID,
 				"phone": req.Phone, "content": req.Content,
 				"direction": "out", "type": req.Type,
+				"mediaUrl": req.MediaURL,
+				"replyTo":  req.ReplyTo, "replyContent": replyContent,
 			},
 		})
 
 		c.JSON(http.StatusOK, gin.H{"message": "Terkirim", "data": msg})
+	}
+}
+
+// chatMediaLabel mengembalikan label teks untuk pesan media tanpa caption
+// (ditampilkan sebagai last message percakapan).
+func chatMediaLabel(msgType string) string {
+	switch msgType {
+	case "image":
+		return "📷 Foto"
+	case "video":
+		return "🎬 Video"
+	case "document":
+		return "📄 Dokumen"
+	case "audio":
+		return "🎵 Audio"
+	case "voicenote":
+		return "🎤 Pesan suara"
+	default:
+		return "📎 Media"
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/security"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -156,10 +157,83 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen]
 }
 
-// loadMediaData membaca data media dari URL http(s) atau dari file lokal.
+// ChatUploadsDir adalah direktori penyimpanan media Live Chat,
+// konsisten dengan r.Static("/uploads", "./public/uploads") di router.
+const ChatUploadsDir = "./public/uploads/chat"
+
+// localMediaAllowed mengembalikan true bila path absolut berada di dalam salah
+// satu direktori media lokal yang diizinkan (UploadsDir File Manager atau
+// direktori uploads publik untuk media Live Chat).
+func localMediaAllowed(abs string) bool {
+	for _, base := range []string{UploadsDir, "./public/uploads"} {
+		b, err := filepath.Abs(base)
+		if err != nil {
+			continue
+		}
+		if abs == b || strings.HasPrefix(abs, b+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractQuoteInfo membaca info quote dari pesan masuk (best effort).
+// Mengembalikan wa message ID (StanzaID) pesan yang dikutip dan cuplikan
+// teksnya bila mudah diekstrak; keduanya bisa kosong bila tidak ada quote.
+func extractQuoteInfo(msg *events.Message) (replyTo, replyContent string) {
+	if msg == nil || msg.Message == nil {
+		return "", ""
+	}
+	m := msg.Message
+	var ci *waE2E.ContextInfo
+	switch {
+	case m.GetExtendedTextMessage() != nil:
+		ci = m.GetExtendedTextMessage().GetContextInfo()
+	case m.GetImageMessage() != nil:
+		ci = m.GetImageMessage().GetContextInfo()
+	case m.GetVideoMessage() != nil:
+		ci = m.GetVideoMessage().GetContextInfo()
+	case m.GetDocumentMessage() != nil:
+		ci = m.GetDocumentMessage().GetContextInfo()
+	case m.GetAudioMessage() != nil:
+		ci = m.GetAudioMessage().GetContextInfo()
+	case m.GetStickerMessage() != nil:
+		ci = m.GetStickerMessage().GetContextInfo()
+	}
+	if ci == nil {
+		return "", ""
+	}
+	replyTo = ci.GetStanzaID()
+	if qm := ci.GetQuotedMessage(); qm != nil {
+		replyContent = extractQuotedText(qm)
+	}
+	return replyTo, replyContent
+}
+
+// extractQuotedText mengekstrak teks/caption dari pesan yang dikutip.
+func extractQuotedText(qm *waE2E.Message) string {
+	if qm.GetConversation() != "" {
+		return qm.GetConversation()
+	}
+	if qm.GetExtendedTextMessage() != nil {
+		return qm.GetExtendedTextMessage().GetText()
+	}
+	if qm.GetImageMessage() != nil {
+		return qm.GetImageMessage().GetCaption()
+	}
+	if qm.GetVideoMessage() != nil {
+		return qm.GetVideoMessage().GetCaption()
+	}
+	if qm.GetDocumentMessage() != nil {
+		return qm.GetDocumentMessage().GetCaption()
+	}
+	return ""
+}
+
 // File lokal ditandai prefix "file://" dan hanya boleh berada di dalam
-// UploadsDir — prefix ini hanya dibuat server-side dari record File milik
-// user (handler File Manager), bukan dari input mentah.
+// direktori media yang diizinkan (UploadsDir File Manager atau
+// ./public/uploads untuk media Live Chat) — prefix ini hanya dibuat
+// server-side, bukan dari input mentah user.
 func loadMediaData(source string) ([]byte, error) {
 	if strings.HasPrefix(source, "file://") {
 		p := filepath.Clean(strings.TrimPrefix(source, "file://"))
@@ -167,11 +241,7 @@ func loadMediaData(source string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("path file tidak valid: %w", err)
 		}
-		base, err := filepath.Abs(UploadsDir)
-		if err != nil {
-			return nil, fmt.Errorf("direktori upload tidak valid: %w", err)
-		}
-		if abs != base && !strings.HasPrefix(abs, base+string(os.PathSeparator)) {
+		if !localMediaAllowed(abs) {
 			return nil, fmt.Errorf("file di luar direktori upload")
 		}
 		data, err := os.ReadFile(abs)

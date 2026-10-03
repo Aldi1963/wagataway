@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
 	waBinary "go.mau.fi/whatsmeow/binary"
+	"go.mau.fi/whatsmeow/proto/waCommon"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/util/random"
@@ -25,10 +27,11 @@ type Button struct {
 // SendOptions adalah parameter pengiriman pesan lanjutan.
 // Field tambahan hanya dipakai oleh tipe pesan yang relevan.
 type SendOptions struct {
-	Type     string // text, image, document, poll, interactive/buttons, sticker, voicenote/voice, location
+	Type     string // text, image, video, document, poll, interactive/buttons, sticker, voicenote/voice, audio, location
 	Content  string
 	MediaURL string
 	ReplyTo  string // WA message ID (stanza ID) yang dibalas
+	FileName string // nama file untuk tipe document (fallback: Content)
 
 	// Poll
 	PollOptions          []string
@@ -195,7 +198,25 @@ func (m *Manager) SendMessageWithOptions(deviceID uint, to string, opts SendOpti
 			err = fmt.Errorf("mediaURL wajib untuk tipe document")
 			break
 		}
-		waMsgID, err = m.sendDocumentMessage(ctx, sess.Client, jid, opts.MediaURL, opts.Content, opts.ReplyTo)
+		filename := opts.FileName
+		if filename == "" {
+			filename = opts.Content
+		}
+		waMsgID, err = m.sendDocumentMessage(ctx, sess.Client, jid, opts.MediaURL, filename, opts.ReplyTo)
+
+	case "video":
+		if opts.MediaURL == "" {
+			err = fmt.Errorf("mediaURL wajib untuk tipe video")
+			break
+		}
+		waMsgID, err = m.sendVideoMessage(ctx, sess.Client, jid, opts.MediaURL, opts.Content, opts.ReplyTo)
+
+	case "audio":
+		if opts.MediaURL == "" {
+			err = fmt.Errorf("mediaURL wajib untuk tipe audio")
+			break
+		}
+		waMsgID, err = m.sendAudioMessage(ctx, sess.Client, jid, opts.MediaURL, false)
 
 	case "poll":
 		if len(opts.PollOptions) < 2 || len(opts.PollOptions) > 12 {
@@ -453,9 +474,45 @@ func (m *Manager) sendStickerMessage(ctx context.Context, client *whatsmeow.Clie
 	return m.sendProto(ctx, client, jid, msg)
 }
 
+// sendVideoMessage mengupload dan mengirim video; mengembalikan WA message ID.
+// Struktur mirip image (caption + reply context), pakai whatsmeow.MediaVideo.
+func (m *Manager) sendVideoMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL, caption, replyTo string) (string, error) {
+	data, err := loadMediaData(mediaURL)
+	if err != nil {
+		return "", fmt.Errorf("gagal download video: %w", err)
+	}
+
+	uploaded, err := client.Upload(ctx, data, whatsmeow.MediaVideo)
+	if err != nil {
+		return "", fmt.Errorf("gagal upload video: %w", err)
+	}
+
+	msg := &waE2E.Message{
+		VideoMessage: &waE2E.VideoMessage{
+			Caption:       proto.String(caption),
+			URL:           proto.String(uploaded.URL),
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String("video/mp4"),
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
+			FileLength:    proto.Uint64(uint64(len(data))),
+			ContextInfo:   replyContext(jid, replyTo),
+		},
+	}
+
+	return m.sendProto(ctx, client, jid, msg)
+}
+
 // sendVoiceNoteMessage mengupload dan mengirim voice note (PTT).
 // File idealnya ogg/opus; format lain tetap dicoba dikirim apa adanya.
 func (m *Manager) sendVoiceNoteMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL string) (string, error) {
+	return m.sendAudioMessage(ctx, client, jid, mediaURL, true)
+}
+
+// sendAudioMessage mengupload dan mengirim audio. ptt=true → voice note
+// (tampil sebagai pesan suara), ptt=false → file audio biasa.
+func (m *Manager) sendAudioMessage(ctx context.Context, client *whatsmeow.Client, jid types.JID, mediaURL string, ptt bool) (string, error) {
 	data, err := loadMediaData(mediaURL)
 	if err != nil {
 		return "", fmt.Errorf("gagal download audio: %w", err)
@@ -474,15 +531,34 @@ func (m *Manager) sendVoiceNoteMessage(ctx context.Context, client *whatsmeow.Cl
 			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
-			Mimetype:      proto.String("audio/ogg; codecs=opus"),
+			Mimetype:      proto.String(sniffAudioMimetype(data)),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(data))),
-			PTT:           proto.Bool(true),
+			PTT:           proto.Bool(ptt),
 		},
 	}
 
 	return m.sendProto(ctx, client, jid, msg)
+}
+
+// sniffAudioMimetype menebak mime audio dari isi file untuk field Mimetype
+// pesan WA. Default audio/mpeg bila tidak dikenali.
+func sniffAudioMimetype(data []byte) string {
+	head := data
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	switch http.DetectContentType(head) {
+	case "audio/ogg", "application/ogg":
+		return "audio/ogg; codecs=opus"
+	case "audio/mp4":
+		return "audio/mp4"
+	case "audio/webm", "video/webm":
+		return "audio/webm"
+	default:
+		return "audio/mpeg"
+	}
 }
 
 // sendLocationMessage mengirim lokasi (atau live location bila LiveLocation=true).
@@ -527,5 +603,39 @@ func (m *Manager) RevokeMessage(deviceID uint, to, waMsgID string) error {
 	defer cancel()
 
 	_, err = sess.Client.RevokeMessage(ctx, jid, types.MessageID(waMsgID))
+	return err
+}
+
+// SendReaction mengirim reaksi emoji ke sebuah pesan. targetFromMe menandai
+// apakah pesan yang dituju dikirim oleh kita sendiri (true) atau lawan bicara.
+// emoji kosong ("") berarti menghapus reaksi.
+func (m *Manager) SendReaction(deviceID uint, to, waMsgID string, targetFromMe bool, emoji string) error {
+	m.mu.RLock()
+	sess, exists := m.sessions[deviceID]
+	m.mu.RUnlock()
+
+	if !exists || sess.Status != "connected" || sess.Client == nil {
+		return fmt.Errorf("device %d tidak terhubung", deviceID)
+	}
+
+	jid, err := parseJID(to)
+	if err != nil {
+		return fmt.Errorf("nomor tidak valid: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	msg := &waE2E.Message{
+		ReactionMessage: &waE2E.ReactionMessage{
+			Key: &waCommon.MessageKey{
+				RemoteJID: proto.String(jid.String()),
+				FromMe:    proto.Bool(targetFromMe),
+				ID:        proto.String(waMsgID),
+			},
+			Text: proto.String(emoji),
+		},
+	}
+	_, err = sess.Client.SendMessage(ctx, jid, msg)
 	return err
 }
