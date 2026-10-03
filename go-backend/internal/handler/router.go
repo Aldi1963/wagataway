@@ -83,6 +83,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerContactGroupRoutes(protected, db, waManager)
 			registerAutoReplyRoutes(protected, db)
 			registerAIReplyRoutes(protected, db)
+			registerAIConnectionRoutes(protected, db)
 			registerMenuBotRoutes(protected, db)
 			registerIntegrationRoutes(protected, db, waManager)
 			registerApiKeyRoutes(protected, db)

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/service"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,7 +33,7 @@ func (m *Manager) checkAIReply(sess *SessionState, senderJID, text string, isGro
 			continue
 		}
 
-		reply, err := AskAI(m.db, cfg.SystemPrompt, text)
+		reply, err := m.askAIForUser(sess.UserID, cfg.SystemPrompt, text)
 		if err != nil {
 			log.Error().Err(err).
 				Uint("deviceID", sess.DeviceID).
@@ -67,4 +68,30 @@ func matchTriggerKeywords(text, keywords string) bool {
 		return true
 	}
 	return matchKeyword(text, keywords, "contains")
+}
+
+// askAIForUser mengirim prompt ke AI memakai koneksi milik user (provider +
+// API key + model pilihannya sendiri). Bila user belum mengonfigurasi koneksi,
+// fallback ke backend AI global (legacy AskAI via 9router/settings).
+func (m *Manager) askAIForUser(userID uint, systemPrompt, userMessage string) (string, error) {
+	if conn := service.ConnectionForUser(m.db, userID); conn != nil {
+		if svc := service.ServiceForConnection(conn); svc != nil {
+			resp, err := svc.Complete(service.ChatRequest{
+				Provider:   service.AIProvider(conn.Provider),
+				Model:      service.EffectiveModel(conn, ""),
+				Messages: []service.ChatMessage{
+					{Role: "system", Content: systemPrompt},
+					{Role: "user", Content: userMessage},
+				},
+				MaxTokens:   500,
+				Temperature: 0.7,
+			})
+			if err != nil {
+				return "", err
+			}
+			return resp.Content, nil
+		}
+		log.Warn().Uint("userID", userID).Msg("AI connection key undecryptable, falling back to global AI backend")
+	}
+	return AskAI(m.db, systemPrompt, userMessage)
 }

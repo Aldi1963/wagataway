@@ -9,6 +9,7 @@ import { Toggle } from "@/components/Toggle";
 import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import AIConnectionCard from "@/components/AIConnectionCard";
 
 interface AIReplyConfig {
   id: number;
@@ -23,6 +24,9 @@ interface AIReplyConfig {
 interface AIStatus {
   reachable: boolean;
   detail: string;
+  configured?: boolean;
+  provider?: string;
+  model?: string;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -134,6 +138,7 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="space-y-4">
+      <AIConnectionCard onChanged={load} />
       <div className={`flex gap-3 sm:flex-row sm:items-center ${embedded ? "justify-end" : "flex-col sm:justify-between"}`}>
         {!embedded && (
           <div>
@@ -145,7 +150,11 @@ export default function AIReply({ embedded = false }: { embedded?: boolean }) {
           {status == null ? (
             <Badge variant="secondary">{t("aiReply.checkingAI")}</Badge>
           ) : status.reachable ? (
-            <Badge variant="success">{t("aiReply.aiConnected")}</Badge>
+            <Badge variant="success">
+              {status.configured && status.provider
+                ? `${status.provider} • ${status.model ?? ""}`
+                : t("aiReply.aiConnected")}
+            </Badge>
           ) : (
             <Badge variant="destructive" className="max-w-[260px] text-left whitespace-normal">
               {t("aiReply.aiUnreachable")}{status.detail ? `: ${status.detail}` : ""}

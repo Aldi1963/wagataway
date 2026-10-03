@@ -10,7 +10,7 @@ import (
 // userScopedTables are tables carrying a user_id column. Each gets an RLS
 // policy restricting rows to the requesting app user.
 var userScopedTables = []string{
-	"affiliates", "ai_reply_configs", "api_keys", "auto_replies",
+	"affiliates", "ai_connections", "ai_reply_configs", "api_keys", "auto_replies",
 	"blacklists", "bot_orders", "bot_products", "bulk_jobs",
 	"canned_responses", "chat_assignments", "chat_conversations",
 	"chat_inboxes", "chat_labels", "chat_reminders", "contact_groups", "contacts",

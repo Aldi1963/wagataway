@@ -9,6 +9,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/rls"
+	"github.com/Aldi1963/wagataway/internal/service"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -153,13 +154,27 @@ func toggleAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// aiReplyStatus memeriksa apakah backend AI dapat dihubungi.
+// aiReplyStatus melaporkan status AI untuk user: koneksi miliknya bila ada,
+// sonst backend AI global (legacy).
 func aiReplyStatus(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		if conn := service.ConnectionForUser(udb, userID); conn != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"reachable":  true,
+				"configured": true,
+				"provider":   conn.Provider,
+				"model":      conn.Model,
+				"detail":     "Koneksi AI milik Anda (" + conn.Provider + " / " + conn.Model + ")",
+			})
+			return
+		}
 		ok, detail := whatsapp.AICheckHealth(db)
 		c.JSON(http.StatusOK, gin.H{
-			"reachable": ok,
-			"detail":    detail,
+			"reachable":  ok,
+			"configured": false,
+			"detail":     detail,
 		})
 	}
 }

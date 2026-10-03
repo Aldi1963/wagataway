@@ -53,6 +53,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ContactGroupMember{},
 		&models.AutoReply{},
 		&models.AIReplyConfig{},
+		&models.AIConnection{},
 		&models.ApiKey{},
 		&models.Plan{},
 		&models.Subscription{},

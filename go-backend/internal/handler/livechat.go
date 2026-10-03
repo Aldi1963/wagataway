@@ -329,11 +329,30 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		// Get bot config (system prompt, model, provider)
+		// Prioritas: koneksi AI milik user (provider + API key + model pilihannya).
+		// Bila user belum mengonfigurasi, fallback ke key env (legacy).
+		var aiSvc *service.AIService
+		conn := service.ConnectionForUser(db, userID)
+		if conn != nil {
+			aiSvc = service.ServiceForConnection(conn)
+		}
+		if aiSvc == nil {
+			aiSvc = liveChatSvc.AI
+		}
+
 		provider := service.ProviderOpenAI
 		model := "gpt-4o-mini"
 		systemPrompt := "Kamu adalah CS bot yang membantu pelanggan. Jawab dengan ramah, singkat, dan dalam bahasa Indonesia."
 		maxTokens := 500
 		temperature := 0.7
+
+		if conn != nil {
+			provider = service.AIProvider(conn.Provider)
+			model = service.EffectiveModel(conn, "")
+			if model == "" {
+				model = service.DefaultModelFor(provider)
+			}
+		}
 
 		if req.BotID != nil {
 			var bot models.CsBot
@@ -344,7 +363,10 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				if bot.Model != "" {
 					model = bot.Model
 				}
-				if bot.Provider == "anthropic" {
+				// Provider bot hanya dipakai di jalur legacy (tanpa koneksi user);
+				// bila user punya koneksi sendiri, provider-nya yang menang karena
+				// API key milik provider tersebut.
+				if conn == nil && bot.Provider == "anthropic" {
 					provider = service.ProviderAnthropic
 				}
 				if bot.MaxTokens > 0 {
@@ -385,7 +407,7 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			MaxTokens:   maxTokens,
 			Temperature: temperature,
 		}
-		aiResp, err := liveChatSvc.AI.Complete(aiReq)
+		aiResp, err := aiSvc.Complete(aiReq)
 		if err != nil {
 			log.Error().Err(err).Msg("AI completion failed")
 			c.JSON(http.StatusInternalServerError, gin.H{
