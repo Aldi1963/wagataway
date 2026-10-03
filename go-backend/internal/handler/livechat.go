@@ -48,7 +48,7 @@ func InitLiveChat(cfg *config.Config, db *gorm.DB, wm *whatsapp.Manager) {
 func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
 	chat := rg.Group("/chat")
 	{
-		chat.GET("/conversations", listConversations(db))
+		chat.GET("/conversations", listConversations(db, wm))
 		chat.GET("/history", getChatHistory(db))
 		chat.GET("/messages/:phone", getChatMessages(db, wm))
 		chat.POST("/send", sendChatMessage(db, wm))
@@ -73,11 +73,19 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 	}
 }
 
-func listConversations(db *gorm.DB) gin.HandlerFunc {
+func listConversations(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		udb := rls.Scoped(db, userID)
 		deviceID := c.Query("deviceId")
+
+		// Koreksi percakapan berkunci LID ke nomor asli sebelum daftar dimuat,
+		// agar header Live Chat menampilkan nomor telepon asli.
+		if deviceID != "" {
+			if devID, err := strconv.ParseUint(deviceID, 10, 32); err == nil {
+				wm.BackfillLIDConversations(userID, uint(devID))
+			}
+		}
 
 		query := udb.Where("user_id = ?", userID)
 		if deviceID != "" {

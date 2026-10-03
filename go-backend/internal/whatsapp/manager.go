@@ -868,6 +868,14 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		senderPhone = msg.Info.SenderAlt.User
 	}
 
+	// Bila pengirim berupa LID dan nomor asli (PN) diketahui, migrasi
+	// percakapan + inbox lama dari kunci LID ke PN agar header Live Chat
+	// menampilkan nomor telepon asli, bukan ID LID. SenderJID (LID) tetap
+	// disimpan untuk pengiriman balasan.
+	if senderPhone != sender {
+		m.migrateLIDConversation(sess.UserID, sess.DeviceID, sender, senderPhone)
+	}
+
 	// Chatbot menu bertingkat — dievaluasi DULU sebelum AI reply & auto-reply.
 	// Bila ia menangani pesan (sesi menu aktif / keyword cocok / selalu-aktif),
 	// keduanya dilewati agar tidak bentrok. Default nonaktif per device.
@@ -908,7 +916,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	inbox := models.ChatInbox{
 		UserID:       sess.UserID,
 		DeviceID:     sess.DeviceID,
-		Phone:        sender,
+		Phone:        senderPhone,
 		SenderJID:    senderJID,
 		Name:         msg.Info.PushName,
 		Content:      text,
@@ -922,7 +930,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	m.db.Create(&inbox)
 
 	// Update or create conversation
-	m.updateConversation(sess, sender, senderJID, msg.Info.PushName, text, getMessageType(msg))
+	m.updateConversation(sess, senderPhone, senderJID, msg.Info.PushName, text, getMessageType(msg))
 
 	// Fire webhook
 	go m.fireWebhooks(sess.UserID, sess.DeviceID, "message.received", map[string]interface{}{
@@ -1215,6 +1223,74 @@ func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushN
 		}
 		m.db.Model(&conv).Updates(updates)
 	}
+}
+
+// migrateLIDConversation memindahkan percakapan + pesan inbox dari kunci LID
+// ke nomor telepon asli (PN) begitu SenderAlt tersedia. Tidak menggabungkan:
+// bila sudah ada percakapan dengan nomor asli, yang lama dibiarkan apa adanya.
+func (m *Manager) migrateLIDConversation(userID, deviceID uint, lidPhone, realPhone string) {
+	if lidPhone == "" || realPhone == "" || lidPhone == realPhone {
+		return
+	}
+	var existing models.ChatConversation
+	if err := m.db.Where("user_id = ? AND device_id = ? AND phone = ?",
+		userID, deviceID, realPhone).First(&existing).Error; err == nil {
+		return
+	}
+	m.db.Model(&models.ChatConversation{}).
+		Where("user_id = ? AND device_id = ? AND phone = ?", userID, deviceID, lidPhone).
+		Update("phone", realPhone)
+	m.db.Model(&models.ChatInbox{}).
+		Where("user_id = ? AND device_id = ? AND phone = ?", userID, deviceID, lidPhone).
+		Update("phone", realPhone)
+}
+
+// ResolvePNForLID memetakan LID ke nomor telepon asli (PN) lewat cache
+// LID→PN di session store WhatsApp. Mengembalikan "" bila tidak ketemu
+// (mis. device offline atau mapping belum pernah terlihat).
+func (m *Manager) ResolvePNForLID(deviceID uint, lidUser string) string {
+	if lidUser == "" {
+		return ""
+	}
+	m.mu.RLock()
+	sess, ok := m.sessions[deviceID]
+	m.mu.RUnlock()
+	if !ok || sess == nil || sess.Client == nil || sess.Client.Store == nil {
+		return ""
+	}
+	lidJID := types.NewJID(lidUser, types.HiddenUserServer)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pn, err := sess.Client.Store.LIDs.GetPNForLID(ctx, lidJID)
+	if err != nil || pn.User == "" || pn.Server != types.DefaultUserServer {
+		return ""
+	}
+	return pn.User
+}
+
+// BackfillLIDConversations memigrasi semua percakapan berkunci LID milik
+// user+device ke nomor asli bila mapping LID→PN tersedia. Dipanggil saat
+// daftar percakapan dimuat agar header Live Chat menampilkan nomor asli
+// tanpa menunggu pesan baru. Mengembalikan jumlah percakapan yang dimigrasi.
+func (m *Manager) BackfillLIDConversations(userID, deviceID uint) int {
+	var convs []models.ChatConversation
+	m.db.Where("user_id = ? AND device_id = ? AND sender_j_id LIKE ?", userID, deviceID, "%@lid").
+		Find(&convs)
+	migrated := 0
+	for _, conv := range convs {
+		lidUser := strings.TrimSuffix(conv.SenderJID, "@"+types.HiddenUserServer)
+		// Hanya yang kuncinya masih LID; yang sudah bermigrasi dilewati.
+		if lidUser == "" || conv.Phone != lidUser {
+			continue
+		}
+		if pn := m.ResolvePNForLID(deviceID, lidUser); pn != "" && pn != lidUser {
+			m.migrateLIDConversation(userID, deviceID, lidUser, pn)
+			migrated++
+			log.Info().Uint("deviceID", deviceID).Str("lid", lidUser).Str("pn", pn).
+				Msg("Backfilled LID conversation to real phone number")
+		}
+	}
+	return migrated
 }
 
 // fireWebhooks fires all active webhooks for a user/device event.
