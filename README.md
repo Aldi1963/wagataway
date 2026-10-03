@@ -2,6 +2,11 @@
 
 Platform WhatsApp Gateway SaaS — kirim pesan otomatis, blast, auto-reply, live chat + AI, drip campaign, dan integrasi. Single binary, deploy simpel.
 
+## Rilis & Paket
+
+- **Rilis**: [github.com/Aldi1963/wagataway/releases](https://github.com/Aldi1963/wagataway/releases) — binary siap pakai per versi
+- **Paket**: [github.com/users/Aldi1963/packages?repo_name=wagataway](https://github.com/users/Aldi1963/packages?repo_name=wagataway) — paket terkait repositori ini
+
 ## Tech Stack
 
 | Layer | Teknologi |
