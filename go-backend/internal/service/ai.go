@@ -148,6 +148,31 @@ type ChatResponse struct {
 	Tokens  int
 }
 
+// NormalizeChatHistory merapikan riwayat percakapan (terurut kronologis,
+// tanpa system prompt) agar diterima semua provider:
+//   - pesan berurutan dengan role sama digabung (Gemini menuntut alternasi
+//     user/model yang ketat saat dikonversi dari format OpenAI)
+//   - pesan assistant di ujung dibuang — itu balasan yang sudah terkirim,
+//     bukan yang perlu dibalas; Gemini menolak request yang berakhir di
+//     model turn ("Requests ending with a model turn are not supported")
+func NormalizeChatHistory(msgs []ChatMessage) []ChatMessage {
+	merged := make([]ChatMessage, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Content == "" {
+			continue
+		}
+		if n := len(merged); n > 0 && merged[n-1].Role == m.Role {
+			merged[n-1].Content += "\n" + m.Content
+			continue
+		}
+		merged = append(merged, m)
+	}
+	for len(merged) > 0 && merged[len(merged)-1].Role == "assistant" {
+		merged = merged[:len(merged)-1]
+	}
+	return merged
+}
+
 
 // Complete sends a chat completion request to the configured provider
 func (s *AIService) Complete(req ChatRequest) (*ChatResponse, error) {

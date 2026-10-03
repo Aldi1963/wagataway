@@ -383,22 +383,31 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		udb.Where("user_id = ? AND phone = ?", userID, req.Phone).
 			Order("created_at DESC").Limit(10).Find(&history)
 
-		// Build messages for AI (reverse to chronological)
+		// Build messages for AI (reverse to chronological), lalu normalisasi:
+		// pesan assistant di ujung dibuang (sudah terjawab) & role berurutan
+		// digabung — Gemini menolak request yang berakhir di model turn.
 		// System prompt selalu diperkuat akhiran anti prompt-injection.
-		messages := []service.ChatMessage{
-			{Role: "system", Content: service.GuardedSystemPrompt(systemPrompt)},
-		}
+		histMsgs := make([]service.ChatMessage, 0, len(history))
 		for i := len(history) - 1; i >= 0; i-- {
 			role := "user"
 			if history[i].Direction == "out" {
 				role = "assistant"
 			}
 			if history[i].Content != "" {
-				messages = append(messages, service.ChatMessage{
+				histMsgs = append(histMsgs, service.ChatMessage{
 					Role: role, Content: history[i].Content,
 				})
 			}
 		}
+		histMsgs = service.NormalizeChatHistory(histMsgs)
+		if len(histMsgs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Belum ada pesan pelanggan untuk dibalas AI."})
+			return
+		}
+		messages := []service.ChatMessage{
+			{Role: "system", Content: service.GuardedSystemPrompt(systemPrompt)},
+		}
+		messages = append(messages, histMsgs...)
 
 		// Generate AI response
 		aiReq := service.ChatRequest{
@@ -669,18 +678,21 @@ func ProcessIncomingForAI(db *gorm.DB, wm *whatsapp.Manager, userID, deviceID ui
 	db.Where("user_id = ? AND phone = ?", userID, phone).
 		Order("created_at DESC").Limit(8).Find(&history)
 
-	messages := []service.ChatMessage{
-		{Role: "system", Content: bot.Prompt},
-	}
+	histMsgs := make([]service.ChatMessage, 0, len(history))
 	for i := len(history) - 1; i >= 0; i-- {
 		role := "user"
 		if history[i].Direction == "out" {
 			role = "assistant"
 		}
 		if history[i].Content != "" {
-			messages = append(messages, service.ChatMessage{Role: role, Content: history[i].Content})
+			histMsgs = append(histMsgs, service.ChatMessage{Role: role, Content: history[i].Content})
 		}
 	}
+	histMsgs = service.NormalizeChatHistory(histMsgs)
+	messages := []service.ChatMessage{
+		{Role: "system", Content: bot.Prompt},
+	}
+	messages = append(messages, histMsgs...)
 	// Add current message
 	messages = append(messages, service.ChatMessage{Role: "user", Content: text})
 
