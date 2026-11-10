@@ -1,0 +1,6 @@
+
+server
+# web/dist/ TIDAK di-ignore lagi (lihat .gitignore root): hasil build web
+# ikut ter-commit agar repo berisi web jadi (keputusan 11 Nov 2026).
+.env
+uploads/

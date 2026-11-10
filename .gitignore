@@ -1,0 +1,43 @@
+# Go
+/go-backend/bin/
+/go-backend/wa-sessions/
+/go-backend/public/uploads/*
+!/go-backend/public/uploads/.gitkeep
+
+# Frontend
+/go-backend/web/node_modules/
+# dist TIDAK di-ignore: hasil build web ikut ter-commit agar repo berisi
+# web jadi yang disajikan wa.clipku.com (keputusan 11 Nov 2026).
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Binary
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local deploy only (secrets + nginx-served build copy)
+/go-backend/docker-compose.override.yml
+/go-backend/web-dist-static/

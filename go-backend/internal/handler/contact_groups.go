@@ -1,0 +1,195 @@
+package handler
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/rls"
+	"github.com/Aldi1963/wagataway/internal/whatsapp"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+func registerContactGroupRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
+	g := rg.Group("/contact-groups")
+	g.Use(middleware.RequireScope("contacts"))
+	{
+		g.GET("", listContactGroups(db))
+		g.POST("", createContactGroup(db))
+		g.POST("/sync", syncGroupsFromWA(db, wm))
+		g.PUT("/:id", updateContactGroup(db))
+		g.DELETE("/:id", deleteContactGroup(db))
+		g.GET("/:id/members", listGroupMembers(db))
+		g.POST("/:id/members", addGroupMembers(db))
+		g.DELETE("/:id/members/:memberId", removeGroupMember(db))
+		// Fitur 5: setting welcome DM pribadi per grup (hanya grup hasil sync WA).
+		g.GET("/:id/welcome-dm", getWelcomeDMSetting(db))
+		g.PUT("/:id/welcome-dm", updateWelcomeDMSetting(db))
+	}
+}
+
+// getWelcomeDMSetting mengembalikan {enabled, template} welcome DM grup.
+func getWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var group models.ContactGroup
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"enabled":  group.WelcomeDMEnabled,
+			"template": group.WelcomeDMTemplate,
+			"waJid":    group.WAJID,
+		})
+	}
+}
+
+// updateWelcomeDMSetting menyimpan {enabled, template} welcome DM grup.
+// Variabel template yang didukung: {nama} (nama anggota baru) dan {grup}
+// (nama grup). Bila enabled=true tapi template kosong → 400.
+func updateWelcomeDMSetting(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var group models.ContactGroup
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
+			return
+		}
+		var req struct {
+			Enabled  bool   `json:"enabled"`
+			Template string `json:"template"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Payload tidak valid"})
+			return
+		}
+		if req.Enabled && req.Template == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Template wajib diisi bila welcome DM diaktifkan"})
+			return
+		}
+		if err := udb.Model(&group).Updates(map[string]interface{}{
+			"welcome_dm_enabled":  req.Enabled,
+			"welcome_dm_template": req.Template,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "Pengaturan welcome DM disimpan",
+			"enabled":  req.Enabled,
+			"template": req.Template,
+		})
+	}
+}
+
+func listContactGroups(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		var groups []models.ContactGroup
+		udb.Where("user_id = ?", userID).Order("name ASC").Find(&groups)
+		c.JSON(http.StatusOK, gin.H{"groups": groups})
+	}
+}
+
+func createContactGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		var req struct {
+			Name        string `json:"name" binding:"required"`
+			Description string `json:"description"`
+			Color       string `json:"color"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Nama grup wajib"})
+			return
+		}
+		group := models.ContactGroup{
+			UserID: userID, Name: req.Name,
+			Description: req.Description, Color: req.Color,
+		}
+		udb.Create(&group)
+		c.JSON(http.StatusCreated, gin.H{"group": group})
+	}
+}
+
+func updateContactGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var group models.ContactGroup
+		if err := udb.Where("id = ? AND user_id = ?", id, userID).First(&group).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Grup tidak ditemukan"})
+			return
+		}
+		var req map[string]interface{}
+		c.ShouldBindJSON(&req)
+		udb.Model(&group).Updates(snakeKeys(req))
+		c.JSON(http.StatusOK, gin.H{"group": group})
+	}
+}
+
+func deleteContactGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		udb.Where("group_id = ?", id).Delete(&models.ContactGroupMember{})
+		udb.Where("id = ? AND user_id = ?", id, userID).Delete(&models.ContactGroup{})
+		c.JSON(http.StatusOK, gin.H{"message": "Grup dihapus"})
+	}
+}
+
+func listGroupMembers(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var members []models.ContactGroupMember
+		db.Where("group_id = ?", id).Preload("Contact").Find(&members)
+		c.JSON(http.StatusOK, gin.H{"members": members})
+	}
+}
+
+func addGroupMembers(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var req struct {
+			ContactIDs []uint `json:"contactIds" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "contactIds wajib"})
+			return
+		}
+		added := 0
+		for _, cid := range req.ContactIDs {
+			m := models.ContactGroupMember{GroupID: uint(id), ContactID: cid}
+			if db.Create(&m).Error == nil {
+				added++
+			}
+		}
+		db.Model(&models.ContactGroup{}).Where("id = ?", id).
+			Update("member_count", gorm.Expr("member_count + ?", added))
+		c.JSON(http.StatusOK, gin.H{"added": added})
+	}
+}
+
+func removeGroupMember(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		memberId, _ := strconv.ParseUint(c.Param("memberId"), 10, 32)
+		result := db.Where("id = ? AND group_id = ?", memberId, id).Delete(&models.ContactGroupMember{})
+		if result.RowsAffected > 0 {
+			db.Model(&models.ContactGroup{}).Where("id = ?", id).
+				Update("member_count", gorm.Expr("member_count - 1"))
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Member dihapus"})
+	}
+}

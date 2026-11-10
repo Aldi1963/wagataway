@@ -1,0 +1,35 @@
+package models
+
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type Device struct {
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	UserID      uint           `gorm:"index;not null" json:"userId"`
+	Name        string         `gorm:"size:255;not null" json:"name"`
+	Phone       string         `gorm:"size:20" json:"phone"`
+	Status      string         `gorm:"size:30;default:disconnected" json:"status"` // connected, connecting, disconnected
+	IsDefault   bool           `gorm:"default:false" json:"isDefault"`
+	AutoOnline      bool           `gorm:"default:false" json:"autoOnline"`
+	ReadReceipts    bool           `gorm:"default:false" json:"readReceipts"`
+	RejectCall      bool           `gorm:"default:false" json:"rejectCall"`
+	TypingIndicator bool           `gorm:"default:false" json:"typingIndicator"`
+	SentCount       int64          `gorm:"-" json:"sentCount"`
+	WebhookURL  string         `gorm:"size:500" json:"webhookUrl"`
+	WebhookEnabled bool        `gorm:"default:true" json:"webhookEnabled"` // toggle aktif/nonaktif webhook per-device
+	WebhookSecret string       `gorm:"size:128" json:"webhookSecret"` // HMAC-SHA256 signing key untuk webhook per-device
+	MaxRetries  int            `gorm:"default:3" json:"maxRetries"`
+	RetryDelay  int            `gorm:"default:5" json:"retryDelay"` // seconds
+	LastSeen    *time.Time     `json:"lastSeen"`
+	ConnectedAt *time.Time     `json:"connectedAt"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+
+	// Relations
+	User     User      `gorm:"foreignKey:UserID" json:"-"`
+	Messages []Message `gorm:"foreignKey:DeviceID" json:"-"`
+}

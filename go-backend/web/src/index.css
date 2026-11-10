@@ -1,0 +1,194 @@
+/* Font dimuat via <link> di index.html (preconnect + non-blocking). */
+/* Wajib: Tailwind v4 tidak scan node_modules by default (lihat README Kumo).
+ * Tanpa ini, class internal Kumo (mis. `contents`) tidak ke-generate. */
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * DESIGN SYSTEM: Navy brand (#243370), no gradients
+ * - Light mode: white surfaces, navy primary actions
+ * - Dark mode: deep navy surfaces
+ * - Pill buttons with soft tints (MPWA-style): navy / green / amber / red
+ * - Clean typography (Inter)
+ */
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--card-fg);
+  --color-primary: var(--primary-color);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--secondary-color);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-fg);
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-fg);
+  --color-sidebar-bg: var(--sidebar-color);
+  --color-sidebar-foreground: var(--sidebar-fg);
+  --color-sidebar-border: var(--sidebar-border-color);
+  --color-success: var(--success-color);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+/* ── LIGHT MODE ─────────────────────────────────────────────────────────────── */
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --card-bg: #ffffff;
+  --card-fg: #0a0a0a;
+  --border-color: #e5e5e5;
+  --input-color: #e5e5e5;
+  --ring-color: #0a0a0a;
+
+  --primary-color: #243370;
+  --primary-fg: #ffffff;
+  --secondary-color: #f5f5f5;
+  --secondary-fg: #0a0a0a;
+  --muted-color: #f5f5f5;
+  --muted-fg: #737373;
+  --accent-color: #f5f5f5;
+  --accent-fg: #0a0a0a;
+  --destructive-color: #dc2626;
+  --destructive-fg: #ffffff;
+  --success-color: #16a34a;
+
+  --sidebar-color: #0a0a0a;
+  --sidebar-fg: #fafafa;
+  --sidebar-border-color: #262626;
+}
+
+/* ── DARK MODE: navy ────────────────────────────────────────────────────────── */
+.dark {
+  --bg: #0a1030;
+  --fg: #eef1ff;
+  --card-bg: #121a42;
+  --card-fg: #eef1ff;
+  --border-color: #2f3a7d;
+  --input-color: #2f3a7d;
+  --ring-color: #8fa3f5;
+
+  --primary-color: #4c63d2;
+  --primary-fg: #ffffff;
+  --secondary-color: #1a2350;
+  --secondary-fg: #eef1ff;
+  --muted-color: #1a2350;
+  --muted-fg: #9aa5d6;
+  --accent-color: #1a2350;
+  --accent-fg: #eef1ff;
+  --destructive-color: #f87171;
+  --destructive-fg: #ffffff;
+  --success-color: #4ade80;
+
+  --sidebar-color: #080d28;
+  --sidebar-fg: #eef1ff;
+  --sidebar-border-color: #232c5e;
+}
+
+@layer base {
+  * {
+    border-color: var(--border-color);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  /* Vercel-style focus ring */
+  .focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring-color);
+  }
+}
+
+/* ── KUMO UI: brand navy WaGataway di atas token Kumo ─────────────────────────
+ * Kumo membaca tema dari atribut data-theme="kumo" + data-mode="light|dark"
+ * pada <html> (diatur oleh ThemeProvider). Di sini brand Cloudflare (biru)
+ * diganti navy #243370 agar identitas WaGataway tetap terjaga. */
+
+[data-theme="kumo"] {
+  --color-kumo-brand: #243370;
+  --color-kumo-brand-hover: #1b2a5e;
+  --text-color-kumo-brand: #243370;
+}
+
+/* Dark mode: permukaan navy mengikuti tema gelap aplikasi */
+[data-theme="kumo"][data-mode="dark"],
+[data-mode="dark"] [data-theme="kumo"] {
+  --color-kumo-brand: #4c63d2;
+  --color-kumo-brand-hover: #5d74dd;
+  --text-color-kumo-brand: #aab6f5;
+  --color-kumo-canvas: #0a1030;
+  --color-kumo-elevated: #121a42;
+  --color-kumo-base: #121a42;
+  --color-kumo-tint: #1a2350;
+  --color-kumo-recessed: #0d1435;
+  --color-kumo-line: #27326a;
+  --color-kumo-hairline: #232c5e;
+  --color-kumo-control: #121a42;
+  --color-kumo-interact: #27326a;
+  --color-kumo-fill: #1a2350;
+  --text-color-kumo-default: #eef1ff;
+  --text-color-kumo-strong: #ffffff;
+  --text-color-kumo-subtle: #9aa5d6;
+  --text-color-kumo-placeholder: #6b77ab;
+}
+
+/* ── Animasi page transition WaGataway ─────────────────────────────── */
+@keyframes float-plane {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-8deg); }
+}
+@keyframes ping-slow {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  70%, 100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes bounce-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-7px); opacity: 1; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes fade-slide-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float-plane { animation: float-plane 1.8s ease-in-out infinite; }
+.animate-ping-slow { animation: ping-slow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+.animate-bounce-dot { animation: bounce-dot 1.2s ease-in-out infinite; }
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+.animate-fade-slide-in { animation: fade-slide-in 0.25s ease-out; }
+
+/* Scroll-reveal untuk landing (prerender-friendly): tanpa JS konten terlihat;
+ * dengan JS, .reveal-js menyembunyikan dulu sampai .revealed ditambahkan. */
+.reveal { opacity: 1; }
+.reveal.reveal-js { opacity: 0; transform: translateY(2rem); transition: opacity .7s ease-out, transform .7s ease-out; }
+.reveal.reveal-js.revealed { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal.reveal-js { opacity: 1; transform: none; transition: none; }
+}
