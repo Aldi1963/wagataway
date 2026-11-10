@@ -573,8 +573,12 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Banner grace period / expired langganan (Fitur 5) */}
       {!loading && <GraceBanner />}
-      {/* Banner peringatan kuota pesan (Fitur 3): >=80% atau habis */}
-      {!loading && quota?.quotaExceeded && (
+      {/* Banner peringatan kuota pesan (Fitur 3): >=80% atau habis.
+          Disembunyikan saat langganan expired/grace: GraceBanner di atas
+          sudah menampilkan pesan yang sama — satu akar masalah (langganan
+          berakhir membuat quotaExceeded=true meski pemakaian jauh di bawah
+          limit), jadi tampilkan banner kuota hanya saat langganan aktif. */}
+      {!loading && quota?.quotaExceeded && quota.subState !== "expired" && quota.subState !== "grace" && (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="p-4 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
@@ -596,7 +600,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
-      {!loading && quota && !quota.quotaExceeded && quota.warning && (
+      {!loading && quota && !quota.quotaExceeded && quota.warning && quota.subState !== "expired" && quota.subState !== "grace" && (
         <Card className="border-amber-500/50 bg-amber-500/5">
           <CardContent className="p-4 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
