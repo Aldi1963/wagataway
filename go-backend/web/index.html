@@ -4,7 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#ffffff" />
+    <style>
+      html,body{background:#fff;margin:0}
+      .wa-boot{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+      .wa-boot .wa-logo{font-size:28px;font-weight:700;letter-spacing:-.5px;color:#243370}
+      .wa-boot .wa-spin{width:28px;height:28px;border-radius:50%;border:3px solid #c7d2fe;border-top-color:#243370;animation:wa-spin 1s linear infinite}
+      @keyframes wa-spin{to{transform:rotate(360deg)}}
+      .wa-boot p{margin:0;font-size:14px;color:#64748b}
+    </style>
     <title>WaGataway — WhatsApp API Gateway Indonesia</title>
     <meta
       name="description"
@@ -37,7 +45,13 @@
     <link rel="preload" as="image" href="/illustrations/messaging-fun.svg" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="wa-boot">
+        <div class="wa-logo">WaGataway</div>
+        <div class="wa-spin"></div>
+        <p>Memuat…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
