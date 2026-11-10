@@ -33,6 +33,7 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB,
 		b.GET("/transactions/:id", getBillingTransaction(cfg, db, wm))
 		b.GET("/transactions/:id/invoice.pdf", getInvoicePDF(db))
 		b.POST("/voucher/redeem", redeemVoucher(db))
+		b.GET("/voucher/redemptions", listVoucherRedemptions(db))
 	}
 }
 
@@ -310,8 +311,16 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Kode dibuat admin dalam huruf besar — samakan normalisasinya
+		// supaya "abc123" / " abc123 " tetap ketemu.
+		code := strings.ToUpper(strings.TrimSpace(req.Code))
+		if code == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Kode voucher wajib"})
+			return
+		}
+
 		var voucher models.Voucher
-		if err := udb.Where("code = ? AND is_active = ?", req.Code, true).First(&voucher).Error; err != nil {
+		if err := udb.Where("code = ? AND is_active = ?", code, true).First(&voucher).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Voucher tidak valid atau sudah tidak aktif"})
 			return
 		}
@@ -326,9 +335,27 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Voucher diskon belum punya mekanisme penerapan (tidak ada tempat
+		// menyimpan diskon untuk pembayaran berikutnya) — tolak dengan jelas
+		// daripada mencatat penukaran yang tidak memberi apa-apa.
+		if voucher.Type == "discount" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Voucher diskon belum dapat digunakan"})
+			return
+		}
+
+		// Siapkan paket yang akan diberikan (trial memakai paket acuan bila
+		// voucher tidak menunjuk paket tertentu).
+		plan, durationDays, isTrial, err := voucherGrantPlan(udb, &voucher)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+
 		// Cek + catat redeem + increment used_count + terapkan efek voucher
 		// berjalan atomik dalam satu transaksi.
-		err := udb.Transaction(func(tx *gorm.DB) error {
+		now := java_time_now()
+		endsAt := now.AddDate(0, 0, durationDays)
+		err = udb.Transaction(func(tx *gorm.DB) error {
 			var count int64
 			if err := tx.Model(&models.VoucherRedemption{}).
 				Where("voucher_id = ? AND user_id = ?", voucher.ID, userID).
@@ -356,17 +383,9 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 				return err
 			}
 
-			// Apply voucher based on type
-			switch voucher.Type {
-			case "trial":
-				// Extend subscription with trial days
-				if err := tx.Model(&models.User{}).Where("id = ?", userID).Update("plan", "trial").Error; err != nil {
-					return err
-				}
-			case "discount":
-				// Store discount for next payment
-			}
-			return nil
+			// Berikan langganan: nonaktifkan yang lama, buat yang baru mulai
+			// sekarang (konvensi yang sama dengan activateSubscription).
+			return grantVoucherSubscription(tx, userID, plan, durationDays, isTrial, now)
 		})
 		if err != nil {
 			if errors.Is(err, errAlreadyRedeemed) {
@@ -378,9 +397,128 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Voucher berhasil digunakan",
-			"voucher": voucher,
+			"message":      "Voucher berhasil digunakan",
+			"voucher":      voucher,
+			"planName":     plan.Name,
+			"durationDays": durationDays,
+			"endsAt":       endsAt,
 		})
+	}
+}
+
+// voucherGrantPlan menentukan paket + durasi + status trial yang diberikan
+// sebuah voucher. Trial memakai paket yang ditunjuk voucher bila ada, kalau
+// tidak memakai paket Free sebagai acuan (kuota trial tetap mengikuti
+// TrialMonthlyLimit, bukan limit paket acuan).
+func voucherGrantPlan(udb *gorm.DB, voucher *models.Voucher) (models.Plan, int, bool, error) {
+	var plan models.Plan
+	switch voucher.Type {
+	case "trial":
+		durationDays := voucher.Duration
+		if durationDays <= 0 {
+			durationDays = 7
+		}
+		if voucher.PlanID != nil {
+			if err := udb.Where("id = ? AND is_active = ?", *voucher.PlanID, true).First(&plan).Error; err != nil {
+				return plan, 0, false, errors.New("Paket acuan voucher trial tidak ditemukan")
+			}
+			return plan, durationDays, true, nil
+		}
+		if err := udb.Where("slug = ? AND is_active = ?", "free", true).First(&plan).Error; err != nil {
+			return plan, 0, false, errors.New("Paket trial tidak tersedia")
+		}
+		return plan, durationDays, true, nil
+	case "plan":
+		if voucher.PlanID == nil {
+			return plan, 0, false, errors.New("Voucher paket tidak memiliki paket yang valid")
+		}
+		if err := udb.Where("id = ? AND is_active = ?", *voucher.PlanID, true).First(&plan).Error; err != nil {
+			return plan, 0, false, errors.New("Paket voucher tidak ditemukan atau tidak aktif")
+		}
+		durationDays := voucher.Duration
+		if durationDays <= 0 {
+			durationDays = plan.Duration
+		}
+		if durationDays <= 0 {
+			durationDays = 30
+		}
+		return plan, durationDays, false, nil
+	default:
+		return plan, 0, false, errors.New("Tipe voucher tidak dikenal")
+	}
+}
+
+// grantVoucherSubscription mengaktifkan langganan dari voucher: nonaktifkan
+// langganan aktif yang lama lalu buat langganan baru mulai sekarang selama
+// durationDays hari (konvensi yang sama dengan activateSubscription).
+func grantVoucherSubscription(tx *gorm.DB, userID uint, plan models.Plan, durationDays int, isTrial bool, now time.Time) error {
+	if err := tx.Model(&models.Subscription{}).
+		Where("user_id = ? AND status = ?", userID, "active").
+		Update("status", "expired").Error; err != nil {
+		return err
+	}
+	sub := models.Subscription{
+		UserID:    userID,
+		PlanID:    plan.ID,
+		Status:    "active",
+		StartDate: now,
+		EndDate:   now.AddDate(0, 0, durationDays),
+		IsTrial:   isTrial,
+	}
+	if err := tx.Create(&sub).Error; err != nil {
+		return err
+	}
+	planSlug := plan.Slug
+	if isTrial {
+		planSlug = "trial"
+	}
+	return tx.Model(&models.User{}).Where("id = ?", userID).Update("plan", planSlug).Error
+}
+
+// GET /api/billing/voucher/redemptions — riwayat penukaran voucher milik
+// user, terbaru dulu (maks. 50).
+func listVoucherRedemptions(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		var reds []models.VoucherRedemption
+		if err := udb.Where("user_id = ?", userID).Preload("Voucher").
+			Order("created_at DESC").Limit(50).Find(&reds).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memuat riwayat voucher"})
+			return
+		}
+		// Nama paket untuk voucher bertipe plan (sekali jalan, tanpa N+1).
+		planIDs := make([]uint, 0, len(reds))
+		for _, r := range reds {
+			if r.Voucher.PlanID != nil {
+				planIDs = append(planIDs, *r.Voucher.PlanID)
+			}
+		}
+		planNames := map[uint]string{}
+		if len(planIDs) > 0 {
+			var plans []models.Plan
+			udb.Where("id IN ?", planIDs).Find(&plans)
+			for _, p := range plans {
+				planNames[p.ID] = p.Name
+			}
+		}
+		out := make([]gin.H, 0, len(reds))
+		for _, r := range reds {
+			planName := ""
+			if r.Voucher.PlanID != nil {
+				planName = planNames[*r.Voucher.PlanID]
+			}
+			out = append(out, gin.H{
+				"id":         r.ID,
+				"code":       r.Voucher.Code,
+				"type":       r.Voucher.Type,
+				"planName":   planName,
+				"duration":   r.Voucher.Duration,
+				"discount":   r.Voucher.Discount,
+				"redeemedAt": r.CreatedAt,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"redemptions": out})
 	}
 }
 

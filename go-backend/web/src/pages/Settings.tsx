@@ -4,13 +4,14 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput, StrengthMeter } from "@/components/PasswordInput";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
-import { Check, UserRound, KeyRound, Users, ChevronRight } from "lucide-react";
+import { Check, UserRound, KeyRound, Users, Ticket, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiPatch, apiPost } from "@/lib/api";
 import { KeyManager } from "@/components/KeyManager";
 import TwoFASettings from "@/components/TwoFASettings";
 import SessionsSection from "@/components/SessionsSection";
+import VoucherRedeem from "@/components/VoucherRedeem";
 import Team from "./Team";
 import { useLang } from "@/lib/i18n";
 
@@ -25,7 +26,7 @@ export function SectionHeader({ title, desc }: { title: string; desc?: string })
   );
 }
 
-const TAB_IDS = ["profil", "api", "tim"];
+const TAB_IDS = ["profil", "api", "tim", "voucher"];
 
 /** Alias tab lama (?tab=keamanan dsb.) ke halaman baru yang digabung. */
 const TAB_ALIAS: Record<string, string> = {
@@ -34,6 +35,7 @@ const TAB_ALIAS: Record<string, string> = {
   "api-key": "api",
   api: "api",
   tim: "tim",
+  voucher: "voucher",
 };
 
 /** Tab lama yang kini pindah ke halaman sendiri. */
@@ -70,6 +72,7 @@ export default function Settings() {
     { id: "profil", label: t("settings.tabProfile"), icon: UserRound },
     { id: "api", label: t("settings.tabApiSettings"), icon: KeyRound },
     { id: "tim", label: t("settings.tabTeam"), icon: Users },
+    { id: "voucher", label: t("settings.tabVoucher"), icon: Ticket },
   ];
 
   const [active, setActive] = useState<string>(initialTab);
@@ -325,6 +328,8 @@ export default function Settings() {
       )}
 
       {active === "tim" && <Team embedded />}
+
+      {active === "voucher" && <VoucherRedeem />}
       </div>
     </div>
   );
