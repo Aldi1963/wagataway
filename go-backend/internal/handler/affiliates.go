@@ -19,6 +19,7 @@ func registerAffiliateRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		af.GET("", getAffiliateInfo(db))
 		af.POST("", createOrGetAffiliate(db))
 		af.GET("/earnings", listAffiliateEarnings(db))
+		af.GET("/rewards", listAffiliateRewards(db))
 	}
 }
 
@@ -57,12 +58,15 @@ func getAffiliateInfo(db *gorm.DB) gin.HandlerFunc {
 			Select("COALESCE(SUM(amount),0)").Scan(&paid)
 		var referrals int64
 		udb.Model(&models.AffiliateEarning{}).Where("affiliate_id = ?", aff.ID).Count(&referrals)
+		var rewards int64
+		udb.Model(&models.ReferralReward{}).Where("affiliate_id = ?", aff.ID).Count(&rewards)
 		c.JSON(http.StatusOK, gin.H{
 			"affiliate": aff,
 			"stats": gin.H{
 				"pending":   pending,
 				"paid":      paid,
 				"referrals": referrals,
+				"rewards":   rewards,
 			},
 		})
 	}
@@ -99,6 +103,50 @@ func createOrGetAffiliate(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"affiliate": aff})
+	}
+}
+
+// GET /api/affiliate/rewards — daftar voucher hadiah referral milik user
+// (diterbitkan otomatis saat teman yang diajak menyelesaikan pembayaran
+// pertamanya). Status pemakaian dibaca dari vouchernya: usedCount > 0 =
+// sudah dipakai, lewat ExpiresAt = kedaluwarsa.
+func listAffiliateRewards(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := middleware.GetUserID(c)
+		udb := rls.Scoped(db, userID)
+		var aff models.Affiliate
+		if err := udb.Where("user_id = ?", userID).First(&aff).Error; err != nil {
+			c.JSON(http.StatusOK, gin.H{"rewards": []gin.H{}, "total": 0})
+			return
+		}
+		page, limit := getPageLimit(c)
+		var total int64
+		udb.Model(&models.ReferralReward{}).Where("affiliate_id = ?", aff.ID).Count(&total)
+		var items []models.ReferralReward
+		udb.Where("affiliate_id = ?", aff.ID).Preload("Voucher").
+			Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&items)
+		rewards := make([]gin.H, 0, len(items))
+		for _, r := range items {
+			rewards = append(rewards, gin.H{
+				"id":             r.ID,
+				"referredUserId": r.ReferredUserID,
+				"transactionId":  r.TransactionID,
+				"voucherId":      r.VoucherID,
+				"code":           r.Voucher.Code,
+				"duration":       r.Voucher.Duration,
+				"usedCount":      r.Voucher.UsedCount,
+				"maxUses":        r.Voucher.MaxUses,
+				"isActive":       r.Voucher.IsActive,
+				"expiresAt":      r.Voucher.ExpiresAt,
+				"createdAt":      r.CreatedAt,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"rewards": rewards,
+			"page":    page,
+			"limit":   limit,
+			"total":   total,
+		})
 	}
 }
 

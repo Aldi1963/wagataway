@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -513,6 +515,11 @@ func activateSubscription(db *gorm.DB, txID uint) (activated bool, err error) {
 					}
 					// Abaikan duplikat (bila webhook dipanggil ulang).
 					_ = tdb.Where("transaction_id = ?", tx.ID).FirstOrCreate(&earning).Error
+					// Voucher hadiah referral (Item 9): aktivasi berbayar
+					// pertama teman yang diajak juga menerbitkan satu
+					// voucher trial untuk pengajak (idempoten, lihat
+					// issueReferralRewardVoucher).
+					issueReferralRewardVoucher(tdb, aff, tx)
 				}
 			}
 		}
@@ -520,6 +527,93 @@ func activateSubscription(db *gorm.DB, txID uint) (activated bool, err error) {
 		return nil
 	})
 	return activated, err
+}
+
+// generateReferralRewardCode membuat kode voucher hadiah unik berawalan
+// REF- + 8 karakter (alfabet yang sama dengan generateAffiliateCode).
+func generateReferralRewardCode(tdb *gorm.DB) string {
+	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	for {
+		b := make([]byte, 8)
+		for i := range b {
+			n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+			b[i] = chars[n.Int64()]
+		}
+		code := models.ReferralRewardVoucherPrefix + string(b)
+		var count int64
+		tdb.Model(&models.Voucher{}).Where("code = ?", code).Count(&count)
+		if count == 0 {
+			return code
+		}
+	}
+}
+
+// issueReferralRewardVoucher menerbitkan voucher hadiah referral untuk
+// pengajak (aff.UserID) saat teman yang diajak (tx.UserID) menyelesaikan
+// aktivasi berbayar PERTAMANYA.
+//
+// Definisi "referral berhasil": user yang terdaftar lewat kode afiliasi
+// (users.referred_by_affiliate_id) membayar transaksi langganan pertamanya
+// lewat ClipkuPay (amount > 0) dan aktivasi berhasil. Pendaftaran saja
+// (tanpa bayar) atau aktivasi via voucher gratis TIDAK memberi hadiah.
+//
+// Hadiah: voucher trial 7 hari (tipe "trial", max_uses 1, kedaluwarsa 90
+// hari, tanpa paket acuan — saat redeem, voucherGrantPlan memakai paket
+// Free sebagai acuan seperti voucher trial biasa). Pengajak menukarkannya
+// lewat endpoint redeem voucher yang sudah ada.
+//
+// Idempoten: dipanggil dari dalam transaksi activateSubscription, yang
+// hanya berjalan sekali per transisi status → paid. Penjaga ganda:
+//   - uniqueIndex referred_user_id pada ReferralReward — satu teman yang
+//     diajak hanya menerbitkan satu hadiah, apa pun yang terjadi;
+//   - cek tidak ada transaksi paid lain milik teman yang diajak — hanya
+//     pembayaran pertama yang memberi hadiah.
+//
+// Bila pembuatan baris reward gagal karena duplikat (dua webhook berlomba),
+// voucher yang sudah dibuat di transaksi yang sama dihapus agar tidak ada
+// voucher yatim. Kegagalan di sini tidak menggagalkan aktivasi — dicatat
+// lewat return tanpa error; aktivasi langganan tetap jalan.
+func issueReferralRewardVoucher(tdb *gorm.DB, aff models.Affiliate, tx models.Transaction) {
+	// Sudah pernah ada hadiah untuk teman ini → selesai.
+	var existing models.ReferralReward
+	if err := tdb.Where("referred_user_id = ?", tx.UserID).First(&existing).Error; err == nil {
+		return
+	}
+	// Hanya pembayaran pertama teman yang diajak yang memberi hadiah.
+	var paidCount int64
+	tdb.Model(&models.Transaction{}).
+		Where("user_id = ? AND status = ? AND id <> ?", tx.UserID, "paid", tx.ID).
+		Count(&paidCount)
+	if paidCount > 0 {
+		return
+	}
+	expiresAt := time.Now().AddDate(0, 0, models.ReferralRewardExpiryDays)
+	voucher := models.Voucher{
+		Code:      generateReferralRewardCode(tdb),
+		Type:      "trial",
+		Duration:  models.ReferralRewardDurationDays,
+		MaxUses:   1,
+		UsedCount: 0,
+		IsActive:  true,
+		ExpiresAt: &expiresAt,
+		Source:    models.VoucherSourceReferralReward,
+	}
+	if err := tdb.Create(&voucher).Error; err != nil {
+		return
+	}
+	reward := models.ReferralReward{
+		AffiliateID:    aff.ID,
+		ReferrerUserID: aff.UserID,
+		ReferredUserID: tx.UserID,
+		TransactionID:  &tx.ID,
+		VoucherID:      voucher.ID,
+	}
+	if err := tdb.Create(&reward).Error; err != nil {
+		// Duplikat (balapan webhook): hapus voucher yatim di transaksi
+		// yang sama, lalu diam — hadiah dari proses lain yang menang.
+		_ = tdb.Delete(&models.Voucher{}, voucher.ID)
+		return
+	}
 }
 
 // POST /api/billing/clipkupay/webhook — publik, diverifikasi via X-Signature.

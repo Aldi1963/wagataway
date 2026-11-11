@@ -82,6 +82,10 @@ type Transaction struct {
 	Plan *Plan `gorm:"foreignKey:PlanID" json:"Plan,omitempty"`
 }
 
+// VoucherSourceReferralReward menandai voucher yang diterbitkan otomatis
+// sebagai hadiah referral (Item 9). Voucher buatan admin berisi "".
+const VoucherSourceReferralReward = "referral_reward"
+
 type Voucher struct {
 	ID        uint       `gorm:"primaryKey" json:"id"`
 	Code      string     `gorm:"size:50;uniqueIndex;not null" json:"code"`
@@ -93,6 +97,9 @@ type Voucher struct {
 	UsedCount int        `gorm:"default:0" json:"usedCount"`
 	IsActive  bool       `gorm:"default:true" json:"isActive"`
 	ExpiresAt *time.Time `json:"expiresAt"`
+	// Source: asal voucher — "" (dibuat admin) atau "referral_reward"
+	// (diterbitkan otomatis sebagai hadiah referral).
+	Source    string     `gorm:"size:20;default:''" json:"source"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 }
