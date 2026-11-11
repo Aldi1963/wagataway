@@ -23,7 +23,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-<<<<<<< HEAD
 // logChatbotReply mencatat satu balasan chatbot (best-effort, abaikan error).
 func (m *Manager) logChatbotReply(userID, deviceID uint, phone, question, answer, source string, faqID *uint) {
 	if strings.TrimSpace(question) == "" {
@@ -60,8 +59,6 @@ func (m *Manager) sendChatbotReply(sess *SessionState, senderJID, senderPhone, q
 	return true
 }
 
-=======
->>>>>>> origin/feat/cs-multiagent
 func (m *Manager) checkAIReply(sess *SessionState, senderJID, senderPhone, text string, isGroup bool) {
 	if strings.TrimSpace(text) == "" {
 		return
@@ -89,16 +86,9 @@ func (m *Manager) checkAIReply(sess *SessionState, senderJID, senderPhone, text 
 				Uint("configID", cfg.ID).
 				Str("to", senderJID).
 				Msg("AI reply blocked: prompt injection detected")
-<<<<<<< HEAD
 			m.sendChatbotReply(sess, senderJID, senderPhone, text,
 				service.InjectionRefusalMessage, "blocked", nil)
-=======
-			if err := m.SendMessage(sess.DeviceID, senderJID, "text", service.InjectionRefusalMessage, ""); err != nil {
-				log.Error().Err(err).Msg("AI injection refusal send failed")
-			} else {
-				m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
-			}
->>>>>>> origin/feat/cs-multiagent
+			m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
 			return
 		}
 
@@ -120,25 +110,9 @@ func (m *Manager) checkAIReply(sess *SessionState, senderJID, senderPhone, text 
 		if strings.TrimSpace(reply) == "" {
 			continue
 		}
-<<<<<<< HEAD
 		m.sendChatbotReply(sess, senderJID, senderPhone, text,
 			service.TruncateReply(reply, service.EffectiveMaxReplyLength(&cfg)), "llm", nil)
-=======
-
-		if err := m.SendMessage(sess.DeviceID, senderJID, "text", reply, ""); err != nil {
-			log.Error().Err(err).
-				Uint("deviceID", sess.DeviceID).
-				Str("to", senderJID).
-				Msg("AI reply send failed")
-		} else {
-			log.Info().
-				Uint("deviceID", sess.DeviceID).
-				Uint("configID", cfg.ID).
-				Str("to", senderJID).
-				Msg("AI reply sent")
-			m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
-		}
->>>>>>> origin/feat/cs-multiagent
+		m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
 		return // hanya config pertama yang cocok yang membalas
 	}
 }
@@ -154,13 +128,17 @@ func (m *Manager) replyChatbot(sess *SessionState, senderJID, senderPhone, text 
 		if best, _ := service.FindBestFAQ(faqs, text); best != nil {
 			answer := service.TruncateReply(best.Answer, maxLen)
 			faqID := best.ID
-			m.sendChatbotReply(sess, senderJID, senderPhone, text, answer, "faq", &faqID)
+			if m.sendChatbotReply(sess, senderJID, senderPhone, text, answer, "faq", &faqID) {
+				m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
+			}
 			return
 		}
 		// 2. Mode ketat: tolak topik di luar FAQ tanpa memanggil LLM.
 		if cfg.StrictFAQ {
-			m.sendChatbotReply(sess, senderJID, senderPhone, text,
-				service.OutOfScopeRefusalMessage, "refused", nil)
+			if m.sendChatbotReply(sess, senderJID, senderPhone, text,
+				service.OutOfScopeRefusalMessage, "refused", nil) {
+				m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
+			}
 			return
 		}
 	}
@@ -179,8 +157,10 @@ func (m *Manager) replyChatbot(sess *SessionState, senderJID, senderPhone, text 
 	if strings.TrimSpace(reply) == "" {
 		return
 	}
-	m.sendChatbotReply(sess, senderJID, senderPhone, text,
-		service.TruncateReply(reply, maxLen), "llm", nil)
+	if m.sendChatbotReply(sess, senderJID, senderPhone, text,
+		service.TruncateReply(reply, maxLen), "llm", nil) {
+		m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
+	}
 }
 
 // matchTriggerKeywords: keywords kosong = cocok untuk semua pesan,
@@ -218,18 +198,9 @@ func (m *Manager) askAIWithHistory(userID uint, cfg *models.AIReplyConfig, histo
 	if conn := service.ConnectionForUser(m.db, userID); conn != nil {
 		if svc := service.ServiceForConnection(conn); svc != nil {
 			resp, err := svc.Complete(service.ChatRequest{
-<<<<<<< HEAD
 				Provider:    service.AIProvider(conn.Provider),
 				Model:       service.EffectiveModel(conn, ""),
 				Messages:    messages,
-=======
-				Provider: service.AIProvider(conn.Provider),
-				Model:    service.EffectiveModel(conn, ""),
-				Messages: []service.ChatMessage{
-					{Role: "system", Content: systemPrompt},
-					{Role: "user", Content: guardedMsg},
-				},
->>>>>>> origin/feat/cs-multiagent
 				MaxTokens:   500,
 				Temperature: 0.7,
 			})
