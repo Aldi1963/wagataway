@@ -1454,11 +1454,6 @@ function TransactionsTab() {
 
 /* ── Tab: Pengaturan ────────────────────────────────── */
 
-interface SettingRow {
-  key: string;
-  value: string;
-}
-
 interface KnownSetting {
   key: string;
   label: string;
@@ -1573,7 +1568,6 @@ function SettingsTab() {
     },
   ];
   const [values, setValues] = useState<Record<string, string>>({});
-  const [customRows, setCustomRows] = useState<SettingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1627,17 +1621,13 @@ function SettingsTab() {
       .then((res) => {
         const s = res.settings || {};
         const v: Record<string, string> = {};
-        const custom: SettingRow[] = [];
         for (const [key, val] of Object.entries(s)) {
-          const str = String(val ?? "");
-          if (knownKeys.has(key)) v[key] = str;
-          else custom.push({ key, value: str });
+          if (knownKeys.has(key)) v[key] = String(val ?? "");
         }
         for (const ks of KNOWN_SETTINGS) {
           if (!(ks.key in v)) v[ks.key] = ks.def;
         }
         setValues(v);
-        setCustomRows(custom);
         setMaskedKeys(res.masked || {});
       })
       .catch((e) => setError(errMsg(e, t("admin.errLoadSettings"))))
@@ -1650,18 +1640,8 @@ function SettingsTab() {
   const setVal = (key: string, val: string) =>
     setValues((prev) => ({ ...prev, [key]: val }));
 
-  const addRow = () => setCustomRows((r) => [...r, { key: "", value: "" }]);
-  const removeRow = (i: number) => setCustomRows((r) => r.filter((_, idx) => idx !== i));
-  const setRow = (i: number, k: "key" | "value", v: string) =>
-    setCustomRows((r) => r.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)));
-
   const handleSave = async () => {
     const body: Record<string, string> = { ...values };
-    for (const r of customRows) {
-      const k = r.key.trim();
-      if (!k || knownKeys.has(k)) continue;
-      body[k] = r.value;
-    }
     setSaving(true);
     try {
       await apiPut("/admin/settings", body);
@@ -1968,50 +1948,6 @@ function SettingsTab() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-sm font-semibold text-foreground">{t("admin.customSettingsTitle")}</h3>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={addRow}>
-                  <Plus className="w-3.5 h-3.5" /> {t("admin.addRow")}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mb-4">
-                {t("admin.customSettingsDesc")}
-              </p>
-              {customRows.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  {t("admin.noCustomSettings")}
-                </p>
-              )}
-              <div className="space-y-3">
-                {customRows.map((r, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <Input
-                      className="font-mono"
-                      placeholder={t("admin.settingKeyPlaceholder")}
-                      value={r.key}
-                      onChange={(e) => setRow(i, "key", e.target.value)}
-                    />
-                    <Input
-                      placeholder={t("admin.settingValuePlaceholder")}
-                      value={r.value}
-                      onChange={(e) => setRow(i, "value", e.target.value)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 shrink-0 text-destructive"
-                      onClick={() => removeRow(i)}
-                      aria-label={t("admin.deleteRow")}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </>
       )}
     </div>
