@@ -38,7 +38,6 @@ import {
   Gift,
   History,
   DatabaseBackup,
-  ShoppingBag,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 
@@ -66,7 +65,6 @@ const topItems: NavItem[] = [
   { labelKey: "dashboard", href: "/", icon: LayoutGrid },
   { labelKey: "schedule", href: "/schedule", icon: Clock },
   { labelKey: "automation", href: "/automation", icon: Bot },
-  { labelKey: "catalogOrder", href: "/catalog-order", icon: ShoppingBag },
   { labelKey: "liveChat", href: "/live-chat", icon: MessagesSquare },
   { labelKey: "chatBackup", href: "/chat-backups", icon: DatabaseBackup },
   { labelKey: "contacts", href: "/contacts", icon: Users },
