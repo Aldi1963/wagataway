@@ -55,6 +55,10 @@ func (s *Scheduler) Start() {
 	// jendela waktunya mulai — tiap menit, lihat subscription_activation.go.
 	s.cron.AddFunc("0 * * * * *", s.processScheduledSubscriptions)
 
+	// Cadangan percakapan harian (Item 11) setiap hari 02:00 — satu file
+	// JSON per pasangan (user, device), retensi 30 hari.
+	s.cron.AddFunc("0 0 2 * * *", s.processChatBackups)
+
 	s.cron.Start()
 	log.Info().Msg("Background scheduler started")
 }

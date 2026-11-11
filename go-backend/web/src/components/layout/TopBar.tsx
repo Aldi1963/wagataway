@@ -31,6 +31,7 @@ export const routeTitleKeys: Record<string, string> = {
   "/automation": "title.automation",
   "/auto-reply": "title.autoReply",
   "/live-chat": "title.liveChat",
+  "/chat-backups": "title.chatBackup",
   "/cs-bot": "title.csBot",
   "/drip": "title.drip",
   "/files": "title.files",

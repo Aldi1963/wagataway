@@ -37,6 +37,7 @@ import {
   CreditCard,
   Gift,
   History,
+  DatabaseBackup,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 
@@ -65,6 +66,7 @@ const topItems: NavItem[] = [
   { labelKey: "schedule", href: "/schedule", icon: Clock },
   { labelKey: "automation", href: "/automation", icon: Bot },
   { labelKey: "liveChat", href: "/live-chat", icon: MessagesSquare },
+  { labelKey: "chatBackup", href: "/chat-backups", icon: DatabaseBackup },
   { labelKey: "contacts", href: "/contacts", icon: Users },
   { labelKey: "billing", href: "/billing", icon: CreditCard },
   { labelKey: "affiliate", href: "/affiliate", icon: Gift },

@@ -733,8 +733,8 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     }
   };
 
-  // ── Ekspor riwayat chat (TXT/CSV) ──
-  const exportChat = async (format: "txt" | "csv") => {
+  // ── Ekspor riwayat chat (TXT/CSV/PDF) ──
+  const exportChat = async (format: "txt" | "csv" | "pdf") => {
     if (!activePhone || !activeDeviceId || exporting) return;
     setExporting(true);
     try {
@@ -1733,6 +1733,16 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                           >
                             <FileText className="w-3.5 h-3.5" />
                             CSV
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={() => exportChat("pdf")}
+                            disabled={exporting}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            PDF
                           </Button>
                         </div>
                       </div>

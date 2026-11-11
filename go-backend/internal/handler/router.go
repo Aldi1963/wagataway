@@ -104,6 +104,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerUploadRoutes(protected)
 			InitLiveChat(cfg, db, waManager)
 			registerChatRoutes(protected, db, waManager)
+			registerChatBackupRoutes(protected, db)
 			registerAnalyticsRoutes(protected, db)
 			registerStatsRoutes(protected, db)
 			registerDripRoutes(protected, db)
