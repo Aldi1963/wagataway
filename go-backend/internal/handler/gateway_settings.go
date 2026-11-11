@@ -53,9 +53,38 @@ func invalidateSettingCache(key string) {
 
 // Kunci pengaturan payment gateway.
 const (
-	settingClipkuAPIKey    = "clipkupay_api_key"
+	settingClipkuAPIKey     = "clipkupay_api_key"
 	settingClipkuWebhookURL = "clipkupay_webhook_url"
 )
+
+// Kunci pengaturan template resmi Meta (WhatsApp Business API / Cloud API).
+// PERSETUJUAN META BERADA DI LUAR KENDALI KODE: template disetujui di Meta
+// Business Manager, lalu dicatat di aplikasi lewat alur persetujuan
+// (draft → pending → approved). Bila suatu saat pengiriman beralih dari
+// device WA Web ke Cloud API, transport memakai keempat nilai ini:
+//   - meta_waba_enabled: "true" untuk mengaktifkan transport Cloud API
+//   - meta_waba_phone_number_id: Phone Number ID dari Meta Business Manager
+//   - meta_waba_namespace: namespace template (bila diminta Meta)
+//   - meta_waba_access_token: token akses sistem (SENSITIF — tidak pernah
+//     dikembalikan mentah ke frontend; lihat sensitiveSettingKeys).
+// Nilai diisi user/admin dari halaman Template; tanpa ini pengiriman template
+// tetap lewat device WA yang terhubung (jalur yang sudah ada).
+const (
+	settingMetaWabaEnabled       = "meta_waba_enabled"
+	settingMetaWabaPhoneNumberID = "meta_waba_phone_number_id"
+	settingMetaWabaNamespace     = "meta_waba_namespace"
+	settingMetaWabaAccessToken   = "meta_waba_access_token"
+)
+
+// metaWabaConfigFromSettings membaca konfigurasi WABA dari tabel settings.
+// Token tidak pernah dikembalikan — hanya penanda sudah terisi atau belum.
+func metaWabaConfigFromSettings(db *gorm.DB) (phoneNumberID, namespace string, tokenSet, enabled bool) {
+	phoneNumberID = getDBSetting(db, settingMetaWabaPhoneNumberID)
+	namespace = getDBSetting(db, settingMetaWabaNamespace)
+	tokenSet = getDBSetting(db, settingMetaWabaAccessToken) != ""
+	enabled = getDBSetting(db, settingMetaWabaEnabled) == "true"
+	return phoneNumberID, namespace, tokenSet, enabled
+}
 
 // clipkuAPIKeyFromSettings mengembalikan API key mentah dari pengaturan admin
 // (atau env CLIPKUPAY_API_KEY). String kosong bila tidak ada.
