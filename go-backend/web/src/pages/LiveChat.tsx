@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile, Download, BellRing, Trash2, Paperclip, Undo2, Forward, Square, Loader2, Link as LinkIcon } from "lucide-react";
+import { Send, Bot, Search, MessageCircle, MoreHorizontal, ArrowLeft, Zap, X, Copy, Check, Pin, PinOff, Archive, ArchiveRestore, CircleCheck, Circle, Tag, ChevronUp, ChevronDown, Camera, Video, Mic, FileText, Smile, Download, BellRing, Trash2, Paperclip, Undo2, Forward, Square, Loader2, Link as LinkIcon, UserCheck, Clock, StickyNote, History, Users } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { apiGet, apiPatch, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useActiveDevice } from "@/hooks/use-active-device";
+import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { DateTimePicker } from "@/components/DateTimePicker";
 
@@ -28,6 +29,50 @@ interface Conversation {
   unreadCount: number;
   lastActivity: string;
   deviceId: number;
+  // CS multi-agent
+  assignedMemberId?: number | null;
+  assignedMemberName?: string;
+  assignedAt?: string | null;
+  firstInboundAt?: string | null;
+  firstResponseAt?: string | null;
+  firstResponseSecs?: number | null;
+  resolvedAt?: string | null;
+  resolutionSecs?: number | null;
+}
+
+interface TeamMember {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  isActive?: boolean;
+}
+
+interface InternalNote {
+  id: number;
+  authorMemberId?: number | null;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+interface ChatActivityItem {
+  id: number;
+  actorMemberId?: number | null;
+  actorName: string;
+  action: string;
+  detail?: string;
+  createdAt: string;
+}
+
+interface TeamStat {
+  memberId?: number | null;
+  memberName: string;
+  assignedOpen: number;
+  assignedPending: number;
+  resolved: number;
+  avgFirstResponseSecs?: number | null;
+  avgResolutionSecs?: number | null;
 }
 
 interface ChatLabel {
@@ -311,6 +356,19 @@ function timeAgo(iso: string, t: (k: string) => string): string {
   return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
+// Durasi detik -> "< 1 mnt" / "5 mnt" / "2 jam".
+function formatDuration(secs: number | null | undefined, t: (k: string) => string): string {
+  if (secs == null) return "";
+  if (secs < 60) return t("liveChat.durationLessMinute");
+  const m = Math.floor(secs / 60);
+  if (m < 60) return t("liveChat.durationMinutes").replace("{n}", String(m));
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem === 0
+    ? t("liveChat.durationHours").replace("{n}", String(h))
+    : `${t("liveChat.durationHours").replace("{n}", String(h))} ${t("liveChat.durationMinutes").replace("{n}", String(rem))}`;
+}
+
 // Samakan nomor: buang semua non-digit agar chatJid label cocok dengan phone.
 function normPhone(p: string): string {
   return (p || "").replace(/\D/g, "");
@@ -358,10 +416,23 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   const [showInfo, setShowInfo] = useState(false);
   const [copied, setCopied] = useState(false);
   // Fitur batch: filter status, label, semat, cari dalam percakapan
-  const [statusFilter, setStatusFilter] = useState<"open" | "done" | "archived">("open");
+  const [statusFilter, setStatusFilter] = useState<"open" | "pending" | "resolved" | "archived">("open");
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [labelFilter, setLabelFilter] = useState<string>("all");
   const [labels, setLabels] = useState<ChatLabel[]>([]);
   const [assignments, setAssignments] = useState<ChatAssignment[]>([]);
+  // CS multi-agent
+  const { user } = useAuth();
+  const isTeamAgent = user?.role === "team_member";
+  const isTeamViewer = user?.role === "team_viewer";
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [notes, setNotes] = useState<InternalNote[]>([]);
+  const [noteInput, setNoteInput] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [activity, setActivity] = useState<ChatActivityItem[]>([]);
+  const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
+  const [csLoading, setCsLoading] = useState(false);
   const [msgSearchOpen, setMsgSearchOpen] = useState(false);
   const [msgQuery, setMsgQuery] = useState("");
   const [msgMatchIdx, setMsgMatchIdx] = useState(0);
@@ -406,7 +477,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   // Online/mengetik
   const [presence, setPresence] = useState<{ online: boolean; typing: boolean } | null>(null);
   // Tab info kontak: info | media | dokumen | tautan
-  const [infoTab, setInfoTab] = useState<"info" | "media" | "documents" | "links">("info");
+  const [infoTab, setInfoTab] = useState<"info" | "cs" | "media" | "documents" | "links">("info");
   const [tabItems, setTabItems] = useState<ChatMediaItem[] | null>(null);
   const [tabLoading, setTabLoading] = useState(false);
 
@@ -462,8 +533,14 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       setConversations([]);
       return;
     }
+    const params = new URLSearchParams({
+      deviceId: String(deviceId),
+      status,
+    });
+    if (assigneeFilter !== "all") params.set("assignedTo", assigneeFilter);
+    if (labelFilter !== "all") params.set("labelId", labelFilter);
     apiGet<{ conversations: Conversation[] }>(
-      `/chat/conversations?deviceId=${deviceId}&status=${status}`
+      `/chat/conversations?${params.toString()}`
     )
       .then((d) => setConversations(d.conversations || []))
       .catch(() => {});
@@ -474,7 +551,15 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     setMessages([]);
     loadConversations(statusFilter, activeDeviceId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDeviceId, statusFilter]);
+  }, [activeDeviceId, statusFilter, assigneeFilter, labelFilter]);
+
+  // Anggota tim untuk assign + filter (owner/admin/viewer melihat semua;
+  // agent tetap memuat daftar agar bisa mengambil percakapan untuk dirinya).
+  useEffect(() => {
+    apiGet<{ members: TeamMember[] } | TeamMember[]>("/team")
+      .then((d) => setTeamMembers(Array.isArray(d) ? d : d.members ?? []))
+      .catch(() => {});
+  }, []);
 
   // Label + assignment untuk badge terlihat di daftar
   useEffect(() => {
@@ -504,6 +589,89 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       }
     }
     return out;
+  };
+
+  // ── CS multi-agent: catatan internal, riwayat, statistik tim ──
+  const loadCsPanel = async () => {
+    if (!activePhone || activeDeviceId == null) return;
+    setCsLoading(true);
+    try {
+      const [n, a] = await Promise.all([
+        apiGet<{ notes: InternalNote[] }>(
+          `/chat/conversations/${activePhone}/notes?deviceId=${activeDeviceId}`
+        ).catch(() => ({ notes: [] })),
+        apiGet<{ activity: ChatActivityItem[] }>(
+          `/chat/conversations/${activePhone}/activity?deviceId=${activeDeviceId}`
+        ).catch(() => ({ activity: [] })),
+      ]);
+      setNotes(n.notes || []);
+      setActivity(a.activity || []);
+    } finally {
+      setCsLoading(false);
+    }
+    if (!isTeamAgent) {
+      apiGet<{ stats: TeamStat[] }>("/chat/team-stats")
+        .then((d) => setTeamStats(d.stats || []))
+        .catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    if (showInfo && infoTab === "cs" && activePhone) {
+      setNoteInput("");
+      loadCsPanel();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInfo, infoTab, activePhone]);
+
+  const assignConversation = async (memberId: number | null) => {
+    if (!activePhone || activeDeviceId == null) return;
+    try {
+      const d = await apiPatch<{ conversation: Conversation }>(
+        `/chat/conversations/${activePhone}/assign`,
+        { deviceId: activeDeviceId, memberId }
+      );
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.phone === activePhone ? { ...c, ...d.conversation } : c
+        )
+      );
+      toast.success(
+        memberId == null ? t("liveChat.unassignSuccess") : t("liveChat.assignSuccess")
+      );
+      loadCsPanel();
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    }
+  };
+
+  const saveNote = async () => {
+    if (!activePhone || activeDeviceId == null || !noteInput.trim() || savingNote) return;
+    setSavingNote(true);
+    try {
+      const d = await apiPost<{ note: InternalNote }>(
+        `/chat/conversations/${activePhone}/notes`,
+        { deviceId: activeDeviceId, content: noteInput.trim() }
+      );
+      setNotes((prev) => [d.note, ...prev]);
+      setNoteInput("");
+      toast.success(t("liveChat.noteAdded"));
+      loadCsPanel();
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const deleteNote = async (id: number) => {
+    try {
+      await apiDelete(`/chat/notes/${id}`);
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+      toast.success(t("liveChat.noteDeleted"));
+    } catch (e: any) {
+      toast.error(e?.message || t("liveChat.actionFailed"));
+    }
   };
 
   // Load messages when active phone changes
@@ -836,13 +1004,18 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
     }
   };
 
-  const changeStatus = async (status: "open" | "done" | "archived") => {
+  const changeStatus = async (status: "open" | "pending" | "resolved" | "done" | "archived") => {
     if (!activePhone) return;
     try {
       await apiPatch(`/chat/conversations/${activePhone}/status`, { status });
-      // Hilang dari daftar saat ini (kecuali dibuka lagi)
-      setConversations((prev) => prev.filter((c) => c.phone !== activePhone));
-      setActivePhone(null);
+      loadConversations(statusFilter, activeDeviceId);
+      // Tutup percakapan aktif bila status barunya keluar dari filter saat ini.
+      const stillVisible =
+        (statusFilter === "open" && (status === "open" || status === "pending")) ||
+        (statusFilter === "pending" && status === "pending") ||
+        (statusFilter === "resolved" && (status === "resolved" || status === "done")) ||
+        (statusFilter === "archived" && status === "archived");
+      if (!stillVisible) setActivePhone(null);
       toast.success(t("liveChat.statusChanged"));
     } catch (e: any) {
       toast.error(e?.message || t("liveChat.actionFailed"));
@@ -1194,7 +1367,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
       .finally(() => setTabLoading(false));
   };
 
-  const switchInfoTab = (tab: "info" | "media" | "documents" | "links") => {
+  const switchInfoTab = (tab: "info" | "cs" | "media" | "documents" | "links") => {
     setInfoTab(tab);
     if (tab === "media") loadTabMedia("image");
     else if (tab === "documents") loadTabMedia("document");
@@ -1353,12 +1526,13 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          {/* Filter: status + belum dibaca */}
+          {/* Filter: status + belum dibaca + assignee + label */}
           <div className="flex flex-wrap gap-1.5">
             {(
               [
-                { id: "open", label: t("liveChat.filterAll") },
-                { id: "done", label: t("liveChat.filterDone") },
+                { id: "open", label: t("liveChat.filterActive") },
+                { id: "pending", label: t("liveChat.filterPending") },
+                { id: "resolved", label: t("liveChat.filterResolved") },
                 { id: "archived", label: t("liveChat.filterArchived") },
               ] as const
             ).map((f) => (
@@ -1386,6 +1560,40 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
             >
               {t("liveChat.filterUnread")}
             </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <select
+              value={assigneeFilter}
+              onChange={(e) => setAssigneeFilter(e.target.value)}
+              className="h-6 px-1.5 rounded-full bg-white dark:bg-[#2a3942] text-[10px] font-medium text-[#667781] dark:text-[#8696a0] focus:outline-none max-w-[140px]"
+              title={t("liveChat.filterAssignee")}
+            >
+              <option value="all">{t("liveChat.filterAllAssignees")}</option>
+              <option value="unassigned">{t("liveChat.filterUnassigned")}</option>
+              {isTeamAgent && user?.teamMemberId ? (
+                <option value="me">{t("liveChat.filterMine")}</option>
+              ) : null}
+              {teamMembers
+                .filter((m) => m.isActive !== false)
+                .map((m) => (
+                  <option key={m.id} value={String(m.id)}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+            <select
+              value={labelFilter}
+              onChange={(e) => setLabelFilter(e.target.value)}
+              className="h-6 px-1.5 rounded-full bg-white dark:bg-[#2a3942] text-[10px] font-medium text-[#667781] dark:text-[#8696a0] focus:outline-none max-w-[140px]"
+              title={t("liveChat.filterLabel")}
+            >
+              <option value="all">{t("liveChat.filterAllLabels")}</option>
+              {labels.map((l) => (
+                <option key={l.id} value={String(l.id)}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -1444,8 +1652,14 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                       </span>
                     )}
                   </div>
-                  {rowLabels.length > 0 && (
+                  {(convo.assignedMemberName || rowLabels.length > 0) && (
                     <div className="flex flex-wrap gap-1 mt-1">
+                      {convo.assignedMemberName && (
+                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-px rounded-full bg-[#00a884]/10 text-[#00a884] dark:text-[#25d366]">
+                          <UserCheck className="w-2.5 h-2.5" />
+                          {convo.assignedMemberName}
+                        </span>
+                      )}
                       {rowLabels.slice(0, 3).map((l) => (
                         <span
                           key={l.id}
@@ -1579,10 +1793,11 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                       </div>
 
                       {/* Tab: Info | Media | Dokumen | Tautan */}
-                      <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-secondary/60 p-1">
+                      <div className="mt-3 grid grid-cols-5 gap-1 rounded-lg bg-secondary/60 p-1">
                         {(
                           [
                             { id: "info", label: t("liveChat.tabInfo") },
+                            { id: "cs", label: t("liveChat.tabTeam") },
                             { id: "media", label: t("liveChat.tabMedia") },
                             { id: "documents", label: t("liveChat.tabDocuments") },
                             { id: "links", label: t("liveChat.tabLinks") },
@@ -1663,12 +1878,12 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                           )}
                           {activeConvo?.isPinned ? t("liveChat.unpin") : t("liveChat.pin")}
                         </Button>
-                        {statusFilter !== "done" ? (
+                        {statusFilter !== "resolved" ? (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-8 justify-start text-xs gap-2"
-                            onClick={() => changeStatus("done")}
+                            onClick={() => changeStatus("resolved")}
                           >
                             <CircleCheck className="w-3.5 h-3.5" />
                             {t("liveChat.markDone")}
@@ -1794,6 +2009,228 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
                           </div>
                         )}
                       </div>
+                      </>)}
+
+                      {infoTab === "cs" && activeConvo && (
+                      <>
+                      {/* Penugasan */}
+                      <div className="mt-4 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <UserCheck className="w-3 h-3" />
+                          {t("liveChat.assignTitle")}
+                        </p>
+                        <select
+                          value={activeConvo.assignedMemberId ?? ""}
+                          onChange={(e) =>
+                            assignConversation(e.target.value === "" ? null : Number(e.target.value))
+                          }
+                          disabled={isTeamViewer}
+                          className="mt-2 w-full h-8 px-2 rounded-md border border-border bg-card text-xs text-foreground focus:outline-none disabled:opacity-50"
+                        >
+                          <option value="">{t("liveChat.unassigned")}</option>
+                          {teamMembers
+                            .filter((m) => m.isActive !== false)
+                            .filter((m) => !isTeamAgent || m.id === user?.teamMemberId)
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                        </select>
+                        {activeConvo.assignedMemberName && activeConvo.assignedAt && (
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">
+                            {activeConvo.assignedMemberName} · {timeAgo(activeConvo.assignedAt, t)}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Status percakapan */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <CircleCheck className="w-3 h-3" />
+                          {t("liveChat.statusOpen")}
+                        </p>
+                        <div className="mt-2 grid grid-cols-3 gap-1.5">
+                          {(
+                            [
+                              { id: "open", label: t("liveChat.statusOpen") },
+                              { id: "pending", label: t("liveChat.statusPending") },
+                              { id: "resolved", label: t("liveChat.statusResolved") },
+                            ] as const
+                          ).map((s) => {
+                            const cur =
+                              activeConvo.status === "done" ? "resolved" : activeConvo.status;
+                            return (
+                              <Button
+                                key={s.id}
+                                variant={cur === s.id ? "default" : "outline"}
+                                size="sm"
+                                className="h-7 text-[11px] px-1"
+                                disabled={isTeamViewer}
+                                onClick={() => changeStatus(s.id)}
+                              >
+                                {s.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Waktu respons terukur */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" />
+                          {t("liveChat.firstResponse")}
+                        </p>
+                        <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                          {activeConvo.firstResponseSecs != null ? (
+                            <p>
+                              {t("liveChat.firstResponse")}:{" "}
+                              <span className="font-medium text-foreground">
+                                {formatDuration(activeConvo.firstResponseSecs, t)}
+                              </span>
+                            </p>
+                          ) : activeConvo.firstInboundAt ? (
+                            <p>
+                              {t("liveChat.waitingReply")} ·{" "}
+                              {timeAgo(activeConvo.firstInboundAt, t)}
+                            </p>
+                          ) : (
+                            <p>{t("liveChat.noResponseYet")}</p>
+                          )}
+                          {activeConvo.resolutionSecs != null && (
+                            <p>
+                              {t("liveChat.resolutionTime")}:{" "}
+                              <span className="font-medium text-foreground">
+                                {formatDuration(activeConvo.resolutionSecs, t)}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Catatan internal */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <StickyNote className="w-3 h-3" />
+                          {t("liveChat.internalNotes")}
+                        </p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {t("liveChat.internalNotesHint")}
+                        </p>
+                        {csLoading ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">{t("liveChat.loadingMedia")}</p>
+                        ) : notes.length === 0 ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">{t("liveChat.noNotes")}</p>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            {notes.map((n) => (
+                              <div key={n.id} className="rounded-md border border-border bg-secondary/40 p-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-[11px] font-medium text-foreground break-words">
+                                    {n.authorName}
+                                  </p>
+                                  {!isTeamViewer &&
+                                    (!isTeamAgent || n.authorMemberId === user?.teamMemberId) && (
+                                      <button
+                                        onClick={() => deleteNote(n.id)}
+                                        className="text-muted-foreground hover:text-red-600 shrink-0"
+                                        title={t("common.delete")}
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground break-words whitespace-pre-wrap">
+                                  {n.content}
+                                </p>
+                                <p className="mt-1 text-[10px] text-muted-foreground">
+                                  {timeAgo(n.createdAt, t)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!isTeamViewer && (
+                          <div className="mt-2 space-y-2">
+                            <Input
+                              className="h-8 text-xs"
+                              placeholder={t("liveChat.notePlaceholder")}
+                              value={noteInput}
+                              onChange={(e) => setNoteInput(e.target.value)}
+                              maxLength={2000}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  saveNote();
+                                }
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              className="w-full h-8 text-xs gap-1.5"
+                              onClick={saveNote}
+                              disabled={savingNote || !noteInput.trim()}
+                            >
+                              <StickyNote className="w-3.5 h-3.5" />
+                              {savingNote ? t("liveChat.saving") : t("liveChat.addNote")}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Riwayat assign/status */}
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <History className="w-3 h-3" />
+                          {t("liveChat.activityTitle")}
+                        </p>
+                        {activity.length === 0 ? (
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">{t("liveChat.noActivity")}</p>
+                        ) : (
+                          <div className="mt-2 space-y-1.5">
+                            {activity.slice(0, 10).map((a) => (
+                              <div key={a.id} className="text-[11px] text-muted-foreground">
+                                <span className="font-medium text-foreground">{a.actorName}</span>{" "}
+                                {a.detail || a.action} · {timeAgo(a.createdAt, t)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Ringkasan tim (bukan agent) */}
+                      {!isTeamAgent && teamStats.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                            <Users className="w-3 h-3" />
+                            {t("liveChat.teamStats")}
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {teamStats.map((s) => (
+                              <div key={s.memberId ?? "unassigned"} className="rounded-md border border-border p-2">
+                                <p className="text-[11px] font-medium text-foreground">{s.memberName}</p>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                  {t("liveChat.assignedOpen")}: {s.assignedOpen} ·{" "}
+                                  {t("liveChat.pendingCount")}: {s.assignedPending} ·{" "}
+                                  {t("liveChat.resolvedCount")}: {s.resolved}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {t("liveChat.avgFirstResponse")}:{" "}
+                                  {s.avgFirstResponseSecs != null
+                                    ? formatDuration(Math.round(s.avgFirstResponseSecs), t)
+                                    : "—"}
+                                  {" · "}
+                                  {t("liveChat.avgResolution")}:{" "}
+                                  {s.avgResolutionSecs != null
+                                    ? formatDuration(Math.round(s.avgResolutionSecs), t)
+                                    : "—"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       </>)}
 
                       {/* Tab Media & Dokumen */}

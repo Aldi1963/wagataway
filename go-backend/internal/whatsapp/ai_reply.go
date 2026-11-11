@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (m *Manager) checkAIReply(sess *SessionState, senderJID, text string, isGroup bool) {
+func (m *Manager) checkAIReply(sess *SessionState, senderJID, senderPhone, text string, isGroup bool) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
@@ -43,6 +43,8 @@ func (m *Manager) checkAIReply(sess *SessionState, senderJID, text string, isGro
 				Msg("AI reply blocked: prompt injection detected")
 			if err := m.SendMessage(sess.DeviceID, senderJID, "text", service.InjectionRefusalMessage, ""); err != nil {
 				log.Error().Err(err).Msg("AI injection refusal send failed")
+			} else {
+				m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
 			}
 			return
 		}
@@ -70,6 +72,7 @@ func (m *Manager) checkAIReply(sess *SessionState, senderJID, text string, isGro
 				Uint("configID", cfg.ID).
 				Str("to", senderJID).
 				Msg("AI reply sent")
+			m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
 		}
 		return // hanya config pertama yang cocok yang membalas
 	}
@@ -98,8 +101,8 @@ func (m *Manager) askAIForUser(userID uint, cfg *models.AIReplyConfig, userMessa
 	if conn := service.ConnectionForUser(m.db, userID); conn != nil {
 		if svc := service.ServiceForConnection(conn); svc != nil {
 			resp, err := svc.Complete(service.ChatRequest{
-				Provider:   service.AIProvider(conn.Provider),
-				Model:      service.EffectiveModel(conn, ""),
+				Provider: service.AIProvider(conn.Provider),
+				Model:    service.EffectiveModel(conn, ""),
 				Messages: []service.ChatMessage{
 					{Role: "system", Content: systemPrompt},
 					{Role: "user", Content: guardedMsg},

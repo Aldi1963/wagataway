@@ -258,3 +258,18 @@ func GetUserID(c *gin.Context) uint {
 	id, _ := c.Get("userID")
 	return id.(uint)
 }
+
+// GetRole extracts the JWT role from gin context ("" bila tidak ada —
+// mis. request API key tanpa klaim peran eksplisit, diperlakukan sebagai pemilik).
+func GetRole(c *gin.Context) string {
+	role, _ := c.Get("role")
+	s, _ := role.(string)
+	return s
+}
+
+// IsTeamAgentRole: true hanya untuk anggota tim biasa ("team_member").
+// team_admin melihat semua seperti pemilik; team_viewer hanya-baca tapi
+// melihat semua (batas tulisnya ditegakkan di endpoint masing-masing).
+func IsTeamAgentRole(role string) bool {
+	return role == "team_member"
+}

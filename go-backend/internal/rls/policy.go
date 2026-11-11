@@ -12,8 +12,8 @@ import (
 var userScopedTables = []string{
 	"affiliates", "ai_connections", "ai_reply_configs", "api_keys", "auto_replies",
 	"blacklists", "bot_orders", "bot_products", "bulk_jobs",
-	"canned_responses", "chat_assignments", "chat_conversations",
-	"chat_inboxes", "chat_labels", "chat_reminders", "contact_groups", "contacts",
+	"canned_responses", "chat_activities", "chat_assignments", "chat_conversations",
+	"chat_inboxes", "chat_internal_notes", "chat_labels", "chat_reminders", "contact_groups", "contacts",
 	"cs_bots", "devices", "drip_campaigns", "files", "followups",
 	"group_rules", "integrations", "login_histories", "menu_bot_sessions", "menu_bots",
 	"message_reports", "message_templates", "messages", "notifications",

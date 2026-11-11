@@ -16,6 +16,10 @@ interface User {
   avatar?: string;
   twoFaEnabled?: boolean;
   notifyWa?: string;
+  // Konteks sub-akun tim (diisi /auth/me bila login sebagai anggota tim).
+  isTeam?: boolean;
+  teamRole?: string;
+  teamMemberId?: number;
 }
 
 interface AuthContextType {

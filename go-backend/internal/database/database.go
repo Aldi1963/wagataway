@@ -92,6 +92,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.File{},
 		&models.ChatLabel{},
 		&models.ChatAssignment{},
+		&models.ChatInternalNote{},
+		&models.ChatActivity{},
 		&models.MessageReport{},
 		&models.RecurringSchedule{},
 		&models.GroupRule{},

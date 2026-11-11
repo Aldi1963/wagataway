@@ -289,21 +289,38 @@ func handleGetMe(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"user": gin.H{
-				"id":           user.ID,
-				"name":         user.Name,
-				"email":        user.Email,
-				"phone":        user.Phone,
-				"notifyWa":     user.NotifyWA,
-				"role":         user.Role,
-				"plan":         user.Plan,
-				"avatar":       user.Avatar,
-				"twoFaEnabled": user.TwoFAEnabled,
-				"timezone":     user.Timezone,
-				"createdAt":    user.CreatedAt,
-			},
-		})
+		// Bila login sebagai sub-akun tim, sertakan konteks tim agar frontend
+		// bisa membedakan pemilik vs anggota (role JWT saja tidak cukup —
+		// /me sebelumnya selalu mengembalikan data pemilik).
+		resp := gin.H{
+			"id":           user.ID,
+			"name":         user.Name,
+			"email":        user.Email,
+			"phone":        user.Phone,
+			"notifyWa":     user.NotifyWA,
+			"role":         user.Role,
+			"plan":         user.Plan,
+			"avatar":       user.Avatar,
+			"twoFaEnabled": user.TwoFAEnabled,
+			"timezone":     user.Timezone,
+			"createdAt":    user.CreatedAt,
+		}
+		if jti := currentJTI(c); jti != "" {
+			var s models.Session
+			if err := db.Where("jti = ? AND revoked_at IS NULL", jti).First(&s).Error; err == nil && s.TeamMemberID != nil {
+				var m models.TeamMember
+				if err := db.Where("id = ? AND owner_id = ?", *s.TeamMemberID, userID).First(&m).Error; err == nil {
+					resp["isTeam"] = true
+					resp["teamRole"] = m.Role
+					resp["teamMemberId"] = m.ID
+					resp["name"] = m.Name
+					resp["email"] = m.Email
+					resp["role"] = "team_" + m.Role
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"user": resp})
 	}
 }
 

@@ -71,6 +71,8 @@ func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) 
 		chat.POST("/presence/subscribe", subscribePresence(db, wm))
 		chat.GET("/presence", getPresenceState(db, wm))
 	}
+	// CS multi-agent: assign, catatan internal, aktivitas, statistik tim.
+	registerCSMultiAgentRoutes(rg, db)
 }
 
 func listConversations(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
@@ -92,15 +94,42 @@ func listConversations(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			query = query.Where("device_id = ?", deviceID)
 		}
 
-		var convos []models.ChatConversation
-		// Filter status: open (default), done, archived, all.
-		// Urutan: disematkan dulu, lalu aktivitas terakhir.
-		switch c.DefaultQuery("status", "open") {
-		case "all":
-		case "done", "archived":
-			query = query.Where("status = ?", c.Query("status"))
+		// CS multi-agent: agent hanya melihat percakapannya + yang belum di-assign.
+		tc := resolveTeamContext(c, db, userID)
+		query = scopeConversationsForTeam(query, tc)
+
+		// Filter assignee: "unassigned" | "me" | id anggota tim.
+		switch c.Query("assignedTo") {
+		case "":
+		case "unassigned":
+			query = query.Where("assigned_member_id IS NULL")
+		case "me":
+			if tc.memberID != nil {
+				query = query.Where("assigned_member_id = ?", *tc.memberID)
+			} else {
+				query = query.Where("assigned_member_id IS NULL")
+			}
 		default:
-			query = query.Where("status = ?", "open")
+			if memberID, err := strconv.ParseUint(c.Query("assignedTo"), 10, 32); err == nil {
+				query = query.Where("assigned_member_id = ?", memberID)
+			}
+		}
+		// Filter label: percakapan yang punya assignment label tersebut.
+		if labelID := c.Query("labelId"); labelID != "" {
+			query = query.Where("phone IN (SELECT chat_j_id FROM chat_assignments WHERE user_id = ? AND label_id = ?)", userID, labelID)
+		}
+
+		var convos []models.ChatConversation
+		// Filter status: open (default = antrean aktif: open+pending),
+		// pending, resolved (termasuk done lama), done, archived, all.
+		// Urutan: disematkan dulu, lalu aktivitas terakhir.
+		statuses, ok := statusFilterClause(c.DefaultQuery("status", "open"))
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Status tidak dikenal"})
+			return
+		}
+		if len(statuses) > 0 {
+			query = query.Where("status IN ?", statuses)
 		}
 		query.Order("is_pinned DESC, last_activity DESC").Limit(100).Find(&convos)
 
@@ -198,6 +227,18 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 		}
 
+		// CS multi-agent: agent tidak boleh membalas percakapan yang
+		// di-assign ke anggota tim lain.
+		if tc := resolveTeamContext(c, db, userID); middleware.IsTeamAgentRole(tc.role) {
+			var conv models.ChatConversation
+			if err := udb.Where("user_id = ? AND device_id = ? AND phone = ?", userID, req.DeviceID, req.Phone).First(&conv).Error; err == nil {
+				if conv.AssignedMemberID != nil && (tc.memberID == nil || *conv.AssignedMemberID != *tc.memberID) {
+					c.JSON(http.StatusForbidden, gin.H{"message": "Percakapan ini di-assign ke anggota tim lain"})
+					return
+				}
+			}
+		}
+
 		// Send via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
 		to := resolveSenderJID(udb, userID, req.DeviceID, req.Phone)
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
@@ -252,6 +293,11 @@ func sendChatMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			udb.Model(&conv).Updates(map[string]interface{}{
 				"last_message": truncateStr(lastMsg, 200), "last_message_type": req.Type, "last_activity": now,
 			})
+		}
+
+		// Waktu respons: balasan pertama CS menutup pengukuran FRT episode ini.
+		if wm != nil {
+			wm.RecordFirstResponse(userID, req.DeviceID, req.Phone)
 		}
 
 		// Broadcast via SSE
@@ -426,6 +472,18 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
+		// CS multi-agent: agent tidak boleh membalas percakapan yang
+		// di-assign ke anggota tim lain.
+		if tc := resolveTeamContext(c, db, userID); middleware.IsTeamAgentRole(tc.role) {
+			var conv models.ChatConversation
+			if err := udb.Where("user_id = ? AND device_id = ? AND phone = ?", userID, req.DeviceID, req.Phone).First(&conv).Error; err == nil {
+				if conv.AssignedMemberID != nil && (tc.memberID == nil || *conv.AssignedMemberID != *tc.memberID) {
+					c.JSON(http.StatusForbidden, gin.H{"message": "Percakapan ini di-assign ke anggota tim lain"})
+					return
+				}
+			}
+		}
+
 		// Send AI response via WhatsApp — resolve JID lengkap dulu (anti "no LID found")
 		to := resolveSenderJID(udb, userID, req.DeviceID, req.Phone)
 		// Kuota pesan bulanan (Fitur 3): tolak 429 bila habis.
@@ -447,6 +505,11 @@ func aiReplyMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			Content: aiResp.Content, Type: "text", Direction: "out", IsRead: true,
 		}
 		udb.Create(&msg)
+
+		// Balasan AI juga menutup pengukuran FRT episode ini.
+		if wm != nil {
+			wm.RecordFirstResponse(userID, req.DeviceID, req.Phone)
+		}
 
 		// Broadcast via SSE
 		realtime.DefaultHub.SendToUser(userID, realtime.Event{
@@ -540,11 +603,15 @@ func setConversationPin(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// setConversationStatus mengubah status percakapan: open, done, archived.
+// setConversationStatus mengubah status percakapan: open, pending,
+// resolved, done (kompat lama), archived. Resolved menutup percakapan dari
+// antrean aktif dan mencatat waktu penyelesaian; dibuka lagi (open/pending)
+// menghapus jejak penyelesaian itu. Perubahan dicatat di aktivitas.
 func setConversationStatus(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		udb := rls.Scoped(db, userID)
+		tc := resolveTeamContext(c, db, userID)
 		phone := c.Param("phone")
 		var req struct {
 			Status string `json:"status" binding:"required"`
@@ -553,19 +620,47 @@ func setConversationStatus(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Status wajib diisi"})
 			return
 		}
-		switch req.Status {
-		case "open", "done", "archived":
-		default:
+		if !isValidConversationStatus(req.Status) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Status tidak dikenal"})
 			return
 		}
-		r := udb.Model(&models.ChatConversation{}).
-			Where("user_id = ? AND phone = ?", userID, phone).
-			Update("status", req.Status)
-		if r.Error != nil {
+		if !tc.canWrite() {
+			c.JSON(http.StatusForbidden, gin.H{"message": "Peran Anda hanya bisa melihat"})
+			return
+		}
+		var conv models.ChatConversation
+		q := udb.Where("user_id = ? AND phone = ?", userID, phone)
+		q = scopeConversationsForTeam(q, tc)
+		if err := q.First(&conv).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Percakapan tidak ditemukan"})
+			return
+		}
+		now := time.Now()
+		updates := map[string]interface{}{"status": req.Status}
+		switch req.Status {
+		case "resolved", "done":
+			updates["resolved_at"] = now
+			since := conv.CreatedAt
+			if conv.FirstInboundAt != nil {
+				since = *conv.FirstInboundAt
+			}
+			secs := int(now.Sub(since).Seconds())
+			if secs < 0 {
+				secs = 0
+			}
+			updates["resolution_secs"] = secs
+		case "open", "pending":
+			// GORM Updates(map) melewati nilai nil untuk *time.Time —
+			// pakai Expr("NULL") agar jejak penyelesaian benar-benar terhapus.
+			updates["resolved_at"] = gorm.Expr("NULL")
+			updates["resolution_secs"] = gorm.Expr("NULL")
+		}
+		if err := udb.Model(&conv).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
 			return
 		}
+		recordChatActivity(udb, tc, userID, conv.DeviceID, phone, "status_changed",
+			"Status "+conv.Status+" → "+req.Status)
 		c.JSON(http.StatusOK, gin.H{"message": "OK", "status": req.Status})
 	}
 }
@@ -724,6 +819,11 @@ func ProcessIncomingForAI(db *gorm.DB, wm *whatsapp.Manager, userID, deviceID ui
 		Content: resp.Content, Type: "text", Direction: "out", IsRead: true,
 	}
 	db.Create(&msg)
+
+	// Balasan otomatis CS bot juga menutup pengukuran FRT episode ini.
+	if liveChatSvc.WM != nil {
+		liveChatSvc.WM.RecordFirstResponse(userID, deviceID, phone)
+	}
 
 	// Broadcast
 	realtime.DefaultHub.SendToUser(userID, realtime.Event{

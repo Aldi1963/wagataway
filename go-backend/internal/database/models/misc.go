@@ -205,11 +205,28 @@ type ChatConversation struct {
 	LastMessage     string    `gorm:"type:text" json:"lastMessage"`
 	LastMessageType string    `gorm:"size:20;default:text" json:"lastMessageType"` // text,image,video,audio,document,sticker
 	IsPinned        bool      `gorm:"default:false" json:"isPinned"`
-	Status          string    `gorm:"size:20;default:open" json:"status"` // open,done,archived
+	Status          string    `gorm:"size:20;default:open" json:"status"` // open,pending,resolved,done,archived
 	UnreadCount     int       `gorm:"default:0" json:"unreadCount"`
 	LastActivity    time.Time `json:"lastActivity"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+
+	// ── CS multi-agent ───────────────────────────────────────────────────
+	// Penugasan: percakapan di-assign ke satu anggota tim (team_members).
+	// AssignedMemberName didenormalisasi agar daftar percakapan tidak perlu join.
+	AssignedMemberID   *uint      `gorm:"index" json:"assignedMemberId,omitempty"`
+	AssignedMemberName string     `gorm:"size:255" json:"assignedMemberName,omitempty"`
+	AssignedAt         *time.Time `json:"assignedAt,omitempty"`
+	// Waktu respons terukur: FirstInboundAt = pesan masuk pertama yang belum
+	// dibalas; FirstResponseAt + FirstResponseSecs = balasan pertama CS
+	// (durasi detik, dipertahankan meski percakapan dibuka lagi).
+	// ResolvedAt + ResolutionSecs = waktu penyelesaian (dari FirstInboundAt
+	// bila ada, bila tidak dari CreatedAt).
+	FirstInboundAt    *time.Time `json:"firstInboundAt,omitempty"`
+	FirstResponseAt   *time.Time `json:"firstResponseAt,omitempty"`
+	FirstResponseSecs *int       `json:"firstResponseSecs,omitempty"`
+	ResolvedAt        *time.Time `json:"resolvedAt,omitempty"`
+	ResolutionSecs    *int       `json:"resolutionSecs,omitempty"`
 }
 
 // ── Pengingat follow-up chat ─────────────────────────────────────────────────
