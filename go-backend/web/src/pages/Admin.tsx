@@ -83,6 +83,7 @@ interface Voucher {
   discount: number;
   maxUses: number;
   usedCount: number;
+  newUsersOnly?: boolean;
   isActive: boolean;
   expiresAt?: string | null;
 }
@@ -1083,6 +1084,7 @@ function VouchersTab() {
   const [duration, setDuration] = useState("7");
   const [discount, setDiscount] = useState("0");
   const [maxUses, setMaxUses] = useState("100");
+  const [newUsersOnly, setNewUsersOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Voucher | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -1113,6 +1115,7 @@ function VouchersTab() {
     setDuration("7");
     setDiscount("0");
     setMaxUses("100");
+    setNewUsersOnly(false);
   };
 
   const handleAdd = async () => {
@@ -1132,6 +1135,7 @@ function VouchersTab() {
         duration: Number(duration) || 0,
         discount: Number(discount) || 0,
         max_uses: Number(maxUses) || 1,
+        newUsersOnly,
       };
       if (type === "plan" && planId.trim()) body.plan_id = Number(planId);
       await apiPost("/admin/vouchers", body);
@@ -1201,6 +1205,11 @@ function VouchersTab() {
                     <td className="p-3 font-mono font-semibold text-foreground">{v.code}</td>
                     <td className="p-3">
                       <Badge variant="outline">{typeLabel(v.type)}</Badge>
+                      {v.newUsersOnly && (
+                        <Badge variant="outline" className="ml-1 border-sky-500/30 text-sky-600">
+                          {t("admin.voucherNewUsersBadge")}
+                        </Badge>
+                      )}
                     </td>
                     <td className="p-3 text-muted-foreground whitespace-nowrap">{t("admin.daysCount").replace("{count}", String(v.duration))}</td>
                     <td className="p-3 text-muted-foreground">{t("admin.discountPct").replace("{pct}", String(v.discount))}</td>
@@ -1260,6 +1269,13 @@ function VouchersTab() {
                 <Input type="number" min="1" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
               </Field>
             </div>
+            <label className="flex items-start gap-2 text-sm text-foreground cursor-pointer">
+              <input type="checkbox" checked={newUsersOnly} onChange={(e) => setNewUsersOnly(e.target.checked)} className="w-4 h-4 accent-primary mt-0.5" />
+              <span>
+                {t("admin.voucherNewUsersOnly")}
+                <span className="block text-xs text-muted-foreground">{t("admin.voucherNewUsersOnlyHint")}</span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>
                 {t("admin.cancel")}

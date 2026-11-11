@@ -202,3 +202,75 @@ func TestGraceDailyUsageCounted(t *testing.T) {
 		t.Errorf("GraceUsed = %d, want 2", st.GraceUsed)
 	}
 }
+
+// TestHasActiveSubscription: syarat voucher khusus pengguna baru — aktif
+// hanya bila user punya langganan yang jendelanya sedang berjalan.
+func TestHasActiveSubscription(t *testing.T) {
+	db := testSubDB(t)
+
+	// Belum pernah berlangganan → tidak aktif.
+	uidNever := mkUser(t, db)
+	active, err := HasActiveSubscription(db, uidNever)
+	if err != nil {
+		t.Fatalf("HasActiveSubscription: %v", err)
+	}
+	if active {
+		t.Error("tanpa riwayat langganan harus false")
+	}
+
+	// Langganan aktif (berakhir besok) → aktif.
+	uidActive := mkUser(t, db)
+	mkSub(t, db, uidActive, 24*time.Hour, false)
+	active, err = HasActiveSubscription(db, uidActive)
+	if err != nil {
+		t.Fatalf("HasActiveSubscription: %v", err)
+	}
+	if !active {
+		t.Error("langganan aktif harus true")
+	}
+
+	// Langganan habis 10 hari lalu (expired) → tidak aktif.
+	uidExpired := mkUser(t, db)
+	mkSub(t, db, uidExpired, -10*24*time.Hour, false)
+	active, err = HasActiveSubscription(db, uidExpired)
+	if err != nil {
+		t.Fatalf("HasActiveSubscription: %v", err)
+	}
+	if active {
+		t.Error("langganan yang sudah habis harus false")
+	}
+
+	// Masa tenggang (expired 1 hari lalu, masih grace) → langganan sudah
+	// habis, tidak aktif.
+	uidGrace := mkUser(t, db)
+	mkSub(t, db, uidGrace, -24*time.Hour, false)
+	active, err = HasActiveSubscription(db, uidGrace)
+	if err != nil {
+		t.Fatalf("HasActiveSubscription: %v", err)
+	}
+	if active {
+		t.Error("masa tenggang (grace) harus false — langganan sudah habis")
+	}
+
+	// Hanya langganan terjadwal di masa depan (mengantre, jendela belum
+	// mulai) → tidak ada langganan aktif saat ini.
+	uidQueued := mkUser(t, db)
+	now := time.Now()
+	queued := models.Subscription{
+		UserID:    uidQueued,
+		PlanID:    1,
+		Status:    "scheduled",
+		StartDate: now.Add(24 * time.Hour),
+		EndDate:   now.Add(31 * 24 * time.Hour),
+	}
+	if err := db.Create(&queued).Error; err != nil {
+		t.Fatalf("seed queued subscription: %v", err)
+	}
+	active, err = HasActiveSubscription(db, uidQueued)
+	if err != nil {
+		t.Fatalf("HasActiveSubscription: %v", err)
+	}
+	if active {
+		t.Error("langganan terjadwal di masa depan harus false")
+	}
+}
