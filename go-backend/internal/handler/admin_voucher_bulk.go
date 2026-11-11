@@ -74,10 +74,13 @@ func validateBulkVoucherRequest(db *gorm.DB, req *bulkVoucherRequest) string {
 	if req.Type == "" {
 		req.Type = "trial"
 	}
+	// Tipe hanya trial dan plan — sama seperti create satuan + update;
+	// "discount" sudah dihapus dari admin dan tidak boleh dibuat lagi,
+	// termasuk lewat generate massal.
 	switch req.Type {
-	case "trial", "discount", "plan":
+	case "trial", "plan":
 	default:
-		return "Tipe voucher tidak valid (trial, discount, atau plan)"
+		return "Tipe voucher tidak valid (trial atau plan)"
 	}
 	if req.Type == "plan" && req.PlanID == nil {
 		return "Pilih paket dulu"

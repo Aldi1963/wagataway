@@ -389,3 +389,40 @@ func TestAdminCreateVoucherValidTypes(t *testing.T) {
 		t.Fatalf("tipe plan: status = %d, mau 201", status)
 	}
 }
+
+// Tipe plan wajib memilih paket — sama seperti bulk + update: tanpa
+// plan_id ditolak 400 "Pilih paket dulu"; plan_id yang tidak ada ditolak
+// 400 "Paket tidak ditemukan". Tanpa validasi ini voucher plan tanpa
+// paket bisa dibuat (kasus voucher id 1 di DB live: plan_id NULL).
+func TestAdminCreateVoucherPlanRequiresPackage(t *testing.T) {
+	db := auditTestDB(t)
+	seedVoucherCreatePlan(t, db)
+	code := "UJI-PLAN-WAJIB"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, res := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "plan", "duration": 30, "max_uses": 10,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("plan tanpa plan_id: status = %d, mau 400 — body: %v", status, res)
+	}
+	if res["message"] != "Pilih paket dulu" {
+		t.Errorf("message = %v, mau \"Pilih paket dulu\"", res["message"])
+	}
+	status, res = callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "plan", "plan_id": 999999, "duration": 30, "max_uses": 10,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("plan_id tidak ada: status = %d, mau 400 — body: %v", status, res)
+	}
+	if res["message"] != "Paket tidak ditemukan" {
+		t.Errorf("message = %v, mau \"Paket tidak ditemukan\"", res["message"])
+	}
+	var n int64
+	db.Model(&models.Voucher{}).Where("code = ?", code).Count(&n)
+	if n != 0 {
+		t.Errorf("voucher di DB = %d, mau 0", n)
+	}
+}

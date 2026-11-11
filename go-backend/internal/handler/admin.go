@@ -652,6 +652,20 @@ func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Tipe voucher tidak valid"})
 			return
 		}
+		// Tipe plan wajib memilih paket — sama seperti bulk + update;
+		// tanpa ini voucher plan tanpa paket bisa dibuat (kasus voucher
+		// id 1 di DB live: plan_id NULL).
+		if req.Type == "plan" {
+			if req.PlanID == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Pilih paket dulu"})
+				return
+			}
+			var plan models.Plan
+			if err := db.First(&plan, *req.PlanID).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Paket tidak ditemukan"})
+				return
+			}
+		}
 		// Jendela berlaku: bila keduanya diisi, berakhir harus setelah mulai.
 		if req.StartsAt != nil && req.EndsAt != nil && !req.EndsAt.After(*req.StartsAt) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal berakhir harus setelah tanggal mulai"})

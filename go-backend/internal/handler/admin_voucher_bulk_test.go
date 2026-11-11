@@ -228,3 +228,29 @@ func TestBulkCreateVouchersZeroDuration(t *testing.T) {
 		}
 	}
 }
+
+// Tipe discount di bulk ditolak — sama seperti create satuan + update;
+// "discount" sudah dihapus dari admin dan tidak boleh dibuat lagi,
+// termasuk lewat generate massal. Request ditolak utuh (400), tidak ada
+// voucher yang dibuat.
+func TestBulkCreateVouchersDiscountDitolak(t *testing.T) {
+	db := auditTestDB(t)
+	bulkTestSetup(t, db, "BULKDISC")
+	defer bulkTestSetup(t, db, "BULKDISC")
+
+	r := bulkTestRouter(db)
+	body := bulkTestBody("BULKDISC", 3)
+	body["type"] = "discount"
+	code, res := bulkTestPost(t, r, body)
+	if code != http.StatusBadRequest {
+		t.Fatalf("status = %d, mau 400 — body: %v", code, res)
+	}
+	if res["message"] == nil || res["message"] == "" {
+		t.Errorf("respons tanpa pesan error yang jelas: %v", res)
+	}
+	var n int64
+	db.Model(&models.Voucher{}).Where("code LIKE ?", "BULKDISC-%").Count(&n)
+	if n != 0 {
+		t.Errorf("voucher di DB = %d, mau 0 (request ditolak utuh)", n)
+	}
+}
