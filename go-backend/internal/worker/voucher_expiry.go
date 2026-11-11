@@ -47,17 +47,22 @@ func IsVoucherExhausted(v models.Voucher) bool {
 	return VoucherUsageRatio(v) >= 1
 }
 
-// IsVoucherExpired: ExpiresAt sudah lewat (nil = tanpa batas waktu).
+// IsVoucherExpired: ExpiresAt sudah lewat ATAU jendela berlaku sudah
+// berakhir (EndsAt lewat). Nil di kedua sisi = tanpa batas waktu.
 func IsVoucherExpired(v models.Voucher, now time.Time) bool {
-	return v.ExpiresAt != nil && !v.ExpiresAt.After(now)
+	if v.ExpiresAt != nil && !v.ExpiresAt.After(now) {
+		return true
+	}
+	return v.EndsAt != nil && !v.EndsAt.After(now)
 }
 
 // deactivateExpiredVouchers menonaktifkan voucher aktif yang ExpiresAt-nya
-// sudah lewat. Mengembalikan jumlah baris yang dinonaktifkan. Idempoten:
+// sudah lewat ATAU jendela berlakunya (EndsAt) sudah berakhir.
+// Mengembalikan jumlah baris yang dinonaktifkan. Idempoten:
 // pemanggilan ulang tanpa voucher kedaluwarsa baru mengembalikan 0.
 func deactivateExpiredVouchers(db *gorm.DB, now time.Time) (int64, error) {
 	res := db.Model(&models.Voucher{}).
-		Where("is_active = ? AND expires_at IS NOT NULL AND expires_at <= ?", true, now).
+		Where("is_active = ? AND ((expires_at IS NOT NULL AND expires_at <= ?) OR (ends_at IS NOT NULL AND ends_at <= ?))", true, now, now).
 		Update("is_active", false)
 	if res.Error != nil {
 		return 0, res.Error

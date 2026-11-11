@@ -9,9 +9,11 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/drip"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -150,6 +152,18 @@ func CreateOrder(db *gorm.DB, userID uint, buyerPhone, buyerName, notes string, 
 	if err != nil {
 		return nil, err
 	}
+	// Drip berbasis aksi: order baru dibuat -> pemicu order_created.
+	// Best-effort (gagal diam-diam) agar drip tidak menggagalkan order.
+	// deviceID=0: order bersifat per user, jadi semua device yang punya
+	// campaign order_created cocok ikut memicu (pola yang sama seperti
+	// pemicu tag_added di chat_labels.go).
+	if order != nil {
+		productID := ""
+		if len(order.Items) > 0 {
+			productID = strconv.FormatUint(uint64(order.Items[0].ProductID), 10)
+		}
+		_, _ = drip.FireEvent(db, userID, 0, drip.TriggerOrderCreated, buyerPhone, order.OrderNumber, map[string]string{"productId": productID})
+	}
 	return order, nil
 }
 
@@ -188,6 +202,16 @@ func TransitionOrder(db *gorm.DB, userID uint, orderID uint, to string) (*models
 	})
 	if err != nil {
 		return nil, err
+	}
+	// Drip berbasis aksi: order dikonfirmasi (dianggap lunas, lihat
+	// komentar TriggerOrderPaid di models/drip.go) -> pemicu order_paid.
+	// Best-effort; deviceID=0 seperti order_created di atas.
+	if to == StatusConfirmed && order != nil {
+		productID := ""
+		if len(order.Items) > 0 {
+			productID = strconv.FormatUint(uint64(order.Items[0].ProductID), 10)
+		}
+		_, _ = drip.FireEvent(db, userID, 0, drip.TriggerOrderPaid, order.BuyerPhone, order.OrderNumber, map[string]string{"productId": productID})
 	}
 	return order, nil
 }

@@ -1420,7 +1420,9 @@ function VouchersTab() {
   // dianggap hampir habis; ExpiresAt yang lewat berarti kedaluwarsa
   // (job per jam + lazy-expiry di GET /admin/vouchers menonaktifkannya).
   const usageRatio = (v: Voucher) => (v.maxUses > 0 ? v.usedCount / v.maxUses : 0);
-  const isExpired = (v: Voucher) => !!v.expiresAt && new Date(v.expiresAt).getTime() <= Date.now();
+  const isExpired = (v: Voucher) =>
+    (!!v.expiresAt && new Date(v.expiresAt).getTime() <= Date.now()) ||
+    (!!v.endsAt && new Date(v.endsAt).getTime() <= Date.now());
   const isNearlyUsed = (v: Voucher) => {
     const r = usageRatio(v);
     return r >= 0.9 && r < 1;
