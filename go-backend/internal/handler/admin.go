@@ -293,10 +293,57 @@ func adminListVouchers(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// voucherSnakeKeys memetakan kunci snake_case ke kunci camelCase tag JSON
+// model Voucher. Form admin Tambah Voucher mengirim plan_id/max_uses
+// (snake_case) — lihat Admin.tsx handleAdd — sementara encoding/json hanya
+// mengenali tag camelCase model, sehingga sebelum perbaikan ini plan_id dan
+// max_uses diam-diam hilang (voucher id 1 tersimpan plan_id NULL +
+// max_uses 1 padahal form mengirim 100). Endpoint bulk sudah memakai
+// snake_case lewat struct-nya sendiri; helper ini membuat create satuan
+// konsisten dengannya. used_count sengaja tidak ada di sini: counter
+// pemakaian dikelola server dan tidak boleh diisi dari create.
+var voucherSnakeKeys = map[string]string{
+	"plan_id":        "planId",
+	"max_uses":       "maxUses",
+	"new_users_only": "newUsersOnly",
+	"is_active":      "isActive",
+	"expires_at":     "expiresAt",
+	"starts_at":      "startsAt",
+	"ends_at":        "endsAt",
+	"min_plan_id":    "minPlanId",
+}
+
+// bindVoucherJSON mengikat body JSON ke model Voucher dengan menerima kunci
+// camelCase (tag JSON model) MAUPUN snake_case (form admin). Bila kedua
+// ejaan dikirim, camelCase menang — dukungan camelCase lama tidak berubah.
+func bindVoucherJSON(c *gin.Context, v *models.Voucher) error {
+	body, err := c.GetRawData()
+	if err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	for snake, camel := range voucherSnakeKeys {
+		if _, ok := raw[camel]; ok {
+			continue
+		}
+		if val, ok := raw[snake]; ok {
+			raw[camel] = val
+		}
+	}
+	norm, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(norm, v)
+}
+
 func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.Voucher
-		if err := c.ShouldBindJSON(&req); err != nil {
+		if err := bindVoucherJSON(c, &req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
@@ -341,10 +388,11 @@ func adminDeleteVoucher(db *gorm.DB) gin.HandlerFunc {
 //   - Kode baru harus unik (unique index menjadi penjaga terakhir bila dua
 //     admin berlomba mengganti ke kode yang sama).
 //
-// Frontend mengirim key camelCase (key snake_case tidak ter-bind ke model
-// Go — lihat catatan bug binding di adminCreateVoucher). Key yang tidak
-// dikenal (mis. discount, usedCount) diabaikan: discount TIDAK bisa
-// dihidupkan lagi lewat endpoint ini dan usedCount tidak bisa diubah manual.
+// Frontend edit mengirim key camelCase; kunci snake_case (plan_id,
+// max_uses, is_active, expires_at) juga diterima dan dinormalisasi ke
+// camelCase (lihat voucherSnakeKeys). Key yang tidak dikenal (mis.
+// discount, usedCount) diabaikan: discount TIDAK bisa dihidupkan lagi
+// lewat endpoint ini dan usedCount tidak bisa diubah manual.
 func adminUpdateVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -386,6 +434,11 @@ func adminUpdateVoucher(db *gorm.DB) gin.HandlerFunc {
 		)
 		present := map[string]bool{}
 		for key, b := range raw {
+			// Terima juga ejaan snake_case — dinormalisasi ke kunci
+			// camelCase yang dipakai logika di bawah.
+			if camel, ok := voucherSnakeKeys[key]; ok {
+				key = camel
+			}
 			if string(b) == "null" {
 				present[key] = true
 				continue
