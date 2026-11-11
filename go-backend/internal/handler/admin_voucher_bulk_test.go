@@ -199,3 +199,32 @@ func TestBulkCreateVouchersPlanRequiresPackage(t *testing.T) {
 		t.Errorf("voucher di DB = %d, mau 0", n)
 	}
 }
+
+// TestBulkCreateVouchersZeroDuration: jebakan default: yang sama seperti
+// create satuan — Create(struct) mengganti duration=0 dengan default tag
+// model (7). Bulk sekarang dibuat lewat map, jadi duration=0 tersimpan 0.
+func TestBulkCreateVouchersZeroDuration(t *testing.T) {
+	db := auditTestDB(t)
+	bulkTestSetup(t, db, "BULKZERO")
+	defer bulkTestSetup(t, db, "BULKZERO")
+
+	r := bulkTestRouter(db)
+	body := bulkTestBody("BULKZERO", 2)
+	body["duration"] = 0
+	code, res := bulkTestPost(t, r, body)
+	if code != http.StatusCreated {
+		t.Fatalf("status = %d, mau %d — body: %v", code, http.StatusCreated, res)
+	}
+	var vs []models.Voucher
+	if err := db.Where("code LIKE ?", "BULKZERO-%").Find(&vs).Error; err != nil {
+		t.Fatalf("baca voucher: %v", err)
+	}
+	if len(vs) != 2 {
+		t.Fatalf("voucher di DB = %d, mau 2", len(vs))
+	}
+	for _, v := range vs {
+		if v.Duration != 0 {
+			t.Errorf("voucher %s: duration = %d, mau 0 (diganti default 7)", v.Code, v.Duration)
+		}
+	}
+}

@@ -177,3 +177,119 @@ func TestAdminUpdateVoucherSnakeCase(t *testing.T) {
 		t.Errorf("isActive = true, mau false (is_active tidak tersimpan)")
 	}
 }
+
+// Test create voucher duplikat (temuan error-handling): adminCreateVoucher
+// dulu mengabaikan error db.Create — kode duplikat tetap dibalas 201.
+// Sekarang bentrok dijawab 409 dengan pesan yang jelas.
+func TestAdminCreateVoucherDuplicate(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-DUP-001"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "trial", "duration": 7, "max_uses": 1,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create pertama: status = %d, mau 201", status)
+	}
+	status, res := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "trial", "duration": 7, "max_uses": 1,
+	})
+	if status != http.StatusConflict {
+		t.Fatalf("create duplikat: status = %d, mau 409 — body: %v", status, res)
+	}
+	if res["message"] != "Kode voucher sudah dipakai" {
+		t.Errorf("message = %v, mau 'Kode voucher sudah dipakai'", res["message"])
+	}
+	var n int64
+	db.Model(&models.Voucher{}).Where("code = ?", code).Count(&n)
+	if n != 1 {
+		t.Errorf("voucher di DB = %d, mau 1", n)
+	}
+}
+
+// Test create voucher dengan nilai nol (jebakan default:): karena memakai
+// Create(struct), voucher dengan is_active=false atau duration=0 diganti
+// nilai default tag model (true / 7). Sekarang dibuat lewat map — nilai
+// yang dikirim form tersimpan persis.
+func TestAdminCreateVoucherZeroValues(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-NOL-001"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "trial", "duration": 0, "is_active": false,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, mau 201", status)
+	}
+	var v models.Voucher
+	if err := db.Where("code = ?", code).First(&v).Error; err != nil {
+		t.Fatalf("baca voucher: %v", err)
+	}
+	if v.Duration != 0 {
+		t.Errorf("duration = %d, mau 0 (diganti default 7)", v.Duration)
+	}
+	if v.IsActive {
+		t.Errorf("isActive = true, mau false (diganti default true)")
+	}
+}
+
+// Test kode voucher dinormalisasi (huruf besar) seperti redeem + update:
+// kode huruf kecil tetap tersimpan huruf besar, dan duplikat beda casing
+// ditolak 409.
+func TestAdminCreateVoucherCodeNormalized(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-LOWER-001"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": "uji-lower-001", "type": "trial", "duration": 7,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, mau 201", status)
+	}
+	var v models.Voucher
+	if err := db.Where("code = ?", code).First(&v).Error; err != nil {
+		t.Fatalf("baca voucher: %v", err)
+	}
+	if v.Code != code {
+		t.Errorf("code = %q, mau %q (tidak dinormalisasi)", v.Code, code)
+	}
+	status, _ = callVoucherCreate(t, r, map[string]interface{}{
+		"code": "uji-lower-001", "type": "trial", "duration": 7,
+	})
+	if status != http.StatusConflict {
+		t.Fatalf("duplikat beda casing: status = %d, mau 409", status)
+	}
+}
+
+// Test usedCount tidak bisa diisi dari create: counter pemakaian dikelola
+// server — map create tidak pernah menulis kolom used_count.
+func TestAdminCreateVoucherUsedCountIgnored(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-USED-001"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "trial", "duration": 7, "usedCount": 5,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, mau 201", status)
+	}
+	var v models.Voucher
+	if err := db.Where("code = ?", code).First(&v).Error; err != nil {
+		t.Fatalf("baca voucher: %v", err)
+	}
+	if v.UsedCount != 0 {
+		t.Errorf("usedCount = %d, mau 0 (tidak boleh diisi dari create)", v.UsedCount)
+	}
+}

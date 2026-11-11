@@ -163,6 +163,50 @@ func adminCreateUser(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// userUpdateColumns memetakan setiap kunci body update user yang diizinkan
+// ke nama kolom DB-nya. Kunci camelCase (tag JSON model User) maupun
+// snake_case (nama kolom) diterima. Kunci lain (id, uuid, password,
+// createdAt, ...) dibuang: password tidak bisa diubah lewat endpoint ini,
+// dan field identitas/sistem tidak boleh diubah dari form admin.
+var userUpdateColumns = map[string]string{
+	"name":           "name",
+	"email":          "email",
+	"phone":          "phone",
+	"avatar":         "avatar",
+	"role":           "role",
+	"plan":           "plan",
+	"status":         "status",
+	"notifyWa":       "notify_wa",
+	"notify_wa":      "notify_wa",
+	"timezone":       "timezone",
+	"twoFaEnabled":   "two_fa_enabled",
+	"two_fa_enabled": "two_fa_enabled",
+}
+
+// normalizeUserUpdateMap mengubah body update user (map) menjadi map dengan
+// kunci nama kolom DB, siap untuk GORM Updates — pola yang sama dengan
+// normalizePlanUpdateMap. GORM memakai kunci map apa adanya sebagai nama
+// kolom, jadi kunci camelCase (notifyWa, twoFaEnabled) membuat UPDATE gagal
+// total ("no such column") dan error-nya dulu ditelan lalu dibalas 200 —
+// edit user jadi no-op diam-diam. Dua pass memastikan camelCase menang bila
+// kedua ejaan dikirim untuk satu kolom.
+func normalizeUserUpdateMap(req map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(req))
+	// Pass 1: kunci snake_case (sudah berupa nama kolom) + field satu kata.
+	for key, val := range req {
+		if col, ok := userUpdateColumns[key]; ok && key == col {
+			out[col] = val
+		}
+	}
+	// Pass 2: kunci camelCase menimpa — camelCase menang bila keduanya ada.
+	for key, val := range req {
+		if col, ok := userUpdateColumns[key]; ok && key != col {
+			out[col] = val
+		}
+	}
+	return out
+}
+
 func adminUpdateUser(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -172,12 +216,44 @@ func adminUpdateUser(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		var req map[string]interface{}
-		c.ShouldBindJSON(&req)
-		// Prevent changing password via this endpoint
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		// Password tidak bisa diubah lewat endpoint ini.
 		delete(req, "password")
-		db.Model(&user).Updates(req)
+		updates := normalizeUserUpdateMap(req)
+		if len(updates) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tidak ada perubahan yang valid"})
+			return
+		}
+		if role, ok := updates["role"].(string); ok && role != "admin" && role != "user" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Role tidak valid"})
+			return
+		}
+		if status, ok := updates["status"].(string); ok && status != "active" && status != "suspended" && status != "banned" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Status tidak valid"})
+			return
+		}
+		if err := db.Model(&user).Updates(updates).Error; err != nil {
+			// Email bentrok dengan user lain (unique index) dijawab 409
+			// yang jelas, bukan 500 generik.
+			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "UNIQUE constraint") {
+				c.JSON(http.StatusConflict, gin.H{"message": "Email sudah dipakai"})
+				return
+			}
+			log.Error().Err(err).Msg("Gagal mengubah pengguna")
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengubah pengguna"})
+			return
+		}
+		// Muat ulang agar respons berisi nilai terbaru (Updates dengan
+		// map tidak menyegarkan struct).
+		if err := db.First(&user, id).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca pengguna"})
+			return
+		}
 		logAdminAction(db, middleware.GetUserID(c), "update_user", "user",
-			strconv.FormatUint(id, 10), "Ubah: "+summarizeChanges(req))
+			strconv.FormatUint(id, 10), "Ubah: "+summarizeChanges(updates))
 		c.JSON(http.StatusOK, gin.H{"user": user, "message": "User diperbarui"})
 	}
 }
@@ -393,26 +469,63 @@ func readJSONBody(c *gin.Context) (map[string]json.RawMessage, error) {
 	return raw, nil
 }
 
-// bindJSONWithAliases mengikat body JSON ke struct target dengan menerima
-// kunci camelCase (tag JSON model) MAUPUN snake_case (form admin).
-func bindJSONWithAliases(c *gin.Context, v interface{}, snakeToCamel map[string]string) error {
-	raw, err := readJSONBody(c)
-	if err != nil {
-		return err
-	}
-	normalizeJSONKeys(raw, snakeToCamel)
-	norm, err := json.Marshal(raw)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(norm, v)
-}
-
 // bindVoucherJSON mengikat body JSON ke model Voucher dengan menerima kunci
 // camelCase (tag JSON model) MAUPUN snake_case (form admin). Bila kedua
 // ejaan dikirim, camelCase menang — dukungan camelCase lama tidak berubah.
-func bindVoucherJSON(c *gin.Context, v *models.Voucher) error {
-	return bindJSONWithAliases(c, v, voucherSnakeKeys)
+// Mengembalikan juga map kunci mentah (setelah normalisasi) agar pemanggil
+// tahu field mana yang benar-benar dikirim — perlu untuk Create(map) yang
+// menyimpan nilai nol eksplisit (is_active=false, duration=0) apa adanya.
+func bindVoucherJSON(c *gin.Context, v *models.Voucher) (map[string]json.RawMessage, error) {
+	raw, err := readJSONBody(c)
+	if err != nil {
+		return nil, err
+	}
+	normalizeJSONKeys(raw, voucherSnakeKeys)
+	norm, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(norm, v); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// voucherCreateMap membangun map kolom DB untuk Create(map) dari struct
+// Voucher yang sudah terikat, hanya untuk field yang dikirim di body
+// (kunci camelCase setelah normalisasi — lihat `present`). Nilai nol
+// eksplisit (is_active=false, duration=0) ikut tersimpan apa adanya;
+// field yang tidak dikirim memakai DEFAULT kolom di DB. Dipakai juga
+// bulkCreateVouchers dengan present berisi semua field yang ditulis.
+// used_count sengaja tidak ada di sini: counter pemakaian dikelola server
+// dan tidak boleh diisi dari create.
+func voucherCreateMap(req *models.Voucher, present map[string]bool) map[string]interface{} {
+	fields := []struct {
+		key string
+		col string
+		val interface{}
+	}{
+		{"code", "code", req.Code},
+		{"type", "type", req.Type},
+		{"planId", "plan_id", req.PlanID},
+		{"duration", "duration", req.Duration},
+		{"discount", "discount", req.Discount},
+		{"maxUses", "max_uses", req.MaxUses},
+		{"newUsersOnly", "new_users_only", req.NewUsersOnly},
+		{"isActive", "is_active", req.IsActive},
+		{"expiresAt", "expires_at", req.ExpiresAt},
+		{"startsAt", "starts_at", req.StartsAt},
+		{"endsAt", "ends_at", req.EndsAt},
+		{"minPlanId", "min_plan_id", req.MinPlanID},
+		{"source", "source", req.Source},
+	}
+	out := make(map[string]interface{}, len(fields))
+	for _, f := range fields {
+		if present[f.key] {
+			out[f.col] = f.val
+		}
+	}
+	return out
 }
 
 // Kunci snake_case yang dikirim form paket (Admin.tsx handleSave) beserta
@@ -518,8 +631,17 @@ func normalizePlanUpdateMap(req map[string]interface{}) map[string]interface{} {
 func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.Voucher
-		if err := bindVoucherJSON(c, &req); err != nil {
+		raw, err := bindVoucherJSON(c, &req)
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		// Kode dinormalisasi seperti redeem + update (huruf besar, tanpa
+		// spasi di ujung) agar voucher yang dibuat selalu bisa ditemukan
+		// saat redeem — redeem mencari kode dalam bentuk ini.
+		req.Code = strings.ToUpper(strings.TrimSpace(req.Code))
+		if req.Code == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Kode voucher wajib diisi"})
 			return
 		}
 		// Jendela berlaku: bila keduanya diisi, berakhir harus setelah mulai.
@@ -537,10 +659,48 @@ func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 		}
-		db.Create(&req)
+		// Kode harus unik — dicek dulu agar bentrok dijawab 409 yang jelas,
+		// bukan 201 palsu; unique index tetap menjadi penjaga terakhir bila
+		// dua admin berlomba membuat kode yang sama.
+		var n int64
+		if err := db.Model(&models.Voucher{}).Where("code = ?", req.Code).Count(&n).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat voucher"})
+			return
+		}
+		if n > 0 {
+			c.JSON(http.StatusConflict, gin.H{"message": "Kode voucher sudah dipakai"})
+			return
+		}
+		// Dibuat lewat map, bukan struct: GORM Create(struct) mengganti
+		// nilai nol dengan nilai `default:` pada tag (is_active=false jadi
+		// true, duration=0 jadi 7), sementara map menyimpan nilai persis
+		// seperti yang dikirim form. used_count tidak pernah ditulis dari
+		// create (counter dikelola server).
+		present := make(map[string]bool, len(raw))
+		for k := range raw {
+			present[k] = true
+		}
+		create := voucherCreateMap(&req, present)
+		now := time.Now().UTC()
+		create["created_at"] = now
+		create["updated_at"] = now
+		if err := db.Model(&models.Voucher{}).Create(create).Error; err != nil {
+			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "UNIQUE constraint") {
+				c.JSON(http.StatusConflict, gin.H{"message": "Kode voucher sudah dipakai"})
+				return
+			}
+			log.Error().Err(err).Msg("Gagal membuat voucher")
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat voucher"})
+			return
+		}
+		var created models.Voucher
+		if err := db.Where("code = ?", req.Code).First(&created).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca voucher"})
+			return
+		}
 		logAdminAction(db, middleware.GetUserID(c), "create_voucher", "voucher",
-			strconv.FormatUint(uint64(req.ID), 10), req.Code)
-		c.JSON(http.StatusCreated, gin.H{"voucher": req})
+			strconv.FormatUint(uint64(created.ID), 10), created.Code)
+		c.JSON(http.StatusCreated, gin.H{"voucher": created})
 	}
 }
 
@@ -906,7 +1066,11 @@ func adminSendNotification(db *gorm.DB) gin.HandlerFunc {
 			UserID: req.UserID, Type: req.Type,
 			Title: req.Title, Message: req.Message, Link: req.Link,
 		}
-		db.Create(&notif)
+		if err := db.Create(&notif).Error; err != nil {
+			log.Error().Err(err).Msg("Gagal mengirim notifikasi")
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengirim notifikasi"})
+			return
+		}
 		logAdminAction(db, middleware.GetUserID(c), "send_notification", "notification",
 			strconv.FormatUint(uint64(notif.ID), 10), req.Title)
 		c.JSON(http.StatusCreated, gin.H{"notification": notif, "message": "Notifikasi dikirim"})

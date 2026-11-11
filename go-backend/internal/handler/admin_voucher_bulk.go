@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
@@ -103,11 +104,20 @@ func validateBulkVoucherRequest(db *gorm.DB, req *bulkVoucherRequest) string {
 // satu per satu. Kode yang bentrok dengan kode lama (unique constraint Code)
 // dicatat sebagai gagal dan batch LANJUT ke nomor berikutnya — satu bentrok
 // tidak pernah membatalkan seluruh batch.
+//
+// Dibuat lewat map seperti create satuan: Create(struct) mengganti
+// duration=0 dengan nilai `default:` tag model (7), sementara map menyimpan
+// nilai persis seperti yang dikirim form.
 func bulkCreateVouchers(db *gorm.DB, req bulkVoucherRequest) bulkVoucherResult {
 	result := bulkVoucherResult{
 		Created: []models.Voucher{},
 		Failed:  []bulkVoucherFailure{},
 		Total:   req.Count,
+	}
+	// Semua field yang ditulis bulk dianggap dikirim.
+	present := map[string]bool{
+		"code": true, "type": true, "planId": true, "duration": true,
+		"discount": true, "maxUses": true, "isActive": true,
 	}
 	for i := 1; i <= req.Count; i++ {
 		code := fmt.Sprintf("%s-%03d", req.Prefix, i)
@@ -120,15 +130,24 @@ func bulkCreateVouchers(db *gorm.DB, req bulkVoucherRequest) bulkVoucherResult {
 			MaxUses:  req.MaxUses,
 			IsActive: true,
 		}
-		if err := db.Create(&v).Error; err != nil {
+		create := voucherCreateMap(&v, present)
+		now := time.Now().UTC()
+		create["created_at"] = now
+		create["updated_at"] = now
+		if err := db.Model(&models.Voucher{}).Create(create).Error; err != nil {
 			reason := "Gagal menyimpan voucher"
-			if strings.Contains(err.Error(), "duplicate key") {
+			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "UNIQUE constraint") {
 				reason = "Kode sudah ada"
 			}
 			result.Failed = append(result.Failed, bulkVoucherFailure{Code: code, Reason: reason})
 			continue
 		}
-		result.Created = append(result.Created, v)
+		var created models.Voucher
+		if err := db.Where("code = ?", code).First(&created).Error; err != nil {
+			result.Failed = append(result.Failed, bulkVoucherFailure{Code: code, Reason: "Gagal membaca voucher"})
+			continue
+		}
+		result.Created = append(result.Created, created)
 	}
 	result.CreatedCount = len(result.Created)
 	result.FailedCount = len(result.Failed)

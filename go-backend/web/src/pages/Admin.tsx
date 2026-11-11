@@ -953,9 +953,8 @@ function PackagesTab() {
         max_devices: Number(form.maxDevices) || 1,
         max_messages: Number(form.maxMessages) || 0,
         max_contacts: Number(form.maxContacts) || 0,
-        // Field baru pakai camelCase agar ter-bind ke model Go (tag json
-        // camelCase) saat membuat paket baru; update paket memakai map
-        // dan GORM memetakan nama field ke kolom.
+        // Backend menerima snake_case maupun camelCase untuk semua field
+        // paket (create + update dinormalisasi ke kolom DB di server).
         maxBulk: Number(form.maxBulk) || 0,
         maxAutoReply: Number(form.maxAutoReply) || 0,
         is_active: form.isActive,
@@ -1380,7 +1379,8 @@ function VouchersTab() {
     }
     setSaving(true);
     try {
-      // Key camelCase agar ter-bind ke model Go (snake_case tidak ter-bind).
+      // Backend menerima camelCase maupun snake_case untuk semua field
+      // voucher (create + update dinormalisasi di server).
       const body: Record<string, unknown> = {
         code: code.trim().toUpperCase(),
         type,
