@@ -85,6 +85,8 @@ interface Voucher {
   usedCount: number;
   isActive: boolean;
   expiresAt?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
 }
 
 interface Txn {
@@ -1083,6 +1085,8 @@ function VouchersTab() {
   const [duration, setDuration] = useState("7");
   const [discount, setDiscount] = useState("0");
   const [maxUses, setMaxUses] = useState("100");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Voucher | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -1113,6 +1117,8 @@ function VouchersTab() {
     setDuration("7");
     setDiscount("0");
     setMaxUses("100");
+    setStartsAt("");
+    setEndsAt("");
   };
 
   const handleAdd = async () => {
@@ -1122,6 +1128,10 @@ function VouchersTab() {
     }
     if (type === "plan" && !planId.trim()) {
       toast.error(t("admin.errVoucherPlan"));
+      return;
+    }
+    if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+      toast.error(t("admin.errVoucherSchedule"));
       return;
     }
     setSaving(true);
@@ -1134,6 +1144,10 @@ function VouchersTab() {
         max_uses: Number(maxUses) || 1,
       };
       if (type === "plan" && planId.trim()) body.plan_id = Number(planId);
+      // Kunci camelCase supaya ter-bind ke tag JSON model Voucher
+      // (encoding/json tidak mengenali snake_case seperti starts_at).
+      if (startsAt) body.startsAt = new Date(startsAt).toISOString();
+      if (endsAt) body.endsAt = new Date(endsAt).toISOString();
       await apiPost("/admin/vouchers", body);
       toast.success(t("admin.voucherCreated"));
       setShowForm(false);
@@ -1163,6 +1177,22 @@ function VouchersTab() {
 
   const typeLabel = (tv: string) => VOUCHER_TYPES.find((x) => x.value === tv)?.label || tv;
 
+  // Label jendela berlaku: "mulai – berakhir", sisi yang kosong jadi "…".
+  const scheduleLabel = (v: Voucher) => {
+    if (!v.startsAt && !v.endsAt) return "-";
+    const s = v.startsAt ? fmtDate(v.startsAt) : "…";
+    const e = v.endsAt ? fmtDate(v.endsAt) : "…";
+    return `${s} – ${e}`;
+  };
+
+  // Status jendela: di luar jendela voucher tidak bisa ditukar walau aktif.
+  const scheduleState = (v: Voucher) => {
+    const now = Date.now();
+    if (v.startsAt && new Date(v.startsAt).getTime() > now) return "upcoming";
+    if (v.endsAt && new Date(v.endsAt).getTime() < now) return "ended";
+    return null;
+  };
+
   const planOptions = [
     { value: "", label: t("admin.selectPackage") },
     ...plans.map((p) => ({ value: String(p.id), label: `${p.name} — ${fmtRp(p.price)}` })),
@@ -1182,7 +1212,7 @@ function VouchersTab() {
       {!loading && !error && (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[860px]">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="p-3 font-medium">{t("admin.colCode")}</th>
@@ -1191,6 +1221,7 @@ function VouchersTab() {
                   <th className="p-3 font-medium">{t("admin.colDiscount")}</th>
                   <th className="p-3 font-medium">{t("admin.colUsed")}</th>
                   <th className="p-3 font-medium">{t("admin.colExpires")}</th>
+                  <th className="p-3 font-medium">{t("admin.colSchedule")}</th>
                   <th className="p-3 font-medium">{t("admin.colStatus")}</th>
                   <th className="p-3 font-medium text-right">{t("admin.colActions")}</th>
                 </tr>
@@ -1208,8 +1239,13 @@ function VouchersTab() {
                       {fmtNum(v.usedCount)} / {fmtNum(v.maxUses)}
                     </td>
                     <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(v.expiresAt)}</td>
+                    <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{scheduleLabel(v)}</td>
                     <td className="p-3">
-                      {v.isActive ? (
+                      {scheduleState(v) === "upcoming" ? (
+                        <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20">{t("admin.voucherNotYetValid")}</Badge>
+                      ) : scheduleState(v) === "ended" ? (
+                        <Badge variant="outline">{t("admin.voucherScheduleEnded")}</Badge>
+                      ) : v.isActive ? (
                         <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{t("admin.statusActive")}</Badge>
                       ) : (
                         <Badge variant="outline">{t("admin.statusInactive")}</Badge>
@@ -1224,7 +1260,7 @@ function VouchersTab() {
                 ))}
                 {vouchers.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       {t("admin.noVouchers")}
                     </td>
                   </tr>
@@ -1258,6 +1294,14 @@ function VouchersTab() {
               </Field>
               <Field label={t("admin.maxUsesLabel")}>
                 <Input type="number" min="1" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("admin.voucherStartsAtLabel")}>
+                <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+              </Field>
+              <Field label={t("admin.voucherEndsAtLabel")}>
+                <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
               </Field>
             </div>
             <div className="flex justify-end gap-2">

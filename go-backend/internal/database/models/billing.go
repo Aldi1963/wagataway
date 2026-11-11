@@ -93,6 +93,12 @@ type Voucher struct {
 	UsedCount int        `gorm:"default:0" json:"usedCount"`
 	IsActive  bool       `gorm:"default:true" json:"isActive"`
 	ExpiresAt *time.Time `json:"expiresAt"`
+	// Jendela berlaku (Item 3): voucher hanya bisa ditukar bila sekarang
+	// berada di dalam [StartsAt, EndsAt]. Keduanya opsional — sisi yang
+	// kosong tidak membatasi. Berlaku DI SAMPING ExpiresAt + durasi hari,
+	// bukan menggantikannya.
+	StartsAt *time.Time `json:"startsAt"`
+	EndsAt   *time.Time `json:"endsAt"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 }
