@@ -26,6 +26,7 @@ const AutomationHub = lazy(() => import("@/pages/AutomationHub"));
 const ReportHub = lazy(() => import("@/pages/ReportHub"));
 const DeveloperHub = lazy(() => import("@/pages/DeveloperHub"));
 const LiveChatHub = lazy(() => import("@/pages/LiveChatHub"));
+const ChatBackup = lazy(() => import("@/pages/ChatBackup"));
 const FileManager = lazy(() => import("@/pages/FileManager"));
 const Links = lazy(() => import("@/pages/Links"));
 const Admin = lazy(() => import("@/pages/Admin"));
@@ -181,6 +182,9 @@ function AppRouter() {
         </Route>
         <Route path="/chat-labels">
           <ProtectedRoute><LiveChatHub /></ProtectedRoute>
+        </Route>
+        <Route path="/chat-backups">
+          <ProtectedRoute><ChatBackup /></ProtectedRoute>
         </Route>
         <Route path="/reports">
           <ProtectedRoute><ReportHub /></ProtectedRoute>
