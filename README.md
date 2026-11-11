@@ -4,8 +4,8 @@ Platform WhatsApp Gateway SaaS — kirim pesan otomatis, blast, auto-reply, live
 
 ## Rilis & Paket
 
-- **Rilis**: [github.com/Aldi1963/wblash/releases](https://github.com/Aldi1963/wblash/releases) — binary siap pakai per versi
-- **Paket**: [github.com/users/Aldi1963/packages?repo_name=wblash](https://github.com/users/Aldi1963/packages?repo_name=wblash) — paket terkait repositori ini
+- **Rilis**: [github.com/Aldi1963/wblash/releases](https://github.com/Aldi1963/wblash/releases) — binary siap pakai per versi (`server` + `web/dist`)
+- **Paket**: [github.com/users/Aldi1963/packages?repo_name=wblash](https://github.com/users/Aldi1963/packages?repo_name=wblash) — image Docker `ghcr.io/aldi1963/wblash:latest` (juga per versi, mis. `:v1.0.2`)
 
 ## Tech Stack
 
@@ -63,7 +63,7 @@ Platform WhatsApp Gateway SaaS — kirim pesan otomatis, blast, auto-reply, live
 ### Billing & Langganan
 - **Paket langganan** — Free/Lite/Regular/dll dengan kuota pesan
 - **QRIS** — bayar via Clipku Pay, QR dinormalisasi otomatis jadi gambar
-- **Voucher** — kode voucher diskon/paket
+- **Voucher** — kode voucher trial/paket, ditukar di Settings → tab Tukar Voucher + riwayat penukaran
 - **Transaksi & riwayat** — log pembayaran lengkap
 
 ### Produktivitas UI
@@ -124,7 +124,15 @@ Buka `http://localhost:5173` untuk frontend, API di `http://localhost:8080` (ata
 ## Deploy Production
 
 ```bash
-# Docker (recommended) — build semua dalam 1 image
+# Docker (recommended) — pakai image yang sudah dipublish per rilis
+docker pull ghcr.io/aldi1963/wblash:latest
+docker run -d --name wagataway -p 8080:8080 \
+  -e DATABASE_URL=postgres://user:pass@host:5432/wagataway?sslmode=disable \
+  -e JWT_SECRET=your-secret-key -e APP_URL=https://wa.example.com \
+  -v wagataway-sessions:/app/wa-sessions \
+  ghcr.io/aldi1963/wblash:latest
+
+# Atau build sendiri dari source
 cd go-backend
 docker compose up --build -d
 
@@ -148,7 +156,7 @@ wagataway/
 │   │   ├── config/              # Environment config
 │   │   ├── database/            # Koneksi + AutoMigrate + models/
 │   │   │   └── models/          # 28 file model GORM
-│   │   ├── handler/             # 68 file HTTP handler
+│   │   ├── handler/             # 74 file HTTP handler
 │   │   │   ├── clipkupay.go     # Pembayaran QRIS
 │   │   │   └── wamp_compat.go   # Shim kompatibilitas WAMP
 │   │   ├── middleware/          # Auth, CORS, rate limit, 2FA
@@ -209,6 +217,8 @@ wagataway/
 | GET | /api/analytics/overview | Statistik |
 | GET | /api/billing/plans | List paket |
 | POST | /api/billing/subscribe | Buat pembayaran QRIS |
+| POST | /api/billing/voucher/redeem | Tukar kode voucher |
+| GET | /api/billing/voucher/redemptions | Riwayat penukaran voucher |
 | POST | /api/billing/clipkupay/webhook | Webhook Clipku Pay |
 | GET | /api/auth/sessions | Sesi aktif |
 | GET | /api/api-keys | Kelola API key |
