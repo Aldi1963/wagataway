@@ -14,7 +14,7 @@ import (
 )
 
 func registerWebhookRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	wh := rg.Group("/webhooks")
+	wh := rg.Group("/webhooks", middleware.RequireScope("webhooks"))
 	{
 		wh.GET("", listWebhooks(db))
 		wh.POST("", createWebhook(db))

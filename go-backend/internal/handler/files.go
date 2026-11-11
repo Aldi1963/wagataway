@@ -20,7 +20,7 @@ import (
 )
 
 func registerFileRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	f := rg.Group("/files")
+	f := rg.Group("/files", middleware.RequireScope("files"))
 	{
 		f.POST("", uploadFile(db))
 		f.GET("", listFiles(db))

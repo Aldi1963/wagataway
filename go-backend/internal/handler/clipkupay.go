@@ -32,8 +32,11 @@ import (
 //   create → CLI "create" (POST ?action=create_transaction)
 //   get    → CLI "get"    (GET  ?action=get_transaction&order_id=X)
 // Webhook: X-Signature = HMAC-SHA256 hex dari raw body, key = merchant API key.
-//   Bila API key mentah tidak tersedia (mode CLI), verifikasi HMAC dilewati
-//   namun status tetap diverifikasi ulang ke API Clipku Pay sebelum aktivasi.
+//   Bila API key mentah terkonfigurasi, signature WAJIB valid (401 bila tidak).
+//   Bila API key mentah tidak tersedia (mode CLI), verifikasi HMAC tidak bisa
+//   dilakukan di sini; sebagai gantinya SETIAP cabang webhook (paid maupun
+//   non-paid) diverifikasi ulang ke API Clipku Pay sebelum status lokal
+//   berubah, dan aktivasi menolak nominal remote yang kurang dari tagihan.
 
 type clipkuPay struct {
 	webhookURL string
@@ -352,6 +355,79 @@ func (k clipkuPay) getTransaction(orderID string) (*clipkuTxData, error) {
 	return data, nil
 }
 
+// clipkuRemoteAmount mengambil nominal yang dilaporkan Clipku Pay untuk
+// sebuah transaksi: "amount" dulu, fallback "total_amount".
+func clipkuRemoteAmount(r *clipkuTxData) int64 {
+	if r == nil {
+		return 0
+	}
+	if r.Amount > 0 {
+		return r.Amount
+	}
+	return r.TotalAmount
+}
+
+// clipkuAmountSufficient: nominal remote yang diketahui tidak boleh kurang
+// dari tagihan lokal. Nominal 0 = API tidak melaporkannya → bukan bukti
+// kurang bayar, jadi tidak memblokir (perilaku lama dipertahankan); bila
+// API melaporkan nominal, nominal itu yang dipakai.
+func clipkuAmountSufficient(remote *clipkuTxData, expectedAmount int64) bool {
+	amt := clipkuRemoteAmount(remote)
+	if amt <= 0 {
+		return true
+	}
+	return amt >= expectedAmount
+}
+
+// clipkuWebhookAction adalah keputusan webhook setelah verifikasi ulang ke
+// Clipku Pay (sumber kebenaran).
+type clipkuWebhookAction string
+
+const (
+	// clipkuActionActivate lanjutkan aktivasi langganan.
+	clipkuActionActivate clipkuWebhookAction = "activate"
+	// clipkuActionSync sinkronkan status non-paid dari Clipku Pay.
+	clipkuActionSync clipkuWebhookAction = "sync"
+	// clipkuActionIgnore jangan ubah status transaksi lokal.
+	clipkuActionIgnore clipkuWebhookAction = "ignore"
+)
+
+// decideClipkuWebhook menentukan aksi webhook dari status yang diklaim
+// webhook + hasil verifikasi ulang ke Clipku Pay. Mengembalikan aksi, status
+// untuk PaymentWebhookLog, dan (bila aksi sync) status baru transaksi.
+//
+//   - Verifikasi ulang gagal → abaikan (webhook kemungkinan akan dikirim
+//     ulang oleh Clipku Pay).
+//   - Webhook klaim paid: remote harus paid DAN nominalnya tidak kurang dari
+//     tagihan; bila tidak, catat status_mismatch dan jangan aktifkan.
+//   - Webhook klaim non-paid: status webhook TIDAK dipercaya begitu saja.
+//     Hanya disinkronkan bila Clipku Pay mengonfirmasi status terminal
+//     non-paid; bila remote justru bilang paid, jangan turunkan status.
+func decideClipkuWebhook(txAmount int64, webhookStatus string, remote *clipkuTxData, remoteErr error) (clipkuWebhookAction, string, string) {
+	if remoteErr != nil {
+		return clipkuActionIgnore, "verify_failed", ""
+	}
+	if clipkuIsPaid(webhookStatus) {
+		if !clipkuIsPaid(remote.Status) {
+			return clipkuActionIgnore, "status_mismatch", ""
+		}
+		if !clipkuAmountSufficient(remote, txAmount) {
+			return clipkuActionIgnore, "status_mismatch", ""
+		}
+		return clipkuActionActivate, "activated", ""
+	}
+	if clipkuIsPaid(remote.Status) {
+		return clipkuActionIgnore, "status_mismatch", ""
+	}
+	st := strings.ToLower(strings.TrimSpace(remote.Status))
+	switch st {
+	case "expired", "failed", "cancelled":
+		return clipkuActionSync, "synced:" + st, st
+	default:
+		return clipkuActionIgnore, "pending", ""
+	}
+}
+
 func clipkuIsPaid(status string) bool {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "paid", "success", "settlement", "capture":
@@ -500,15 +576,12 @@ func clipkuPayWebhook(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerF
 		}
 
 		if clipkuIsPaid(status) {
-			// Verifikasi ulang ke Clipku Pay sebagai sumber kebenaran
+			// Verifikasi ulang ke Clipku Pay sebagai sumber kebenaran:
+			// status DAN nominal harus cocok sebelum aktivasi.
 			remote, err := kp.getTransaction(orderID)
-			if err != nil {
-				db.Model(&log).Update("status", "verify_failed")
-				c.JSON(http.StatusOK, gin.H{"message": "OK"})
-				return
-			}
-			if !clipkuIsPaid(remote.Status) {
-				db.Model(&log).Update("status", "status_mismatch")
+			action, logStatus, _ := decideClipkuWebhook(tx.Amount, status, remote, err)
+			if action != clipkuActionActivate {
+				db.Model(&log).Update("status", logStatus)
 				c.JSON(http.StatusOK, gin.H{"message": "OK"})
 				return
 			}
@@ -523,14 +596,17 @@ func clipkuPayWebhook(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerF
 				// tidak menggagalkan webhook (sudah dicatat di log).
 				_ = notifyPaymentSuccess(db, wm, tx.ID)
 			}
-			db.Model(&log).Update("status", "activated")
+			db.Model(&log).Update("status", logStatus)
 		} else {
-			// Sinkronkan status non-paid (expired/failed)
-			st := strings.ToLower(status)
-			if st == "expired" || st == "failed" || st == "cancelled" {
-				db.Model(&tx).Update("status", st)
-				db.Model(&log).Update("status", "synced:"+st)
+			// Cabang non-paid juga diverifikasi ulang: status webhook tidak
+			// dipercaya begitu saja (webhook palsu bisa mematikan transaksi
+			// yang sebenarnya sudah lunas).
+			remote, err := kp.getTransaction(orderID)
+			action, logStatus, syncStatus := decideClipkuWebhook(tx.Amount, status, remote, err)
+			if action == clipkuActionSync {
+				db.Model(&tx).Update("status", syncStatus)
 			}
+			db.Model(&log).Update("status", logStatus)
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "OK"})
 	}

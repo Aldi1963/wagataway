@@ -12,7 +12,9 @@ import (
 )
 
 func registerSessionRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	s := rg.Group("/sessions")
+	// Manajemen sesi login adalah ranah akun — hanya key "full"
+	// (atau JWT dashboard) yang boleh melihat/mencabut sesi.
+	s := rg.Group("/sessions", middleware.RequireScope("full"))
 	{
 		s.GET("", handleListSessions(db))
 		s.DELETE("/:id", handleRevokeSession(db))
@@ -41,19 +43,42 @@ func issueSession(db *gorm.DB, userID uint, jti string, c *gin.Context) {
 }
 
 type sessionDTO struct {
-	ID        uint       `json:"id"`
-	IP        string     `json:"ip"`
-	UserAgent string     `json:"userAgent"`
-	CreatedAt time.Time  `json:"createdAt"`
-	LastSeen  time.Time  `json:"lastSeen"`
-	Current   bool       `json:"current"`
-	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+	ID           uint       `json:"id"`
+	IP           string     `json:"ip"`
+	UserAgent    string     `json:"userAgent"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	LastSeen     time.Time  `json:"lastSeen"`
+	Current      bool       `json:"current"`
+	TeamMemberID *uint      `json:"teamMemberId,omitempty"`
+	RevokedAt    *time.Time `json:"revokedAt,omitempty"`
 }
 
 func currentJTI(c *gin.Context) string {
 	jti, _ := c.Get("sessionJTI")
 	s, _ := jti.(string)
 	return s
+}
+
+// revokeAllSessionsExcept mencabut semua sesi aktif milik user, kecuali sesi
+// dengan jti tertentu (sesi yang sedang berjalan). Bila exceptJTI kosong,
+// semua sesi dicabut — dipakai saat reset password (tidak ada sesi berjalan).
+// Dipakai ganti/reset password agar token lama langsung mati.
+func revokeAllSessionsExcept(db *gorm.DB, userID uint, exceptJTI string) error {
+	q := db.Model(&models.Session{}).Where("user_id = ? AND revoked_at IS NULL", userID)
+	if exceptJTI != "" {
+		q = q.Where("jti <> ?", exceptJTI)
+	}
+	return q.Update("revoked_at", time.Now()).Error
+}
+
+// revokeTeamSessions mencabut semua sesi login milik satu anggota tim.
+// Dipakai saat password anggota diganti, anggota dinonaktifkan, atau dihapus —
+// tanpa ini token tim tetap berlaku sampai kedaluwarsa (24 jam) meski
+// anggotanya sudah tidak aktif.
+func revokeTeamSessions(db *gorm.DB, memberID uint) error {
+	return db.Model(&models.Session{}).
+		Where("team_member_id = ? AND revoked_at IS NULL", memberID).
+		Update("revoked_at", time.Now()).Error
 }
 
 func handleListSessions(db *gorm.DB) gin.HandlerFunc {
@@ -71,7 +96,8 @@ func handleListSessions(db *gorm.DB) gin.HandlerFunc {
 			out = append(out, sessionDTO{
 				ID: s.ID, IP: s.IP, UserAgent: s.UserAgent,
 				CreatedAt: s.CreatedAt, LastSeen: s.LastSeen,
-				Current: s.JTI == jti && jti != "",
+				Current:      s.JTI == jti && jti != "",
+				TeamMemberID: s.TeamMemberID,
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"sessions": out})

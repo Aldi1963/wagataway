@@ -128,6 +128,9 @@ function AppRouter() {
         <Route path="/">
           <HomeRoute />
         </Route>
+        <Route path="/dashboard">
+          <Redirect to="/" />
+        </Route>
         <Route path="/send">
           <ProtectedRoute><Send /></ProtectedRoute>
         </Route>

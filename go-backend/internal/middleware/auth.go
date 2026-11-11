@@ -186,6 +186,9 @@ var AvailableAPIScopes = []struct {
 	{"contacts", "Kelola kontak & grup"},
 	{"devices:read", "Lihat perangkat"},
 	{"devices:write", "Kelola perangkat"},
+	{"chat", "Live Chat (baca & balas)"},
+	{"files", "Kelola file/media"},
+	{"webhooks", "Kelola webhook"},
 }
 
 func ValidAPIScope(s string) bool {
@@ -208,6 +211,23 @@ func ParseAPIKeyScopes(raw string) []string {
 		return []string{"full"}
 	}
 	return scopes
+}
+
+// RequireJWT menolak autentikasi berbasis X-API-Key: hanya token JWT
+// dashboard (atau ticket SSE yang diterbitkan untuk sesi dashboard) yang
+// boleh lewat. Dipakai grup /admin — API key, sekalipun milik admin,
+// tidak boleh mengelola user/paket/pengaturan platform.
+func RequireJWT() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, ok := c.Get("apiKeyScopes"); ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"message": "Endpoint ini hanya bisa diakses dengan login dashboard (JWT), bukan API key",
+				"code":    "API_KEY_NOT_ALLOWED",
+			})
+			return
+		}
+		c.Next()
+	}
 }
 
 // RequireScope menolak request berbasis X-API-Key yang tidak punya scope.

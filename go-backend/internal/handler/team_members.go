@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 
 	"github.com/Aldi1963/wagataway/internal/config"
@@ -11,13 +12,16 @@ import (
 	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"time"
 )
 
 func registerTeamMemberRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	team := rg.Group("/team")
+	// Manajemen anggota tim adalah ranah pemilik akun — hanya key "full"
+	// (atau JWT dashboard) yang boleh mengelolanya.
+	team := rg.Group("/team", middleware.RequireScope("full"))
 	{
 		team.GET("", listTeamMembers(db))
 		team.POST("", inviteTeamMember(db))
@@ -28,8 +32,10 @@ func registerTeamMemberRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.
 }
 
 // POST /api/auth/team-login didaftarkan terpisah (publik, di bawah).
+// Tetap di bawah AuthRateLimit yang sama dengan login utama (10/menit/IP)
+// agar tidak jadi jalur brute-force di luar grup /auth.
 func registerTeamLoginRoute(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	rg.POST("/auth/team-login", handleTeamLogin(cfg, db))
+	rg.POST("/auth/team-login", middleware.AuthRateLimit.Middleware(), handleTeamLogin(cfg, db))
 }
 
 func listTeamMembers(db *gorm.DB) gin.HandlerFunc {
@@ -131,6 +137,7 @@ func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 		if req.Role == "admin" || req.Role == "member" || req.Role == "viewer" {
 			member.Role = req.Role
 		}
+		passwordChanged := false
 		if req.Password != "" {
 			if len(req.Password) < 6 {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Password minimal 6 karakter"})
@@ -142,8 +149,13 @@ func updateTeamMember(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 			member.Password = string(hashed)
+			passwordChanged = true
 		}
 		udb.Save(&member)
+		if passwordChanged {
+			// Password diganti pemilik: token tim lama harus langsung mati.
+			_ = revokeTeamSessions(udb, member.ID)
+		}
 		c.JSON(http.StatusOK, gin.H{"member": member})
 	}
 }
@@ -152,11 +164,16 @@ func deleteTeamMember(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
 		udb := rls.Scoped(db, userID)
-		res := udb.Where("id = ? AND owner_id = ?", c.Param("id"), userID).Delete(&models.TeamMember{})
-		if res.RowsAffected == 0 {
+		var member models.TeamMember
+		if err := udb.Where("id = ? AND owner_id = ?", c.Param("id"), userID).First(&member).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Anggota tidak ditemukan"})
 			return
 		}
+		udb.Delete(&member)
+		// Anggota dihapus: token tim-nya harus langsung mati (tanpa ini token
+		// tetap lolos AuthRequired sampai kedaluwarsa karena hanya dicek ke
+		// tabel sessions, bukan ke tabel team_members).
+		_ = revokeTeamSessions(udb, member.ID)
 		c.JSON(http.StatusOK, gin.H{"message": "Anggota dihapus"})
 	}
 }
@@ -171,13 +188,34 @@ func toggleTeamMember(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		member.IsActive = !member.IsActive
+		wasActive := !member.IsActive
 		udb.Save(&member)
+		if wasActive {
+			// Anggota dinonaktifkan: token tim-nya harus langsung mati.
+			_ = revokeTeamSessions(udb, member.ID)
+		}
 		c.JSON(http.StatusOK, gin.H{"member": member})
 	}
 }
 
+// registerTeamFailedAttempt menaikkan hitungan gagal team-login; mengunci
+// anggota 15 menit setelah 5x gagal beruntun. Cermin registerFailedAttempt
+// untuk login utama (konstanta yang sama: maxFailedAttempts,
+// accountLockDuration di auth.go).
+func registerTeamFailedAttempt(db *gorm.DB, member *models.TeamMember) {
+	member.FailedAttempts++
+	if member.FailedAttempts >= maxFailedAttempts {
+		until := time.Now().Add(accountLockDuration)
+		member.LockedUntil = &until
+		member.FailedAttempts = 0
+	}
+	db.Save(member)
+}
+
 // handleTeamLogin memverifikasi sub-akun dan menerbitkan JWT.
 // Token membawa owner_id agar request sub-akun beroperasi atas data pemilik.
+// Token membawa jti + tercatat di tabel sessions agar bisa dicabut
+// (logout / ganti password / nonaktifkan / hapus anggota).
 func handleTeamLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req struct {
@@ -197,20 +235,42 @@ func handleTeamLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Akun dinonaktifkan"})
 			return
 		}
+
+		// Proteksi brute-force: tolak login selama masa kunci.
+		if member.LockedUntil != nil && member.LockedUntil.After(time.Now()) {
+			sisa := int(time.Until(*member.LockedUntil).Minutes()) + 1
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"message": fmt.Sprintf("Akun dikunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam %d menit.", sisa),
+				"code":    "ACCOUNT_LOCKED",
+			})
+			return
+		}
+
 		if err := bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(req.Password)); err != nil {
+			registerTeamFailedAttempt(db, &member)
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Email atau password salah"})
 			return
 		}
+
+		// Login berhasil: reset hitungan gagal.
+		if member.FailedAttempts != 0 || member.LockedUntil != nil {
+			member.FailedAttempts = 0
+			member.LockedUntil = nil
+			db.Save(&member)
+		}
+
 		var owner models.User
 		if err := db.First(&owner, member.OwnerID).Error; err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Akun pemilik tidak ditemukan"})
 			return
 		}
+		jti := uuid.NewString()
 		claims := &middleware.Claims{
 			UserID: owner.ID,
 			Email:  member.Email,
 			Role:   "team_" + member.Role,
 			RegisteredClaims: jwt.RegisteredClaims{
+				ID:        jti,
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(cfg.JWTExpiry)),
 				IssuedAt:  jwt.NewNumericDate(time.Now()),
 			},
@@ -221,6 +281,11 @@ func handleTeamLogin(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat token"})
 			return
 		}
+		// Catat sesi agar token bisa dicabut; tandai milik anggota tim ini
+		// (bukan pemilik) agar revoke saat nonaktif/hapus tidak ikut
+		// mencabut sesi pemilik.
+		issueSession(db, owner.ID, jti, c)
+		db.Model(&models.Session{}).Where("jti = ?", jti).Update("team_member_id", member.ID)
 		c.JSON(http.StatusOK, gin.H{
 			"token": signed,
 			"user": gin.H{

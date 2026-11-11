@@ -1,6 +1,9 @@
 package database
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/rls"
@@ -120,7 +123,67 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := migratePlanQuotaDefaults(db); err != nil {
 		return err
 	}
+	if err := migrateMessageIdempotencyUniqueIndex(db); err != nil {
+		return err
+	}
+	if err := migrateTransactionExternalIDUniqueIndex(db); err != nil {
+		return err
+	}
 	return migrateAPIKeyHashes(db)
+}
+
+// migrateMessageIdempotencyUniqueIndex membuat unique index parsial untuk
+// kunci idempotency /messages/send: (user_id, device_id, idempotency_key)
+// hanya untuk baris yang kuncinya tidak kosong. Parsial karena sebagian
+// besar pesan tidak memakai kunci (string kosong) — unique index penuh
+// akan menolak pesan kedua tanpa kunci dari user+device yang sama.
+// Idempoten (IF NOT EXISTS); aman dipanggil ulang. Prasyarat: tidak ada
+// duplikat kunci non-kosong di tabel (dicek di DB live sebelum deploy;
+// 0 duplikat per 2026-11-11).
+func migrateMessageIdempotencyUniqueIndex(db *gorm.DB) error {
+	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_idem_unique
+		ON messages (user_id, device_id, idempotency_key)
+		WHERE idempotency_key <> ''`).Error; err != nil {
+		return err
+	}
+	log.Info().Msg("Ensured partial unique index idx_messages_idem_unique")
+	return nil
+}
+
+// migrateTransactionExternalIDUniqueIndex menjadikan transactions.external_id
+// unik (tag uniqueIndex di model). AutoMigrate saja tidak cukup: ia melihat
+// nama index sudah ada (versi non-unik lama) lalu melewatinya, sehingga
+// perubahan tag tidak berpengaruh pada DB yang sudah jalan. Fungsi ini
+// menghapus index lama yang non-unik, lalu membuat ulang versi uniknya.
+// Idempoten; bila index sudah unik, tidak melakukan apa-apa. Prasyarat:
+// tidak ada duplikat ExternalID non-kosong (dicek di DB live sebelum
+// deploy; 0 duplikat per 2026-11-11).
+func migrateTransactionExternalIDUniqueIndex(db *gorm.DB) error {
+	const idxName = "idx_transactions_external_id"
+	var indexdef string
+	err := db.Raw(`SELECT indexdef FROM pg_indexes WHERE indexname = ?`, idxName).
+		Scan(&indexdef).Error
+	switch {
+	case err == nil:
+		if strings.Contains(indexdef, "UNIQUE") {
+			return nil
+		}
+		if err := db.Migrator().DropIndex(&models.Transaction{}, idxName); err != nil {
+			return err
+		}
+		log.Info().Msg("Dropped legacy non-unique index idx_transactions_external_id")
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		// Belum ada index — dibuat di bawah.
+	default:
+		return err
+	}
+	if !db.Migrator().HasIndex(&models.Transaction{}, idxName) {
+		if err := db.Migrator().CreateIndex(&models.Transaction{}, "ExternalID"); err != nil {
+			return err
+		}
+		log.Info().Msg("Created unique index idx_transactions_external_id")
+	}
+	return nil
 }
 
 // migrateDeviceWebhookEnabled mengaktifkan webhook untuk device lama yang

@@ -59,7 +59,7 @@ type ScheduledMessage struct {
 	Type      string     `gorm:"size:20;default:text" json:"type"`
 	Content   string     `gorm:"type:text;not null" json:"content"`
 	MediaURL  string     `gorm:"size:500" json:"mediaUrl"`
-	Status    string     `gorm:"size:20;default:pending" json:"status"` // pending, sent, failed, cancelled
+	Status    string     `gorm:"size:20;default:pending" json:"status"` // pending, sending, sent, failed, cancelled
 	SendAt    time.Time  `gorm:"not null;index" json:"sendAt"`
 	SentAt    *time.Time `json:"sentAt"`
 	ErrorMsg  string     `gorm:"type:text" json:"errorMsg"`
@@ -144,14 +144,19 @@ type Notification struct {
 // ── Sessions (manajemen sesi login, bisa dicabut) ─────────────────────────────
 
 type Session struct {
-	ID        uint       `gorm:"primaryKey" json:"id"`
-	UserID    uint       `gorm:"index;not null" json:"userId"`
-	JTI       string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
-	IP        string     `gorm:"size:45" json:"ip"`
-	UserAgent string     `gorm:"size:500" json:"userAgent"`
-	CreatedAt time.Time  `json:"createdAt"`
-	LastSeen  time.Time  `json:"lastSeen"`
-	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	UserID    uint   `gorm:"index;not null" json:"userId"`
+	JTI       string `gorm:"size:64;uniqueIndex;not null" json:"-"`
+	IP        string `gorm:"size:45" json:"ip"`
+	UserAgent string `gorm:"size:500" json:"userAgent"`
+	// TeamMemberID menandai sesi milik sub-akun tim (nil = login pemilik).
+	// Dipakai untuk mencabut token tim saat anggota dinonaktifkan/dihapus
+	// atau passwordnya diganti — tanpa ini token tim tak terbedakan dari
+	// sesi pemilik karena keduanya tercatat atas user_id pemilik.
+	TeamMemberID *uint      `gorm:"index" json:"teamMemberId,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	LastSeen     time.Time  `json:"lastSeen"`
+	RevokedAt    *time.Time `json:"revokedAt,omitempty"`
 }
 
 // ── Login History (deteksi login dari IP/perangkat baru) ─────────────────────

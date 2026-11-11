@@ -46,7 +46,7 @@ func InitLiveChat(cfg *config.Config, db *gorm.DB, wm *whatsapp.Manager) {
 
 // registerChatRoutes sets up unified Live Chat + AI CS Bot
 func registerChatRoutes(rg *gin.RouterGroup, db *gorm.DB, wm *whatsapp.Manager) {
-	chat := rg.Group("/chat")
+	chat := rg.Group("/chat", middleware.RequireScope("chat"))
 	{
 		chat.GET("/conversations", listConversations(db, wm))
 		chat.GET("/history", getChatHistory(db))

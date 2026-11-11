@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, Loader2, QrCode, Receipt, X } from "lucide-react";
+import { Check, ExternalLink, Loader2, QrCode, Receipt, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +103,8 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  // Gagal fetch paket: tampilkan error + tombol "Coba lagi", jangan diam-diam kosong.
+  const [plansError, setPlansError] = useState(false);
 
   // Fitur 2: riwayat transaksi + kwitansi
   const [txs, setTxs] = useState<Tx[]>([]);
@@ -123,12 +125,20 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
   const [quoteLoading, setQuoteLoading] = useState(false);
 
   const load = useCallback(async () => {
-    try {
-      const [p, s] = await Promise.all([
-        apiGet<{ plans: Plan[] }>("/billing/plans"),
-        apiGet<{ subscription: Subscription | null }>("/billing/subscription"),
-      ]);
-      setPlans(p.plans || []);
+    setPlansError(false);
+    // Paket & langganan di-fetch terpisah (allSettled): gagalnya satu
+    // tidak boleh mengosongkan yang lain diam-diam.
+    const [plansRes, subRes] = await Promise.allSettled([
+      apiGet<{ plans: Plan[] }>("/billing/plans"),
+      apiGet<{ subscription: Subscription | null }>("/billing/subscription"),
+    ]);
+    if (plansRes.status === "fulfilled") {
+      setPlans(plansRes.value.plans || []);
+    } else {
+      setPlansError(true);
+    }
+    if (subRes.status === "fulfilled") {
+      const s = subRes.value;
       setSub(s.subscription);
       // Fitur 1: tombol "Perpanjang" di dashboard mengarah ke /billing?perpanjang=1
       // -> langsung buka modal pembayaran untuk paket yang SAMA (tanpa pilih ulang).
@@ -147,11 +157,10 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
       } catch {
         /* abaikan */
       }
-    } catch {
-      /* abaikan, tampilkan kosong */
-    } finally {
-      setLoading(false);
     }
+    // Kartu langganan sudah menangani sub null, jadi gagal fetch langganan
+    // dibiarkan tampil sebagai "tidak ada langganan aktif".
+    setLoading(false);
     // Fitur 2: riwayat transaksi milik user yang login
     try {
       const t = await apiGet<{ transactions: Tx[] }>("/billing/transactions");
@@ -333,6 +342,29 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
         <div className="flex justify-center py-10">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
+      ) : plansError ? (
+        <Card className="border-destructive/50">
+          <CardContent className="p-5 flex items-center justify-between">
+            <p className="text-sm text-destructive">{t("billing.plansLoadFail")}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLoading(true);
+                load();
+              }}
+              className="gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> {t("common.retry")}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : plans.length === 0 ? (
+        <Card>
+          <CardContent className="p-5 text-center">
+            <p className="text-sm text-muted-foreground">{t("billing.noPlans")}</p>
+          </CardContent>
+        </Card>
       ) : (
         <div id="daftar-paket" className="grid grid-cols-1 md:grid-cols-3 gap-4 scroll-mt-4">
           {plans.map((plan, i) => {

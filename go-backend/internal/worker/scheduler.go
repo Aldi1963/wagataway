@@ -61,15 +61,39 @@ func (s *Scheduler) Stop() {
 	log.Info().Msg("Background scheduler stopped")
 }
 
+// staleSendingAge: pesan 'sending' yang tidak berubah lebih lama dari ini
+// dianggap klaim basi (mis. proses mati di tengah kirim) dan boleh diklaim
+// ulang. Tanpa ini, pesan yang crash saat kirim akan macet di 'sending'
+// selamanya.
+const staleSendingAge = 10 * time.Minute
+
+// claimScheduledMessage mengklaim satu pesan terjadwal secara atomik
+// (pending → sending, atau sending basi → sending dengan updated_at baru).
+// Hanya satu worker yang berhasil (RowsAffected=1); yang lain mendapat
+// false dan lanjut — pola yang sama seperti klaim bulk job di bawah.
+func claimScheduledMessage(db *gorm.DB, id uint, now time.Time) bool {
+	res := db.Model(&models.ScheduledMessage{}).
+		Where("id = ? AND (status = ? OR (status = ? AND updated_at < ?))",
+			id, "pending", "sending", now.Add(-staleSendingAge)).
+		Update("status", "sending")
+	return res.Error == nil && res.RowsAffected == 1
+}
+
 func (s *Scheduler) processScheduledMessages() {
 	var messages []models.ScheduledMessage
 	now := time.Now()
 
-	s.db.Where("status = ? AND send_at <= ?", "pending", now).
+	// Ambil pending + klaim 'sending' basi (crash saat kirim sebelumnya).
+	s.db.Where("(status = ? OR (status = ? AND updated_at < ?)) AND send_at <= ?",
+		"pending", "sending", now.Add(-staleSendingAge), now).
 		Limit(50).
 		Find(&messages)
 
 	for _, msg := range messages {
+		// Klaim dulu: hanya satu worker yang boleh mengirim pesan ini.
+		if !claimScheduledMessage(s.db, msg.ID, time.Now()) {
+			continue
+		}
 		err := s.waManager.SendMessage(msg.DeviceID, msg.To, msg.Type, msg.Content, msg.MediaURL)
 
 		sentAt := time.Now()

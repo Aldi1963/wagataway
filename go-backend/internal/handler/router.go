@@ -127,7 +127,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerSSETicketRoutes(protected)
 
 			// ── Admin only routes ──────────────────────────────────────────
+			// API key ditolak di sini (RequireJWT): sekalipun key milik admin,
+			// pengelolaan platform hanya boleh lewat login dashboard (JWT).
 			admin := protected.Group("/admin")
+			admin.Use(middleware.RequireJWT())
 			admin.Use(middleware.AdminRequired())
 			{
 				registerAdminRoutes(admin, cfg, db, waManager)

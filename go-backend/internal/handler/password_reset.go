@@ -58,9 +58,10 @@ func handleForgotPassword(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 				})
 				resetURL := strings.TrimRight(cfg.AppURL, "/") + "/reset-password?token=" + token
 				if err := sendResetEmail(cfg, user.Email, user.Name, resetURL); err != nil {
-					log.Error().Err(err).Str("email", user.Email).Msg("gagal kirim email reset password")
-					// Fallback: catat link di log server agar admin bisa meneruskan manual
-					log.Warn().Str("email", user.Email).Str("resetURL", resetURL).Msg("RESET PASSWORD LINK (SMTP belum dikonfigurasi)")
+					// JANGAN catat resetURL/token ke log: link berisi token
+					// mentah sekali pakai — siapa pun yang membaca log bisa
+					// mengambil alih akun. Catat hanya email + status gagal.
+					log.Error().Err(err).Str("email", user.Email).Msg("gagal kirim email reset password (SMTP belum dikonfigurasi?)")
 				}
 			}
 		}
@@ -102,6 +103,12 @@ func handleResetPassword(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		now := time.Now()
 		err = db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Model(&models.User{}).Where("id = ?", prt.UserID).Update("password", string(hashed)).Error; err != nil {
+				return err
+			}
+			// Cabut SEMUA sesi user: reset password berarti kredensial lama
+			// sudah tidak dipercaya (bocor/lupa) — token yang beredar dari
+			// sesi lama tidak boleh tetap berlaku sampai kedaluwarsa.
+			if err := revokeAllSessionsExcept(tx, prt.UserID, ""); err != nil {
 				return err
 			}
 			// Tandai semua token user ini sudah terpakai

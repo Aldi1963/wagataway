@@ -131,7 +131,11 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			}
 		}
 
-		// Idempotency: key yang sama tidak dikirim ulang.
+		// Idempotency: key yang sama tidak dikirim ulang. Cek cepat di sini,
+		// lalu unique index parsial (user_id, device_id, idempotency_key)
+		// menjadi penjaga atomik saat dua request bersamaan lolos cek ini:
+		// Create yang kalah mendapat duplicate key dan mengembalikan baris
+		// yang sudah ada (pola yang sama seperti redeem voucher).
 		if req.IdempotencyKey != "" {
 			var existing models.Message
 			if err := udb.Where("user_id = ? AND device_id = ? AND idempotency_key = ?",
@@ -171,6 +175,17 @@ func sendMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		if err := udb.Create(&msg).Error; err != nil {
+			// Balapan dua request dengan kunci yang sama: unique index
+			// parsial menolak yang kedua — kembalikan baris yang sudah
+			// ada sebagai duplikat, bukan 500.
+			if req.IdempotencyKey != "" && strings.Contains(err.Error(), "duplicate key") {
+				var existing models.Message
+				if err2 := udb.Where("user_id = ? AND device_id = ? AND idempotency_key = ?",
+					userID, req.DeviceID, req.IdempotencyKey).First(&existing).Error; err2 == nil {
+					c.JSON(http.StatusOK, gin.H{"message": "Pesan sudah pernah dikirim (duplikat)", "duplicate": true, "data": existing})
+					return
+				}
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan pesan", "code": "DB_ERROR"})
 			return
 		}

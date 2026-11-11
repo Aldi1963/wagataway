@@ -1278,7 +1278,7 @@ export default function LiveChat({ embedded: _embedded = false }: { embedded?: b
   };
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] overflow-hidden bg-[#eae6df] dark:bg-[#0b141a]">
+    <div className="flex h-[calc(100vh-7rem)] supports-[height:100dvh]:h-[calc(100dvh-7rem)] overflow-hidden bg-[#eae6df] dark:bg-[#0b141a]">
       {/* ── Conversation List ─────────────────────────── */}
       <div className={cn(
         "border-r border-black/10 dark:border-white/10 flex-col bg-white dark:bg-[#111b21]",

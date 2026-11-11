@@ -419,12 +419,29 @@ func handleChangePassword(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := udb.Model(&user).Update("password", string(hashed)).Error; err != nil {
+		// Password baru + pencabutan sesi lain dalam satu transaksi: bila
+		// revoke gagal, password tidak ikut berubah — tidak ada jendela di
+		// mana password baru aktif tapi token lama (yang mungkin dicuri)
+		// masih berlaku. Sesi yang sedang berjalan dikecualikan agar user
+		// tidak langsung ter-logout setelah ganti password.
+		// (Tidak perlu password-version di claim JWT: semua token yang
+		// diterbitkan kode saat ini membawa jti + baris sessions yang dicek
+		// tiap request di middleware.AuthRequired — mencabut barisnya
+		// langsung mematikan token. Token tanpa jti sudah kedaluwarsa
+		// karena JWT hanya berlaku 24 jam.)
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			txdb := rls.Scoped(tx, userID)
+			if err := txdb.Model(&user).Update("password", string(hashed)).Error; err != nil {
+				return err
+			}
+			return revokeAllSessionsExcept(txdb, userID, currentJTI(c))
+		}); err != nil {
+			log.Error().Err(err).Uint("userID", userID).Msg("gagal mengubah password / mencabut sesi")
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengubah password", "code": "SERVER_ERROR"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah"})
+		c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah. Sesi login lain telah dicabut."})
 	}
 }
 

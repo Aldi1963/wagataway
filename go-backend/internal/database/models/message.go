@@ -23,7 +23,13 @@ type Message struct {
 	Via        string         `gorm:"size:20;default:web" json:"via"` // web, api
 	RetryCount int            `gorm:"default:0" json:"retryCount"`
 	// Kunci idempotency untuk /messages/send: request dengan key yang sama
-	// tidak dikirim ulang (anti pesan dobel saat retry network).
+	// tidak dikirim ulang (anti pesan dobel saat retry network). Dijamin
+	// atomik oleh unique index parsial idx_messages_idem_unique
+	// (user_id, device_id, idempotency_key) WHERE idempotency_key <> ''
+	// yang dibuat migrateMessageIdempotencyUniqueIndex — parsial karena
+	// sebagian besar pesan tidak memakai kunci (string kosong), dan unique
+	// index penuh akan menolak pesan kedua tanpa kunci dari user+device
+	// yang sama.
 	IdempotencyKey string `gorm:"size:100;index" json:"idempotencyKey"`
 	SentAt     *time.Time     `json:"sentAt"`
 	CreatedAt  time.Time      `json:"createdAt"`

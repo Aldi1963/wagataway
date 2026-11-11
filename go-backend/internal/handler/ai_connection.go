@@ -18,7 +18,9 @@ import (
 )
 
 func registerAIConnectionRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	ar := rg.Group("/ai-connection")
+	// Koneksi AI menyimpan API key provider milik user (terenkripsi) — hanya
+	// key "full" (atau JWT dashboard) yang boleh membaca/mengubahnya.
+	ar := rg.Group("/ai-connection", middleware.RequireScope("full"))
 	{
 		ar.GET("", getAIConnection(db))
 		ar.PUT("", upsertAIConnection(db))

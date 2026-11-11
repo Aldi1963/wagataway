@@ -56,7 +56,7 @@ type Transaction struct {
 	Status        string     `gorm:"size:20;default:pending" json:"status"` // pending, paid, failed, expired, refunded
 	PaymentMethod string     `gorm:"size:50" json:"paymentMethod"`
 	PaymentRef    string     `gorm:"size:255;index" json:"paymentRef"`
-	ExternalID    string     `gorm:"size:255;index" json:"externalId"`
+	ExternalID    string     `gorm:"size:255;uniqueIndex" json:"externalId"` // order ID Clipku Pay (WAG-...), unik
 	ExpiredAt     *time.Time `json:"expiredAt"`
 	PaidAt        *time.Time `json:"paidAt"`
 	Metadata      string     `gorm:"type:text" json:"metadata"` // JSON

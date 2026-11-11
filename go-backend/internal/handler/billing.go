@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,13 +16,20 @@ import (
 	"github.com/Aldi1963/wagataway/internal/subscription"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, wm waSender) {
 	// GET /api/quota — info kuota pesan bulanan (Fitur 3), alias ringan dari
 	// /api/billing/usage untuk dipakai dashboard & integrasi.
 	rg.GET("/quota", getBillingUsage(db))
-	b := rg.Group("/billing")
+	// Grup /billing dikunci scope "billing": key lama tanpa scope tercatat
+	// (NULL) di-grandfather sebagai full di ParseAPIKeyScopes, jadi
+	// integrasi lama tetap lolos; hanya key berscope eksplisit tanpa
+	// "billing" (mis. messages:send saja) yang ditolak 403. Request JWT
+	// (dashboard) tidak dibatasi scope. GET /api/quota di luar grup ini
+	// sengaja dibiarkan apa adanya.
+	b := rg.Group("/billing", middleware.RequireScope("billing"))
 	{
 		b.GET("/plans", listPlans(db))
 		b.GET("/subscription", getSubscription(db))
@@ -110,6 +118,18 @@ func getBillingUsage(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// newBillingOrderID membuat ID order unik untuk Clipku Pay:
+// WAG-<userID>-<UnixNano>-<acak hex>. Unix detik saja (format lama)
+// bertabrakan bila dua langganan dibuat dalam detik yang sama; UnixNano +
+// suffix acak menutup celah itu. ExternalID unik di DB (uniqueIndex).
+func newBillingOrderID(userID uint) string {
+	var rb [3]byte
+	if _, err := rand.Read(rb[:]); err != nil {
+		return fmt.Sprintf("WAG-%d-%d", userID, time.Now().UnixNano())
+	}
+	return fmt.Sprintf("WAG-%d-%d-%x", userID, time.Now().UnixNano(), rb)
+}
+
 func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -153,7 +173,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 				Amount:        0,
 				Status:        "pending",
 				PaymentMethod: "clipkupay",
-				ExternalID:    fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix()),
+				ExternalID:    newBillingOrderID(userID),
 				Metadata:      metadata,
 			}
 			if err := udb.Create(&tx).Error; err != nil {
@@ -195,7 +215,7 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 			return
 		}
 
-		orderID := fmt.Sprintf("WAG-%d-%d", userID, time.Now().Unix())
+		orderID := newBillingOrderID(userID)
 
 		// Catat transaksi lokal dulu sebagai pending
 		tx := models.Transaction{
@@ -250,12 +270,17 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 		if tx.Status == "pending" && tx.ExternalID != "" && kp.enabled() {
 			if remote, err := kp.getTransaction(tx.ExternalID); err == nil {
 				if clipkuIsPaid(remote.Status) {
-					// Fitur 6: tepat di momen transisi → paid. Error
-					// notifikasi tidak menggagalkan sinkronisasi.
-					if activated, _ := activateSubscription(udb, tx.ID); activated {
-						_ = notifyPaymentSuccess(udb, wm, tx.ID)
+					// Nominal remote yang diketahui tidak boleh kurang dari
+					// tagihan (celah yang sama seperti webhook): jangan
+					// aktifkan dari pembayaran kurang, biarkan pending.
+					if clipkuAmountSufficient(remote, tx.Amount) {
+						// Fitur 6: tepat di momen transisi → paid. Error
+						// notifikasi tidak menggagalkan sinkronisasi.
+						if activated, _ := activateSubscription(udb, tx.ID); activated {
+							_ = notifyPaymentSuccess(udb, wm, tx.ID)
+						}
+						udb.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
 					}
-					udb.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
 				} else {
 					st := strings.ToLower(strings.TrimSpace(remote.Status))
 					if st == "expired" || st == "failed" || st == "cancelled" {
@@ -298,6 +323,10 @@ func invoiceNumber(txID uint, createdAt time.Time) string {
 
 // errAlreadyRedeemed menandai percobaan redeem ganda oleh user yang sama.
 var errAlreadyRedeemed = errors.New("voucher already redeemed by user")
+
+// errVoucherExhausted menandai voucher yang kuotanya habis saat penukaran
+// (terdeteksi di dalam transaksi, setelah kunci baris).
+var errVoucherExhausted = errors.New("voucher exhausted")
 
 func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -356,38 +385,13 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 		now := java_time_now()
 		endsAt := now.AddDate(0, 0, durationDays)
 		err = udb.Transaction(func(tx *gorm.DB) error {
-			var count int64
-			if err := tx.Model(&models.VoucherRedemption{}).
-				Where("voucher_id = ? AND user_id = ?", voucher.ID, userID).
-				Count(&count).Error; err != nil {
-				return err
-			}
-			if count > 0 {
-				return errAlreadyRedeemed
-			}
-
-			if err := tx.Create(&models.VoucherRedemption{
-				VoucherID: voucher.ID,
-				UserID:    userID,
-			}).Error; err != nil {
-				// Balapan dua request bersamaan: unique index gabungan
-				// menjadi penjaga terakhir.
-				if strings.Contains(err.Error(), "duplicate key") {
-					return errAlreadyRedeemed
-				}
-				return err
-			}
-
-			if err := tx.Model(&models.Voucher{}).Where("id = ?", voucher.ID).
-				Update("used_count", gorm.Expr("used_count + 1")).Error; err != nil {
-				return err
-			}
-
-			// Berikan langganan: nonaktifkan yang lama, buat yang baru mulai
-			// sekarang (konvensi yang sama dengan activateSubscription).
-			return grantVoucherSubscription(tx, userID, plan, durationDays, isTrial, now)
+			return redeemVoucherTx(tx, userID, &voucher, plan, durationDays, isTrial, now)
 		})
 		if err != nil {
+			if errors.Is(err, errVoucherExhausted) {
+				c.JSON(http.StatusConflict, gin.H{"message": "Voucher sudah habis dipakai"})
+				return
+			}
 			if errors.Is(err, errAlreadyRedeemed) {
 				c.JSON(http.StatusConflict, gin.H{"message": "Voucher ini sudah pernah Anda gunakan"})
 				return
@@ -404,6 +408,67 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			"endsAt":       endsAt,
 		})
 	}
+}
+
+// redeemVoucherTx menjalankan inti penukaran voucher di dalam satu
+// transaksi: kunci baris voucher (SELECT ... FOR UPDATE), cek ulang kuota,
+// catat penukaran, increment kondisional, lalu berikan langganan.
+//
+// Kunci baris + increment kondisional (WHERE used_count < max_uses) menutup
+// balapan dua request bersamaan yang sama-sama lolos cek MaxUses di luar
+// transaksi: request kedua antre pada kunci baris, lalu melihat kuota yang
+// sudah habis; increment kondisional menjadi penjaga terakhir bila MaxUses
+// berubah di tengah jalan (mis. admin menurunkan kuota saat transaksi
+// berjalan) — RowsAffected=0 membatalkan seluruh transaksi.
+func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan models.Plan, durationDays int, isTrial bool, now time.Time) error {
+	// Kunci baris voucher: request lain yang mengincar voucher yang sama
+	// antre di sini sampai transaksi ini selesai.
+	var locked models.Voucher
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", voucher.ID).First(&locked).Error; err != nil {
+		return err
+	}
+	if locked.MaxUses > 0 && locked.UsedCount >= locked.MaxUses {
+		return errVoucherExhausted
+	}
+
+	var count int64
+	if err := tx.Model(&models.VoucherRedemption{}).
+		Where("voucher_id = ? AND user_id = ?", voucher.ID, userID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errAlreadyRedeemed
+	}
+
+	if err := tx.Create(&models.VoucherRedemption{
+		VoucherID: voucher.ID,
+		UserID:    userID,
+	}).Error; err != nil {
+		// Balapan dua request bersamaan: unique index gabungan
+		// menjadi penjaga terakhir.
+		if strings.Contains(err.Error(), "duplicate key") {
+			return errAlreadyRedeemed
+		}
+		return err
+	}
+
+	// Increment kondisional: RowsAffected=0 berarti kuota habis →
+	// batalkan seluruh transaksi (termasuk pencatatan redeem di atas).
+	res := tx.Model(&models.Voucher{}).
+		Where("id = ? AND (max_uses = 0 OR used_count < max_uses)", voucher.ID).
+		Update("used_count", gorm.Expr("used_count + 1"))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return errVoucherExhausted
+	}
+
+	// Berikan langganan: nonaktifkan yang lama, buat yang baru mulai
+	// sekarang (konvensi yang sama dengan activateSubscription).
+	return grantVoucherSubscription(tx, userID, plan, durationDays, isTrial, now)
 }
 
 // voucherGrantPlan menentukan paket + durasi + status trial yang diberikan
