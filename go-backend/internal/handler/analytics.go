@@ -16,6 +16,11 @@ func registerAnalyticsRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	{
 		a.GET("/overview", analyticsOverview(db))
 		a.GET("/messages", analyticsMessages(db))
+		a.GET("/funnel", analyticsFunnel(db))
+		a.GET("/devices", analyticsDevices(db))
+		a.GET("/campaigns", analyticsCampaigns(db))
+		a.GET("/response-time", analyticsResponseTime(db))
+		a.GET("/export", analyticsExport(db))
 	}
 }
 
