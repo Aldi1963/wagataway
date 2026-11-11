@@ -1079,6 +1079,7 @@ function VouchersTab() {
   const [code, setCode] = useState("");
   const [type, setType] = useState("trial");
   const [planId, setPlanId] = useState("");
+  const [plans, setPlans] = useState<Pkg[]>([]);
   const [duration, setDuration] = useState("7");
   const [discount, setDiscount] = useState("0");
   const [maxUses, setMaxUses] = useState("100");
@@ -1097,6 +1098,14 @@ function VouchersTab() {
 
   useEffect(load, []);
 
+  // Muat daftar paket saat form tambah dibuka (untuk dropdown paket).
+  useEffect(() => {
+    if (!showForm) return;
+    apiGet<{ packages: Pkg[] }>("/admin/packages")
+      .then((res) => setPlans(res.packages || []))
+      .catch(() => setPlans([]));
+  }, [showForm]);
+
   const resetForm = () => {
     setCode("");
     setType("trial");
@@ -1109,6 +1118,10 @@ function VouchersTab() {
   const handleAdd = async () => {
     if (!code.trim()) {
       toast.error(t("admin.errVoucherCode"));
+      return;
+    }
+    if (type === "plan" && !planId.trim()) {
+      toast.error(t("admin.errVoucherPlan"));
       return;
     }
     setSaving(true);
@@ -1149,6 +1162,11 @@ function VouchersTab() {
   };
 
   const typeLabel = (tv: string) => VOUCHER_TYPES.find((x) => x.value === tv)?.label || tv;
+
+  const planOptions = [
+    { value: "", label: t("admin.selectPackage") },
+    ...plans.map((p) => ({ value: String(p.id), label: `${p.name} — ${fmtRp(p.price)}` })),
+  ];
 
   return (
     <div className="space-y-4">
@@ -1228,7 +1246,7 @@ function VouchersTab() {
             </Field>
             {type === "plan" && (
               <Field label={t("admin.packageIdLabel")}>
-                <Input type="number" min="1" value={planId} onChange={(e) => setPlanId(e.target.value)} placeholder="cth: 3" />
+                <Select value={planId} onChange={setPlanId} options={planOptions} className="h-10 w-full text-sm" ariaLabel={t("admin.packageIdLabel")} />
               </Field>
             )}
             <div className="grid grid-cols-3 gap-3">
