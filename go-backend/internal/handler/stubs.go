@@ -77,22 +77,5 @@ func registerUploadRoutes(rg *gin.RouterGroup) {
 	rg.POST("/upload", stubHandler("upload-file"))
 }
 
-func registerBotProductRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	products := rg.Group("/bot-products")
-	{
-		products.GET("", stubHandler("list-products"))
-		products.POST("", stubHandler("create-product"))
-		products.PUT("/:id", stubHandler("update-product"))
-		products.DELETE("/:id", stubHandler("delete-product"))
-	}
-}
-
-func registerBotOrderRoutes(rg *gin.RouterGroup, _ *gorm.DB) {
-	orders := rg.Group("/bot-orders")
-	{
-		orders.GET("", stubHandler("list-orders"))
-		orders.PATCH("/:id/status", stubHandler("update-order-status"))
-	}
-}
-
-		// 2FA: implementasi nyata ada di twofa.go (registerTwoFARoutes di router.go).
+// 2FA: implementasi nyata ada di twofa.go (registerTwoFARoutes di router.go).
+// Katalog & pesanan: implementasi nyata ada di bot_catalog.go.

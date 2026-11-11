@@ -876,6 +876,11 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		m.migrateLIDConversation(sess.UserID, sess.DeviceID, sender, senderPhone)
 	}
 
+	// Bot katalog + order via WA — dievaluasi SEBELUM menu bot: bila pelanggan
+	// sedang dalam sesi keranjang atau mengetik keyword katalog, pesan
+	// ditangani di sini agar tidak bentrok dengan menu/auto-reply/AI.
+	catalogHandled := m.checkCatalogBot(sess, senderJID, senderPhone, msg.Info.PushName, text, msg.Info.IsGroup)
+
 	// Chatbot menu bertingkat — dievaluasi DULU sebelum AI reply & auto-reply.
 	// Bila ia menangani pesan (sesi menu aktif / keyword cocok / selalu-aktif),
 	// keduanya dilewati agar tidak bentrok. Default nonaktif per device.
@@ -885,7 +890,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	// Dipanggil sebelum skip grup agar config dengan IgnoreGroups=false tetap jalan di grup.
 	// Di chat pribadi, auto-reply (rule eksplisit) menang atas AI reply agar pengirim
 	// tidak menerima dua balasan sekaligus; AI menjadi fallback bila tak ada rule yang cocok.
-	if !menuHandled {
+	if !menuHandled && !catalogHandled {
 		if msg.Info.IsGroup {
 			go m.checkAIReply(sess, senderJID, text, true)
 		} else if m.findAutoReplyRule(sess, text) != nil {

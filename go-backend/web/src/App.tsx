@@ -23,6 +23,7 @@ const History = lazy(() => import("@/pages/History"));
 const ScheduleHub = lazy(() => import("@/pages/ScheduleHub"));
 const ContactsHub = lazy(() => import("@/pages/ContactsHub"));
 const AutomationHub = lazy(() => import("@/pages/AutomationHub"));
+const CatalogOrder = lazy(() => import("@/pages/CatalogOrder"));
 const ReportHub = lazy(() => import("@/pages/ReportHub"));
 const DeveloperHub = lazy(() => import("@/pages/DeveloperHub"));
 const LiveChatHub = lazy(() => import("@/pages/LiveChatHub"));
@@ -169,6 +170,9 @@ function AppRouter() {
         </Route>
         <Route path="/menu-bot">
           <ProtectedRoute><AutomationHub /></ProtectedRoute>
+        </Route>
+        <Route path="/catalog-order">
+          <ProtectedRoute><CatalogOrder /></ProtectedRoute>
         </Route>
         <Route path="/ai-reply">
           <ProtectedRoute><AutomationHub /></ProtectedRoute>
