@@ -137,7 +137,8 @@ func TestAdminUpdateVoucherUnused(t *testing.T) {
 	if v.IsActive {
 		t.Errorf("isActive = true, mau false")
 	}
-	if v.ExpiresAt == nil || v.ExpiresAt.Format(time.RFC3339) != expires {
+	wantExpires, _ := time.Parse(time.RFC3339, expires)
+	if v.ExpiresAt == nil || !v.ExpiresAt.Equal(wantExpires) {
 		t.Errorf("expiresAt = %v, mau %s", v.ExpiresAt, expires)
 	}
 	if v.PlanID == nil || *v.PlanID != plan.ID {
