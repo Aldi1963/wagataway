@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,6 +74,29 @@ func extractMessageText(msg *events.Message) string {
 	}
 	if m.GetDocumentMessage() != nil {
 		return m.GetDocumentMessage().GetCaption()
+	}
+	// Balasan tombol interaktif (quick reply): NativeFlow params JSON
+	// {"id": "...", "display_text": "..."} → kembalikan id agar bot bisa
+	// membedakan tombol yang ditekan (mis. "catalog:cart").
+	if ir := m.GetInteractiveResponseMessage(); ir != nil {
+		if params := ir.GetNativeFlowResponseMessage().GetParamsJSON(); params != "" {
+			var p struct {
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal([]byte(params), &p); err == nil && p.ID != "" {
+				return p.ID
+			}
+		}
+	}
+	if br := m.GetButtonsResponseMessage(); br != nil {
+		if id := br.GetSelectedButtonID(); id != "" {
+			return id
+		}
+	}
+	if lr := m.GetListResponseMessage(); lr != nil {
+		if id := lr.GetSingleSelectReply().GetSelectedRowID(); id != "" {
+			return id
+		}
 	}
 	return ""
 }

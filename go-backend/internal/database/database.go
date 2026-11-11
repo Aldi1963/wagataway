@@ -90,6 +90,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ShortLink{},
 		&models.BotProduct{},
 		&models.BotOrder{},
+		&models.BotOrderItem{},
+		&models.BotCartSession{},
 		&models.AdminWaBot{},
 		&models.AdminActivityLog{},
 		&models.File{},
