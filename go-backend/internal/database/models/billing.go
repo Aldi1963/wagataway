@@ -93,6 +93,10 @@ type Voucher struct {
 	UsedCount int        `gorm:"default:0" json:"usedCount"`
 	IsActive  bool       `gorm:"default:true" json:"isActive"`
 	ExpiresAt *time.Time `json:"expiresAt"`
+	// MinPlanID: paket minimal yang boleh memakai voucher ini. NULL =
+	// berlaku untuk semua paket. Tier diukur dari SortOrder paket
+	// (lihat planTierBelow di handler billing).
+	MinPlanID *uint      `json:"minPlanId"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 }
