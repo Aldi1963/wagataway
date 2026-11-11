@@ -95,6 +95,12 @@ type Voucher struct {
 	Discount  int        `gorm:"default:0" json:"discount"` // percentage
 	MaxUses   int        `gorm:"default:1" json:"maxUses"`
 	UsedCount int        `gorm:"default:0" json:"usedCount"`
+	// NewUsersOnly membatasi voucher hanya untuk pengguna yang belum pernah
+	// berlangganan ATAU langganannya sudah habis (tidak ada langganan aktif
+	// saat ini). Independen dari tipe voucher (trial maupun plan) dan dari
+	// syarat lain (masa berlaku, maks pakai, sudah pernah redeem). Voucher
+	// diskon tetap ditolak seperti biasa, terlepas dari flag ini.
+	NewUsersOnly bool      `gorm:"default:false" json:"newUsersOnly"`
 	IsActive  bool       `gorm:"default:true" json:"isActive"`
 	// Source: asal voucher — "" (dibuat admin) atau "referral_reward"
 	// (diterbitkan otomatis sebagai hadiah referral).

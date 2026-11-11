@@ -131,6 +131,21 @@ func Check(db *gorm.DB, userID uint) (*Status, error) {
 	return st, nil
 }
 
+// HasActiveSubscription melaporkan apakah user saat ini punya langganan
+// yang masih berlaku, berdasarkan status terpusat Check: aktif bila user
+// pernah berlangganan DAN statusnya StateActive. Masa tenggang (grace)
+// dan expired dihitung SUDAH HABIS — user seperti itu tidak lagi punya
+// langganan aktif. Dipakai syarat voucher khusus pengguna baru: layak
+// bila belum pernah berlangganan sama sekali, atau semua langganannya
+// sudah berakhir.
+func HasActiveSubscription(db *gorm.DB, userID uint) (bool, error) {
+	st, err := Check(db, userID)
+	if err != nil {
+		return false, err
+	}
+	return st.HasSubscription && st.State == StateActive, nil
+}
+
 // dailyUsage menghitung pesan outgoing milik user pada hari kalender
 // berjalan (waktu lokal server) berstatus sent/delivered/read.
 // Definisi pesan yang dihitung SAMA dengan kuota bulanan (paket quota):

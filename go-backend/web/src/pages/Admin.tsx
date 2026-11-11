@@ -100,6 +100,7 @@ interface Voucher {
   discount: number;
   maxUses: number;
   usedCount: number;
+  newUsersOnly?: boolean;
   isActive: boolean;
   expiresAt?: string | null;
   source?: string;
@@ -1161,6 +1162,7 @@ function VouchersTab() {
   const [maxUses, setMaxUses] = useState("100");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
+  const [newUsersOnly, setNewUsersOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Voucher | null>(null);
   const [editIsActive, setEditIsActive] = useState(true);
@@ -1247,6 +1249,7 @@ function VouchersTab() {
     setBulkResult(null);
     setStartsAt("");
     setEndsAt("");
+    setNewUsersOnly(false);
   };
 
   const closeForm = () => {
@@ -1274,6 +1277,7 @@ function VouchersTab() {
         type,
         duration: Number(duration) || 0,
         max_uses: Number(maxUses) || 1,
+        newUsersOnly,
       };
       if (type === "plan" && planId.trim()) body.plan_id = Number(planId);
       // Kunci camelCase supaya ter-bind ke tag JSON model Voucher
@@ -1533,6 +1537,11 @@ function VouchersTab() {
                     </td>
                     <td className="p-3">
                       <Badge variant="outline">{typeLabel(v.type)}</Badge>
+                      {v.newUsersOnly && (
+                        <Badge variant="outline" className="ml-1 border-sky-500/30 text-sky-600">
+                          {t("admin.voucherNewUsersBadge")}
+                        </Badge>
+                      )}
                     </td>
                     <td className="p-3 text-muted-foreground whitespace-nowrap">{t("admin.daysCount").replace("{count}", String(v.duration))}</td>
                     <td className="p-3 text-muted-foreground">{t("admin.discountPct").replace("{pct}", String(v.discount))}</td>
@@ -1648,6 +1657,13 @@ function VouchersTab() {
                 <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
               </Field>
             </div>
+            <label className="flex items-start gap-2 text-sm text-foreground cursor-pointer">
+              <input type="checkbox" checked={newUsersOnly} onChange={(e) => setNewUsersOnly(e.target.checked)} className="w-4 h-4 accent-primary mt-0.5" />
+              <span>
+                {t("admin.voucherNewUsersOnly")}
+                <span className="block text-xs text-muted-foreground">{t("admin.voucherNewUsersOnlyHint")}</span>
+              </span>
+            </label>
             <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-1.5">
               <p className="text-xs font-semibold text-foreground">{t("admin.voucherPreviewTitle")}</p>
               <p className="text-sm text-muted-foreground">{previewSummary}</p>
@@ -1686,6 +1702,12 @@ function VouchersTab() {
                     <dd className="font-medium text-foreground text-right">
                       {startsAt ? fmtDate(startsAt) : "…"} – {endsAt ? fmtDate(endsAt) : "…"}
                     </dd>
+                  </div>
+                )}
+                {newUsersOnly && (
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">{t("admin.voucherNewUsersOnly")}</dt>
+                    <dd className="font-medium text-foreground text-right">Ya</dd>
                   </div>
                 )}
               </dl>

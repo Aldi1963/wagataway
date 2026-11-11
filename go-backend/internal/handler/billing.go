@@ -338,6 +338,10 @@ var errAlreadyRedeemed = errors.New("voucher already redeemed by user")
 // (terdeteksi di dalam transaksi, setelah kunci baris).
 var errVoucherExhausted = errors.New("voucher exhausted")
 
+// errVoucherNewUsersOnly menandai percobaan redeem voucher khusus
+// pengguna baru oleh user yang masih punya langganan aktif.
+var errVoucherNewUsersOnly = errors.New("voucher khusus pengguna baru")
+
 func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -395,6 +399,22 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Voucher khusus pengguna baru: hanya untuk yang belum pernah
+		// berlangganan atau langganannya sudah habis (tidak ada langganan
+		// aktif saat ini). Dicek ulang di dalam transaksi di bawah agar
+		// aktivasi langganan yang berjalan bersamaan tidak lolos.
+		if voucher.NewUsersOnly {
+			active, err := subscription.HasActiveSubscription(udb, userID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menggunakan voucher"})
+				return
+			}
+			if active {
+				c.JSON(http.StatusForbidden, gin.H{"message": "Voucher ini khusus pengguna baru atau yang langganannya sudah habis"})
+				return
+			}
+		}
+
 		// Siapkan paket yang akan diberikan (trial memakai paket acuan bila
 		// voucher tidak menunjuk paket tertentu).
 		plan, durationDays, isTrial, err := voucherGrantPlan(udb, &voucher)
@@ -418,6 +438,10 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			}
 			if errors.Is(err, errAlreadyRedeemed) {
 				c.JSON(http.StatusConflict, gin.H{"message": "Voucher ini sudah pernah Anda gunakan"})
+				return
+			}
+			if errors.Is(err, errVoucherNewUsersOnly) {
+				c.JSON(http.StatusForbidden, gin.H{"message": "Voucher ini khusus pengguna baru atau yang langganannya sudah habis"})
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menggunakan voucher"})
@@ -462,6 +486,27 @@ func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan mod
 	}
 	if locked.MaxUses > 0 && locked.UsedCount >= locked.MaxUses {
 		return time.Time{}, time.Time{}, errVoucherExhausted
+	}
+
+	// Syarat pengguna baru dicek ulang di dalam transaksi: kunci baris
+	// user dulu agar aktivasi langganan yang berjalan bersamaan (mis.
+	// pembayaran paket lain yang commit di antara cek luar dan pemberian
+	// langganan di bawah) tidak lolos. Kunci ini juga dipakai
+	// grantVoucherSubscription di bawah — dalam satu transaksi yang sama,
+	// penguncian ulang baris yang sama adalah no-op.
+	if voucher.NewUsersOnly {
+		var lockedUser models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", userID).First(&lockedUser).Error; err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		active, err := subscription.HasActiveSubscription(tx, userID)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		if active {
+			return time.Time{}, time.Time{}, errVoucherNewUsersOnly
+		}
 	}
 
 	var count int64
