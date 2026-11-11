@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
-import { Dropdown } from "@/components/ui/dropdown";
 
 interface Parts {
   y: number;
@@ -121,7 +120,7 @@ export function DateTimePicker({
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const w = Math.min(320, vw - 24);
-      const h = showTime ? 470 : 380; // perkiraan tinggi panel
+      const h = showTime ? 420 : 380; // perkiraan tinggi panel
       const left = Math.max(12, Math.min(r.left, vw - w - 12));
       const top = r.bottom + 6 + h > vh ? Math.max(12, r.top - h - 6) : r.bottom + 6;
       setPanelStyle({ left, top, width: w });
@@ -168,14 +167,14 @@ export function DateTimePicker({
       })()
     : "";
 
-  const hourOpts = Array.from({ length: 24 }, (_, h) => ({
-    value: String(h),
-    label: pad2(h),
-  }));
-  const minOpts = Array.from({ length: 60 }, (_, m) => ({
-    value: String(m),
-    label: pad2(m),
-  }));
+  const stepHour = (d: number) => {
+    if (!draft) return;
+    setDraft({ ...draft, hh: (draft.hh + d + 24) % 24 });
+  };
+  const stepMin = (d: number) => {
+    if (!draft) return;
+    setDraft({ ...draft, mm: (draft.mm + d + 60) % 60 });
+  };
 
   return (
     <div className="relative">
@@ -265,30 +264,62 @@ export function DateTimePicker({
             )}
           </div>
 
-          {/* Jam & menit */}
+          {/* Jam & menit — stepper inline, bukan dropdown: daftar dropdown
+              terpotong oleh overflow panel (max-h 80vh), stepper tidak bisa
+              kepotong dan lebih enak disentuh di HP. */}
           {showTime && (
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>
               <p className="text-[10px] font-medium text-muted-foreground mb-1">
                 {t("schedule.hourLabel")}
               </p>
-              <Dropdown
-                value={String(draft.hh)}
-                onChange={(v) => setDraft({ ...draft, hh: Number(v) })}
-                options={hourOpts}
-                ariaLabel={t("schedule.hourLabel")}
-              />
+              <div className="flex h-10 items-center rounded-md border border-input bg-background">
+                <button
+                  type="button"
+                  aria-label="Kurangi jam"
+                  onClick={() => stepHour(-1)}
+                  className="flex h-full w-10 shrink-0 items-center justify-center rounded-l-md text-muted-foreground hover:bg-secondary"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="flex-1 text-center text-base font-semibold tabular-nums text-foreground">
+                  {pad2(draft.hh)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Tambah jam"
+                  onClick={() => stepHour(1)}
+                  className="flex h-full w-10 shrink-0 items-center justify-center rounded-r-md text-muted-foreground hover:bg-secondary"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div>
               <p className="text-[10px] font-medium text-muted-foreground mb-1">
                 {t("schedule.minuteLabel")}
               </p>
-              <Dropdown
-                value={String(draft.mm)}
-                onChange={(v) => setDraft({ ...draft, mm: Number(v) })}
-                options={minOpts}
-                ariaLabel={t("schedule.minuteLabel")}
-              />
+              <div className="flex h-10 items-center rounded-md border border-input bg-background">
+                <button
+                  type="button"
+                  aria-label="Kurangi menit"
+                  onClick={() => stepMin(-1)}
+                  className="flex h-full w-10 shrink-0 items-center justify-center rounded-l-md text-muted-foreground hover:bg-secondary"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="flex-1 text-center text-base font-semibold tabular-nums text-foreground">
+                  {pad2(draft.mm)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Tambah menit"
+                  onClick={() => stepMin(1)}
+                  className="flex h-full w-10 shrink-0 items-center justify-center rounded-r-md text-muted-foreground hover:bg-secondary"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
           )}
