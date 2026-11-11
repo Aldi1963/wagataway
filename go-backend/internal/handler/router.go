@@ -134,6 +134,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			admin.Use(middleware.AdminRequired())
 			{
 				registerAdminRoutes(admin, cfg, db, waManager)
+				// Analitik voucher (Item 7): statistik per kode + riwayat penukaran.
+				admin.GET("/vouchers/analytics", adminVoucherAnalytics(db))
+				admin.GET("/vouchers/:id/redemptions", adminListVoucherRedemptions(db))
 			}
 		}
 	}

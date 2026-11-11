@@ -31,6 +31,7 @@ import {
   Copy,
   CreditCard,
   AlertTriangle,
+  History,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -86,6 +87,38 @@ interface Voucher {
   usedCount: number;
   isActive: boolean;
   expiresAt?: string | null;
+}
+
+// Analitik voucher (Item 7): statistik per kode + ringkasan konversi
+// trial→berbayar, dari GET /api/admin/vouchers/analytics.
+interface VoucherAnalyticsRow {
+  voucherId: number;
+  code: string;
+  type: string;
+  planName: string;
+  redemptions: number;
+  convertedCount: number;
+  conversionRate: number;
+  firstRedeemedAt?: string | null;
+  lastRedeemedAt?: string | null;
+}
+
+interface VoucherAnalyticsSummary {
+  totalVouchers: number;
+  totalRedemptions: number;
+  trialRedemptions: number;
+  trialConverted: number;
+  trialConversionRate: number;
+}
+
+interface VoucherRedemptionItem {
+  id: number;
+  userId: number;
+  userName: string;
+  userEmail: string;
+  redeemedAt: string;
+  converted: boolean;
+  firstPaidAt?: string | null;
 }
 
 interface Txn {
@@ -1078,6 +1111,12 @@ function VouchersTab() {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<VoucherAnalyticsSummary | null>(null);
+  const [statsById, setStatsById] = useState<Record<number, VoucherAnalyticsRow>>({});
+  const [historyVoucher, setHistoryVoucher] = useState<Voucher | null>(null);
+  const [history, setHistory] = useState<VoucherRedemptionItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [code, setCode] = useState("");
   const [type, setType] = useState("trial");
@@ -1107,13 +1146,45 @@ function VouchersTab() {
   const load = () => {
     setLoading(true);
     setError(null);
-    apiGet<{ vouchers: Voucher[] }>("/admin/vouchers")
-      .then((res) => setVouchers(res.vouchers || []))
+    // Analitik dimuat berdampingan; bila gagal, tabel tetap tampil
+    // (kolom konversi jadi "—") dan toast tidak diperlukan.
+    Promise.all([
+      apiGet<{ vouchers: Voucher[] }>("/admin/vouchers"),
+      apiGet<{ summary: VoucherAnalyticsSummary; vouchers: VoucherAnalyticsRow[] }>(
+        "/admin/vouchers/analytics",
+      ).catch(() => null),
+    ])
+      .then(([vRes, aRes]) => {
+        setVouchers(vRes.vouchers || []);
+        if (aRes) {
+          setAnalytics(aRes.summary);
+          const map: Record<number, VoucherAnalyticsRow> = {};
+          for (const row of aRes.vouchers || []) map[row.voucherId] = row;
+          setStatsById(map);
+        }
+      })
       .catch((e) => setError(errMsg(e, t("admin.errLoadVouchers"))))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
+
+  // Muat riwayat penukaran saat modal dibuka.
+  const loadHistory = (v: Voucher) => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    apiGet<{ redemptions: VoucherRedemptionItem[] }>(
+      `/admin/vouchers/${v.id}/redemptions`,
+    )
+      .then((res) => setHistory(res.redemptions || []))
+      .catch((e) => setHistoryError(errMsg(e, t("admin.errLoadVoucherHistory"))))
+      .finally(() => setHistoryLoading(false));
+  };
+
+  useEffect(() => {
+    if (!historyVoucher) return;
+    loadHistory(historyVoucher);
+  }, [historyVoucher]);
 
   // Muat daftar paket saat form tambah/edit dibuka (untuk dropdown paket).
   useEffect(() => {
@@ -1264,6 +1335,18 @@ function VouchersTab() {
           .replace("{days}", previewDays)
           .replace("{uses}", previewUses);
 
+  const fmtPct = (n: number) => `${Number(n.toFixed(1))}%`;
+
+  // Kartu ringkasan analitik (pola yang sama seperti tab Overview).
+  const voucherStats = analytics
+    ? [
+        { icon: Ticket, label: t("admin.statTotalVouchers"), value: fmtNum(analytics.totalVouchers), tint: "bg-violet-500/10 text-violet-600" },
+        { icon: Users, label: t("admin.statTotalRedemptions"), value: fmtNum(analytics.totalRedemptions), tint: "bg-emerald-500/10 text-emerald-600" },
+        { icon: Smartphone, label: t("admin.statTrialRedemptions"), value: fmtNum(analytics.trialRedemptions), tint: "bg-amber-500/10 text-amber-600" },
+        { icon: Wallet, label: t("admin.statTrialConversion"), value: `${fmtNum(analytics.trialConverted)} (${fmtPct(analytics.trialConversionRate)})`, tint: "bg-[#243370]/10 text-[#243370] dark:text-[#8fa0e8]" },
+      ]
+    : [];
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -1288,11 +1371,31 @@ function VouchersTab() {
           </div>
         </div>
       )}
+      {!loading && !error && voucherStats.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {voucherStats.map((s) => (
+              <Card key={s.label}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${s.tint}`}>
+                    <s.icon className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">{s.label}</p>
+                    <p className="text-lg font-bold text-foreground truncate">{s.value}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t("admin.trialConversionNote")}</p>
+        </>
+      )}
 
       {!loading && !error && (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[880px]">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="p-3 font-medium">{t("admin.colCode")}</th>
@@ -1300,6 +1403,7 @@ function VouchersTab() {
                   <th className="p-3 font-medium">{t("admin.colDuration")}</th>
                   <th className="p-3 font-medium">{t("admin.colDiscount")}</th>
                   <th className="p-3 font-medium">{t("admin.colUsed")}</th>
+                  <th className="p-3 font-medium">{t("admin.colConversion")}</th>
                   <th className="p-3 font-medium">{t("admin.colExpires")}</th>
                   <th className="p-3 font-medium">{t("admin.colStatus")}</th>
                   <th className="p-3 font-medium text-right">{t("admin.colActions")}</th>
@@ -1323,6 +1427,14 @@ function VouchersTab() {
                         <Badge className="ml-2 bg-amber-500/10 text-amber-600 border-amber-500/20">{t("admin.voucherAlmostUsed")}</Badge>
                       )}
                     </td>
+                    <td className="p-3 text-muted-foreground whitespace-nowrap">
+                      {v.type === "trial" && statsById[v.id]
+                        ? t("admin.conversionDetail")
+                            .replace("{converted}", String(statsById[v.id].convertedCount))
+                            .replace("{total}", String(statsById[v.id].redemptions))
+                            .replace("{rate}", String(Number(statsById[v.id].conversionRate.toFixed(1))))
+                        : "—"}
+                    </td>
                     <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(v.expiresAt)}</td>
                     <td className="p-3">
                       <span className="inline-flex flex-wrap gap-1">
@@ -1341,6 +1453,9 @@ function VouchersTab() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(v)} aria-label={t("admin.editVoucher")}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setHistoryVoucher(v)} aria-label={t("admin.voucherHistory")}>
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(v)} aria-label={t("admin.deleteVoucher")}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -1350,7 +1465,7 @@ function VouchersTab() {
                 ))}
                 {vouchers.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       {t("admin.noVouchers")}
                     </td>
                   </tr>
@@ -1489,6 +1604,49 @@ function VouchersTab() {
               {deletingBusy ? t("admin.deleting") : t("admin.delete")}
             </Button>
           </div>
+        </Modal>
+      )}
+
+      {historyVoucher && (
+        <Modal title={t("admin.voucherHistoryTitle").replace("{code}", historyVoucher.code)} onClose={() => setHistoryVoucher(null)}>
+          {historyLoading && <LoadingRows />}
+          {!historyLoading && historyError && <ErrorCard message={historyError} onRetry={() => loadHistory(historyVoucher)} />}
+          {!historyLoading && !historyError && history.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t("admin.noRedemptions")}</p>
+          )}
+          {!historyLoading && !historyError && history.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[420px]">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="p-3 font-medium">{t("admin.colRedeemer")}</th>
+                    <th className="p-3 font-medium">{t("admin.colRedeemedAt")}</th>
+                    <th className="p-3 font-medium">{t("admin.colConverted")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.id} className="border-b border-border last:border-0">
+                      <td className="p-3">
+                        <p className="font-medium text-foreground">{h.userName}</p>
+                        <p className="text-xs text-muted-foreground">{h.userEmail}</p>
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(h.redeemedAt)}</td>
+                      <td className="p-3">
+                        {h.converted ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                            {t("admin.convertedYes").replace("{date}", fmtDate(h.firstPaidAt))}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">{t("admin.convertedNo")}</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Modal>
       )}
     </div>
