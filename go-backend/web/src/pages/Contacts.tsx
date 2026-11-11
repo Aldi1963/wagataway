@@ -94,6 +94,8 @@ function Modal({
 export default function Contacts({ embedded = false }: { embedded?: boolean }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [total, setTotal] = useState(0);
+  const [contactLimit, setContactLimit] = useState(0);
+  const [planName, setPlanName] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,11 +128,13 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiGet<{ contacts: Contact[]; total: number }>(
+      const res = await apiGet<{ contacts: Contact[]; total: number; contactLimit?: number; planName?: string }>(
         `/contacts?search=${encodeURIComponent(q)}&limit=100`
       );
       setContacts(res.contacts || []);
       setTotal(res.total ?? (res.contacts || []).length);
+      setContactLimit(res.contactLimit ?? 0);
+      setPlanName(res.planName ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : t("contacts.loadFailed"));
     } finally {
@@ -441,6 +445,15 @@ export default function Contacts({ embedded = false }: { embedded?: boolean }) {
             <h1 className="text-xl sm:text-2xl font-bold">{t("title.contacts")}</h1>
             <p className="text-sm text-muted-foreground">
               {t("contacts.totalStored").replace("{count}", String(total))}
+              {contactLimit > 0 && (
+                <>
+                  {" · "}
+                  {t("contacts.limitUsage")
+                    .replace("{used}", String(total))
+                    .replace("{limit}", String(contactLimit.toLocaleString("id-ID")))
+                    .replace("{plan}", planName)}
+                </>
+              )}
             </p>
           </div>
         )}

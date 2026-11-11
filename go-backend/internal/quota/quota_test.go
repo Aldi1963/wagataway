@@ -330,6 +330,115 @@ func TestBackfillDefaults(t *testing.T) {
 	}
 }
 
+// ── Item 7: batas kontak/bulk/auto-reply per paket ────────────────────────
+
+func TestBackfillPlanLimits(t *testing.T) {
+	db := testDB(t)
+	db.Exec("TRUNCATE plans RESTART IDENTITY CASCADE")
+	for _, p := range []models.Plan{
+		// Tripel lama yang sama di semua paket → harus naik per tier.
+		{Name: "Free", Slug: "free", MaxContacts: 500, MaxAutoReply: 5, MaxBulk: 100},
+		{Name: "Lite", Slug: "lite", MaxContacts: 500, MaxAutoReply: 5, MaxBulk: 100},
+		{Name: "Regular", Slug: "regular", MaxContacts: 500, MaxAutoReply: 5, MaxBulk: 100},
+		{Name: "Pro", Slug: "pro", MaxContacts: 500, MaxAutoReply: 5, MaxBulk: 100},
+		{Name: "Master", Slug: "master", MaxContacts: 500, MaxAutoReply: 5, MaxBulk: 100},
+		// Kustom admin (salah satu nilai sudah beda) → tidak boleh ditimpa.
+		{Name: "Custom", Slug: "custom", MaxContacts: 700, MaxAutoReply: 5, MaxBulk: 100},
+		// Slug tak dikenal dengan tripel lama → tidak disentuh.
+		{Name: "Lain", Slug: "lain", MaxContacts: 500, MaxAutoReply: 5, MaxBulk: 100},
+	} {
+		if err := db.Create(&p).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	if err := BackfillPlanLimits(db); err != nil {
+		t.Fatalf("BackfillPlanLimits: %v", err)
+	}
+	// Idempoten: jalankan kedua kali, hasil harus sama.
+	if err := BackfillPlanLimits(db); err != nil {
+		t.Fatalf("BackfillPlanLimits (2nd): %v", err)
+	}
+	want := map[string][3]int{
+		"free":    {500, 5, 100},
+		"lite":    {1000, 10, 250},
+		"regular": {2500, 20, 500},
+		"pro":     {5000, 30, 750},
+		"master":  {10000, 50, 1000},
+		"custom":  {700, 5, 100},
+		"lain":    {500, 5, 100},
+	}
+	for slug, w := range want {
+		var p models.Plan
+		if err := db.Where("slug = ?", slug).First(&p).Error; err != nil {
+			t.Fatalf("plan %s: %v", slug, err)
+		}
+		got := [3]int{p.MaxContacts, p.MaxAutoReply, p.MaxBulk}
+		if got != w {
+			t.Errorf("plan %s = %v (kontak/autoReply/bulk), want %v", slug, got, w)
+		}
+	}
+}
+
+func TestEffectivePlan(t *testing.T) {
+	db := testDB(t)
+	db.Exec("TRUNCATE plans, users, subscriptions RESTART IDENTITY CASCADE")
+	plans := []models.Plan{
+		{Name: "Free", Slug: "free", MonthlyMessageLimit: 3000, MaxContacts: 500, MaxBulk: 100, MaxAutoReply: 5},
+		{Name: "Pro", Slug: "pro", MonthlyMessageLimit: 300000, MaxContacts: 5000, MaxBulk: 750, MaxAutoReply: 30},
+	}
+	for i := range plans {
+		if err := db.Create(&plans[i]).Error; err != nil {
+			t.Fatalf("seed plan: %v", err)
+		}
+	}
+	mkUser := func() uint {
+		u := models.User{Name: "Plan Test", Email: "plan-test-" + randomSuffix() + "@t.local"}
+		if err := db.Create(&u).Error; err != nil {
+			t.Fatalf("seed user: %v", err)
+		}
+		return u.ID
+	}
+	// User berlangganan Pro aktif → paket Pro.
+	uPro := mkUser()
+	now := time.Now()
+	if err := db.Create(&models.Subscription{UserID: uPro, PlanID: plans[1].ID, Status: "active",
+		StartDate: now.Add(-24 * time.Hour), EndDate: now.AddDate(0, 1, 0)}).Error; err != nil {
+		t.Fatalf("seed sub: %v", err)
+	}
+	plan, trial, err := EffectivePlan(db, uPro)
+	if err != nil {
+		t.Fatalf("EffectivePlan: %v", err)
+	}
+	if plan.Slug != "pro" || plan.MaxContacts != 5000 || plan.MaxBulk != 750 || plan.MaxAutoReply != 30 {
+		t.Errorf("EffectivePlan pro = %+v, want slug pro 5000/750/30", plan)
+	}
+	if trial {
+		t.Error("EffectivePlan pro trial = true, want false")
+	}
+	// User tanpa langganan → paket Free.
+	uFree := mkUser()
+	plan, _, err = EffectivePlan(db, uFree)
+	if err != nil {
+		t.Fatalf("EffectivePlan: %v", err)
+	}
+	if plan.Slug != "free" || plan.MaxContacts != 500 {
+		t.Errorf("EffectivePlan tanpa langganan = %+v, want slug free 500", plan)
+	}
+	// Langganan 'scheduled' yang jendelanya BELUM mulai → tetap Free.
+	uQueued := mkUser()
+	if err := db.Create(&models.Subscription{UserID: uQueued, PlanID: plans[1].ID, Status: "scheduled",
+		StartDate: now.AddDate(0, 1, 0), EndDate: now.AddDate(0, 2, 0)}).Error; err != nil {
+		t.Fatalf("seed sub: %v", err)
+	}
+	plan, _, err = EffectivePlan(db, uQueued)
+	if err != nil {
+		t.Fatalf("EffectivePlan: %v", err)
+	}
+	if plan.Slug != "free" {
+		t.Errorf("EffectivePlan antrean belum mulai = %s, want free", plan.Slug)
+	}
+}
+
 // ── Fitur 5: grace period 3 hari terintegrasi di gate kuota ────────────────
 
 // mkGraceUser membuat user dengan langganan Lite yang berakhir endOffset

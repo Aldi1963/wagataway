@@ -71,6 +71,8 @@ interface Pkg {
   maxDevices: number;
   maxMessages: number;
   maxContacts: number;
+  maxBulk: number;
+  maxAutoReply: number;
   isActive: boolean;
 }
 
@@ -829,7 +831,7 @@ function UsersTab() {
 
 /* ── Tab: Paket ─────────────────────────────────────── */
 
-const emptyPkg = { name: "", slug: "", price: "", duration: "30", maxDevices: "1", maxMessages: "1000", maxContacts: "100", isActive: true };
+const emptyPkg = { name: "", slug: "", price: "", duration: "30", maxDevices: "1", maxMessages: "1000", maxContacts: "100", maxBulk: "100", maxAutoReply: "5", isActive: true };
 
 function PackagesTab() {
   const { t } = useLang();
@@ -872,6 +874,8 @@ function PackagesTab() {
       maxDevices: String(p.maxDevices),
       maxMessages: String(p.maxMessages),
       maxContacts: String(p.maxContacts),
+      maxBulk: String(p.maxBulk ?? 0),
+      maxAutoReply: String(p.maxAutoReply ?? 0),
       isActive: p.isActive,
     });
     setEditing(p);
@@ -893,6 +897,11 @@ function PackagesTab() {
         max_devices: Number(form.maxDevices) || 1,
         max_messages: Number(form.maxMessages) || 0,
         max_contacts: Number(form.maxContacts) || 0,
+        // Field baru pakai camelCase agar ter-bind ke model Go (tag json
+        // camelCase) saat membuat paket baru; update paket memakai map
+        // dan GORM memetakan nama field ke kolom.
+        maxBulk: Number(form.maxBulk) || 0,
+        maxAutoReply: Number(form.maxAutoReply) || 0,
         is_active: form.isActive,
       };
       if (editing) {
@@ -964,7 +973,9 @@ function PackagesTab() {
                       {t("admin.packageLimits")
                           .replace("{devices}", String(fmtNum(p.maxDevices)))
                           .replace("{messages}", String(fmtNum(p.maxMessages)))
-                          .replace("{contacts}", String(fmtNum(p.maxContacts)))}
+                          .replace("{contacts}", String(fmtNum(p.maxContacts)))
+                          .replace("{bulk}", String(fmtNum(p.maxBulk ?? 0)))
+                          .replace("{autoReply}", String(fmtNum(p.maxAutoReply ?? 0)))}
                     </td>
                     <td className="p-3">
                       {p.isActive ? (
@@ -1026,6 +1037,14 @@ function PackagesTab() {
               </Field>
               <Field label={t("admin.maxContactsLabel")}>
                 <Input type="number" min="0" value={form.maxContacts} onChange={(e) => set("maxContacts", e.target.value)} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("admin.maxBulkLabel")}>
+                <Input type="number" min="0" value={form.maxBulk} onChange={(e) => set("maxBulk", e.target.value)} />
+              </Field>
+              <Field label={t("admin.maxAutoReplyLabel")}>
+                <Input type="number" min="0" value={form.maxAutoReply} onChange={(e) => set("maxAutoReply", e.target.value)} />
               </Field>
             </div>
             <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">

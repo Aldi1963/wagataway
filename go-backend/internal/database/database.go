@@ -257,11 +257,15 @@ func migrateAPIKeyHashes(db *gorm.DB) error {
 	return nil
 }
 
-// migratePlanQuotaDefaults mengisi monthly_message_limit (Fitur 3) untuk
-// paket bawaan yang masih 0 setelah kolom ditambahkan via AutoMigrate.
-// Idempoten; tidak menimpa nilai kustom. Master memang 0 (= unlimited).
+// migratePlanQuotaDefaults mengisi monthly_message_limit (Fitur 3) dan
+// batas kontak/bulk/auto-reply (Item 7) untuk paket bawaan.
+// Idempoten; tidak menimpa nilai kustom. Master memang 0 (= unlimited)
+// untuk kuota pesan.
 func migratePlanQuotaDefaults(db *gorm.DB) error {
 	if err := quota.BackfillDefaults(db); err != nil {
+		return err
+	}
+	if err := quota.BackfillPlanLimits(db); err != nil {
 		return err
 	}
 	log.Info().Msg("Plan monthly message limits backfilled")

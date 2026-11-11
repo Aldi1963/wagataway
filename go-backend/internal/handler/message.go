@@ -10,6 +10,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
@@ -258,8 +259,24 @@ func sendBulkMessage(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Konten pesan maksimal 10000 karakter", "code": "VALIDATION_ERROR"})
 			return
 		}
-		if len(req.Recipients) > 1000 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Maksimal 1000 penerima per blast", "code": "VALIDATION_ERROR"})
+		// Batas penerima bulk per paket (Item 7): maks penerima per blast
+		// mengikuti plan.maxBulk paket aktif, bukan lagi angka keras 1000.
+		// MaxBulk <= 0 (data lama/kustom) = fallback ke batas keras 1000.
+		// Dicek di sini, SEBELUM AutoClean, terhadap jumlah yang diminta.
+		bulkLimit := 1000
+		bulkPlanName := ""
+		if plan, _, err := quota.EffectivePlan(udb, userID); err == nil && plan != nil {
+			bulkPlanName = plan.Name
+			if plan.MaxBulk > 0 {
+				bulkLimit = plan.MaxBulk
+			}
+		}
+		if len(req.Recipients) > bulkLimit {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "Maksimal " + strconv.Itoa(bulkLimit) + " penerima per blast untuk paket " + bulkPlanName + ". Upgrade paket untuk blast lebih besar.",
+				"code":    "BULK_LIMIT_REACHED",
+				"limit":   bulkLimit,
+			})
 			return
 		}
 		if req.MinDelay < 0 || req.MinDelay > 3600 || req.MaxDelay < 0 || req.MaxDelay > 3600 {

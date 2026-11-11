@@ -10,6 +10,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
@@ -54,20 +55,55 @@ func waContactName(info types.ContactInfo, fallback string) string {
 // upsertSyncContact mencari kontak user berdasar nomor; buat baru bila belum ada,
 // atau lengkapi nama yang masih kosong. Aman dipanggil berulang (idempotent).
 func upsertSyncContact(db *gorm.DB, userID uint, phone, name string) (created, filled bool) {
+	c, f, _ := upsertSyncContactCapped(db, userID, phone, name, nil)
+	return c, f
+}
+
+// remainingContactSlots menghitung sisa slot kontak paket aktif user:
+// -1 = tanpa batas (MaxContacts <= 0) atau paket/DB gagal dibaca
+// (fail-open: sync lama tetap jalan).
+func remainingContactSlots(db *gorm.DB, userID uint) int {
+	plan, _, err := quota.EffectivePlan(db, userID)
+	if err != nil || plan == nil || plan.MaxContacts <= 0 {
+		return -1
+	}
+	var count int64
+	if err := db.Model(&models.Contact{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return -1
+	}
+	rem := plan.MaxContacts - int(count)
+	if rem < 0 {
+		rem = 0
+	}
+	return rem
+}
+
+// upsertSyncContactCapped seperti upsertSyncContact, tapi TIDAK membuat
+// kontak baru bila *remaining sudah 0 (batas kontak paket tercapai —
+// Item 7). remaining nil = tanpa batas. capped=true bila pembuatan
+// diblokir batas paket; kontak yang sudah ada tetap bisa dilengkapi
+// namanya (tidak menghabiskan slot).
+func upsertSyncContactCapped(db *gorm.DB, userID uint, phone, name string, remaining *int) (created, filled, capped bool) {
 	var existing models.Contact
 	if err := db.Where("user_id = ? AND phone = ?", userID, phone).First(&existing).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
+			if remaining != nil && *remaining <= 0 {
+				return false, false, true
+			}
 			if db.Create(&models.Contact{UserID: userID, Name: name, Phone: phone}).Error == nil {
-				return true, false
+				if remaining != nil {
+					*remaining--
+				}
+				return true, false, false
 			}
 		}
-		return false, false
+		return false, false, false
 	}
 	if strings.TrimSpace(existing.Name) == "" && name != phone {
 		db.Model(&existing).Update("name", name)
-		return false, true
+		return false, true, false
 	}
-	return false, false
+	return false, false, false
 }
 
 // POST /api/contacts/sync — tarik seluruh kontak dari perangkat WA yang terhubung.
@@ -100,7 +136,14 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
-		added, filled, failed := 0, 0, 0
+		added, filled, failed, capped := 0, 0, 0, 0
+		// Batas kontak paket aktif (Item 7): sync berhenti menambah
+		// kontak baru saat slot habis; kontak lama tetap bisa dilengkapi.
+		rem := remainingContactSlots(udb, userID)
+		var remPtr *int
+		if rem >= 0 {
+			remPtr = &rem
+		}
 		for jid, info := range waContacts {
 			// hanya kontak personal (bukan grup g.us / lid / broadcast)
 			if jid.Server != types.DefaultUserServer {
@@ -117,24 +160,30 @@ func syncContactsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 						failed++
 					}
 				}()
-				created, nameFilled := upsertSyncContact(udb, userID, phone, waContactName(info, phone))
+				created, nameFilled, wasCapped := upsertSyncContactCapped(udb, userID, phone, waContactName(info, phone), remPtr)
 				if created {
 					added++
 				} else if nameFilled {
 					filled++
+				} else if wasCapped {
+					capped++
 				}
 			}()
 		}
 
 		msg := fmt.Sprintf("Sync selesai: %d kontak baru, %d nama dilengkapi", added, filled)
+		if capped > 0 {
+			msg += fmt.Sprintf(", %d dilewati (batas kontak paket tercapai — upgrade paket untuk menambah kontak)", capped)
+		}
 		if failed > 0 {
 			msg += fmt.Sprintf(", %d dilewati (gagal diproses)", failed)
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"added":   added,
-			"updated": filled,
-			"failed":  failed,
-			"message": msg,
+			"added":             added,
+			"updated":           filled,
+			"failed":            failed,
+			"skippedDueToLimit": capped,
+			"message":           msg,
 		})
 	}
 }
@@ -162,7 +211,14 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 			return
 		}
 
-		groupsAdded, groupsUpdated, membersLinked := 0, 0, 0
+		groupsAdded, groupsUpdated, membersLinked, capped := 0, 0, 0, 0
+		// Batas kontak paket aktif (Item 7): anggota grup baru berhenti
+		// dibuat saat slot kontak habis; penautan anggota lama tetap jalan.
+		rem := remainingContactSlots(udb, userID)
+		var remPtr *int
+		if rem >= 0 {
+			remPtr = &rem
+		}
 		for _, g := range waGroups {
 			if g == nil {
 				continue
@@ -211,7 +267,11 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 
 			// upsert tiap anggota jadi kontak, lalu tautkan ke grup
 			for _, phone := range phones {
-				upsertSyncContact(udb, userID, phone, phone)
+				_, _, wasCapped := upsertSyncContactCapped(udb, userID, phone, phone, remPtr)
+				if wasCapped {
+					capped++
+					continue
+				}
 				var contact models.Contact
 				if err := udb.Where("user_id = ? AND phone = ?", userID, phone).First(&contact).Error; err != nil {
 					continue
@@ -226,10 +286,11 @@ func syncGroupsFromWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"groupsAdded":   groupsAdded,
-			"groupsUpdated": groupsUpdated,
-			"membersLinked": membersLinked,
-			"message":       fmt.Sprintf("Sync selesai: %d grup baru, %d grup diperbarui, %d anggota ditautkan", groupsAdded, groupsUpdated, membersLinked),
+			"groupsAdded":       groupsAdded,
+			"groupsUpdated":     groupsUpdated,
+			"membersLinked":     membersLinked,
+			"skippedDueToLimit": capped,
+			"message":           fmt.Sprintf("Sync selesai: %d grup baru, %d grup diperbarui, %d anggota ditautkan", groupsAdded, groupsUpdated, membersLinked),
 		})
 	}
 }
