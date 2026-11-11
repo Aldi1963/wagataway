@@ -4,6 +4,7 @@ import ApiPlayground from "./ApiPlayground";
 import WebhookLogs from "./WebhookLogs";
 import BotDeliveryLogs from "./BotDeliveryLogs";
 import Integrations from "./Integrations";
+import SheetsWebhook from "./SheetsWebhook";
 import { PageTabs } from "@/components/ui/tabs";
 import { useLang } from "@/lib/i18n";
 
@@ -16,6 +17,7 @@ export default function DeveloperHub() {
     { id: "integrations", label: t("developerHub.tabIntegrations"), href: "/integrations" },
     { id: "playground", label: "Playground", href: "/api-playground" },
     { id: "webhook-logs", label: "Webhook Logs", href: "/webhook-logs" },
+    { id: "sheets-webhook", label: t("developerHub.tabSheetsWebhook"), href: "/sheets-webhook" },
     { id: "bot-logs", label: t("developerHub.tabBotHistory"), href: "/bot-logs" },
   ];
   const active =
@@ -25,6 +27,8 @@ export default function DeveloperHub() {
         ? "playground"
         : location === "/webhook-logs"
           ? "webhook-logs"
+          : location === "/sheets-webhook"
+            ? "sheets-webhook"
           : location === "/bot-logs"
             ? "bot-logs"
             : "api-docs";
@@ -44,6 +48,8 @@ export default function DeveloperHub() {
         <ApiPlayground embedded />
       ) : active === "webhook-logs" ? (
         <WebhookLogs embedded />
+      ) : active === "sheets-webhook" ? (
+        <SheetsWebhook embedded />
       ) : active === "bot-logs" ? (
         <BotDeliveryLogs embedded />
       ) : (

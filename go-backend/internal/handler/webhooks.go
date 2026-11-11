@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
@@ -22,6 +24,7 @@ func registerWebhookRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		wh.DELETE("/:id", deleteWebhook(db))
 		wh.GET("/:id/deliveries", listWebhookDeliveries(db))
 		wh.POST("/:id/deliveries/:deliveryId/retry", retryWebhookDelivery(db))
+		wh.POST("/:id/test", testWebhook(db))
 	}
 }
 
@@ -82,6 +85,42 @@ func retryWebhookDelivery(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// testWebhook: kirim payload uji (event webhook.test) ke URL webhook dan
+// catat hasilnya sebagai delivery baru (Item 8).
+func testWebhook(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		hook, ok := getUserWebhook(c, db)
+		if !ok {
+			return
+		}
+		raw, _ := json.Marshal(map[string]interface{}{
+			"event":      "webhook.test",
+			"device_id":  hook.DeviceID,
+			"webhook_id": hook.ID,
+			"payload":    map[string]interface{}{"test": true},
+			"sent_at":    time.Now().UTC().Format(time.RFC3339),
+		})
+		statusCode, success, errMsg, durationMs := whatsapp.DeliverWebhookPayload(
+			hook.URL, hook.Secret, "webhook.test", raw,
+		)
+		delivery := models.WebhookDelivery{
+			WebhookID:  hook.ID,
+			Event:      "webhook.test",
+			StatusCode: statusCode,
+			Success:    success,
+			ErrorMsg:   errMsg,
+			DurationMs: durationMs,
+			Payload:    string(raw),
+		}
+		db.Create(&delivery)
+		db.Model(&models.Webhook{}).Where("id = ?", hook.ID).Updates(map[string]interface{}{
+			"trigger_count":  gorm.Expr("trigger_count + 1"),
+			"last_triggered": time.Now(),
+		})
+		c.JSON(http.StatusOK, gin.H{"delivery": delivery})
+	}
+}
+
 func listWebhooks(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := middleware.GetUserID(c)
@@ -97,13 +136,18 @@ func createWebhook(db *gorm.DB) gin.HandlerFunc {
 		userID := middleware.GetUserID(c)
 		udb := rls.Scoped(db, userID)
 		var req struct {
-			URL      string `json:"url" binding:"required"`
-			Secret   string `json:"secret"`
-			Events   string `json:"events"`
-			DeviceID *uint  `json:"deviceId"`
+			URL      string          `json:"url" binding:"required"`
+			Secret   string          `json:"secret"`
+			Events   json.RawMessage `json:"events"`
+			DeviceID *uint           `json:"deviceId"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "URL wajib"})
+			return
+		}
+		events, err := normalizeEvents(req.Events)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "VALIDATION_ERROR"})
 			return
 		}
 		if err := security.ValidateOutboundURL(req.URL); err != nil {
@@ -112,7 +156,7 @@ func createWebhook(db *gorm.DB) gin.HandlerFunc {
 		}
 		hook := models.Webhook{
 			UserID: userID, URL: req.URL, Secret: req.Secret,
-			Events: req.Events, DeviceID: req.DeviceID, IsActive: true,
+			Events: events, DeviceID: req.DeviceID, IsActive: true,
 		}
 		udb.Create(&hook)
 		c.JSON(http.StatusCreated, gin.H{"webhook": hook})
@@ -131,6 +175,17 @@ func updateWebhook(db *gorm.DB) gin.HandlerFunc {
 		}
 		var req map[string]interface{}
 		c.ShouldBindJSON(&req)
+		// events boleh dikirim sebagai array JSON (dari UI baru) — normalisasi
+		// ke string JSON sebelum disimpan; event tak dikenal ditolak.
+		if rawEvents, ok := req["events"]; ok {
+			b, _ := json.Marshal(rawEvents)
+			events, err := normalizeEvents(b)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "VALIDATION_ERROR"})
+				return
+			}
+			req["events"] = events
+		}
 		if rawURL, ok := req["url"]; ok {
 			if s, ok := rawURL.(string); ok && s != "" {
 				if err := security.ValidateOutboundURL(s); err != nil {

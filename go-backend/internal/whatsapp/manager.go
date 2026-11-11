@@ -1293,6 +1293,13 @@ func (m *Manager) BackfillLIDConversations(userID, deviceID uint) int {
 	return migrated
 }
 
+// FireEvent memicu webhook outbound untuk satu event dari luar paket
+// whatsapp (mis. subscription.activated dari billing). Pengiriman tiap hook
+// berjalan di goroutine sendiri di dalam fireWebhooks.
+func (m *Manager) FireEvent(userID, deviceID uint, event string, payload map[string]interface{}) {
+	m.fireWebhooks(userID, deviceID, event, payload)
+}
+
 // fireWebhooks fires all active webhooks for a user/device event.
 // Tiap hook dikirim via goroutine sendiri agar tidak memblokir pipeline pesan.
 func (m *Manager) fireWebhooks(userID, deviceID uint, event string, payload map[string]interface{}) {

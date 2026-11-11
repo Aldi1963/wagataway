@@ -689,6 +689,8 @@ func clipkuPayWebhook(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerF
 				// Fitur 6: tepat di momen transisi → paid. Error notifikasi
 				// tidak menggagalkan webhook (sudah dicatat di log).
 				_ = notifyPaymentSuccess(db, wm, tx.ID)
+				// Item 8: event webhook outbound subscription.activated.
+				fireSubscriptionActivated(db, wm, tx.ID)
 			}
 			db.Model(&log).Update("status", logStatus)
 		} else {
