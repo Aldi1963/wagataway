@@ -509,7 +509,7 @@ function Testimoni() {
 }
 
 /* ── Harga ──────────────────────────────────────────── */
-type Paket = { nama: string; harga: number; pesan: string; device: number; fitur: string[]; populer?: boolean };
+type Paket = { nama: string; harga: number; pesan: string; device: number; kontak: number; bulk: number; fitur: string[]; populer?: boolean };
 type PlanDB = {
   id: number | string;
   name: string;
@@ -520,6 +520,8 @@ type PlanDB = {
   maxDevices: number;
   maxMessages: number;
   maxContacts?: number;
+  maxBulk?: number;
+  maxAutoReply?: number;
   features: string[];
 };
 
@@ -550,6 +552,8 @@ function Harga() {
       harga: 0,
       pesan: t("landing.quotaPerMonth").replace("{count}", "1.000"),
       device: 1,
+      kontak: 500,
+      bulk: 100,
       fitur: [t("landing.freeFeat1"), t("landing.freeFeat2"), t("landing.freeFeat3"), t("landing.freeFeat4"), "Autoreply keyword", "Webhook", "REST API"],
     },
     {
@@ -557,6 +561,8 @@ function Harga() {
       harga: 25000,
       pesan: t("landing.quotaPerMonth").replace("{count}", "1.000"),
       device: 2,
+      kontak: 1000,
+      bulk: 250,
       fitur: [t("landing.liteFeat1"), t("landing.liteFeat2"), t("landing.liteFeat3"), t("landing.liteFeat4"), t("landing.liteFeat5"), t("landing.liteFeat6")],
     },
     {
@@ -564,6 +570,8 @@ function Harga() {
       harga: 66000,
       pesan: t("landing.quotaPerMonth").replace("{count}", "10.000"),
       device: 3,
+      kontak: 2500,
+      bulk: 500,
       populer: true,
       fitur: [t("landing.regFeat1"), t("landing.regFeat2"), t("landing.regFeat3"), t("landing.regFeat4"), t("landing.regFeat5"), t("landing.regFeat6")],
     },
@@ -572,6 +580,8 @@ function Harga() {
       harga: 110000,
       pesan: t("landing.quotaPerMonth").replace("{count}", "25.000"),
       device: 5,
+      kontak: 5000,
+      bulk: 750,
       fitur: [t("landing.proFeat1"), t("landing.proFeat2"), t("landing.proFeat3"), t("landing.proFeat4"), t("landing.proFeat5")],
     },
     {
@@ -579,6 +589,8 @@ function Harga() {
       harga: 175000,
       pesan: t("landing.unlimitedQuota"),
       device: 10,
+      kontak: 10000,
+      bulk: 1000,
       fitur: [t("landing.masterFeat1"), t("landing.masterFeat2"), t("landing.masterFeat3"), t("landing.masterFeat4"), t("landing.masterFeat5")],
     },
   ];
@@ -589,6 +601,8 @@ function Harga() {
         harga: p.price,
         pesan: kuotaLabel(t, p.maxMessages),
         device: p.maxDevices,
+        kontak: p.maxContacts ?? 0,
+        bulk: p.maxBulk ?? 0,
         fitur: Array.isArray(p.features) ? p.features : [],
         populer: p.slug === "regular" || p.name.toLowerCase() === "regular",
       }))
@@ -620,7 +634,7 @@ function Harga() {
                   <p className="text-3xl font-extrabold mt-2 text-slate-900 text-center">{rp(harga)}</p>
                   <p className="text-xs mt-1 text-slate-400 text-center">{tahunan ? t("landing.perYear") : t("landing.perMonth")}</p>
                   <p className="text-xs font-semibold mt-4 text-[#1a2a5e] text-center">
-                    {p.pesan} · {p.device} device
+                    {p.pesan} · {p.device} device · {t("landing.contactsCount").replace("{count}", p.kontak.toLocaleString("id-ID"))} · {t("landing.bulkPerBlast").replace("{count}", p.bulk.toLocaleString("id-ID"))}
                   </p>
                   <hr className="my-4 border-slate-100" />
                   <ul className="space-y-2 flex-1">

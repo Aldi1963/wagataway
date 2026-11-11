@@ -59,6 +59,50 @@ var DefaultMonthlyLimits = map[string]int{
 	"master":   0, // unlimited
 }
 
+// Batas kontak, penerima bulk per blast, dan aturan auto-reply per paket
+// (Item 7 — Batas kontak & bulk naik per paket). Skala berjenjang:
+// Free tetap di angka lama (500/100/5) sebagai baseline; tiap tier naik
+// ~2x untuk kontak, bulk naik 100→250→500→750→1000, auto-reply
+// 5→10→20→30→50. Master: 10.000 kontak, 1.000 penerima/blast.
+// Dipakai sebagai backfill idempoten (BackfillPlanLimits) + seed_plans.sql
+// untuk instalasi baru; admin bisa mengubahnya per paket dari panel Admin.
+var DefaultContactLimits = map[string]int{
+	"free":    500,
+	"lite":    1000,
+	"regular": 2500,
+	"pro":     5000,
+	"master":  10000,
+}
+
+var DefaultBulkLimits = map[string]int{
+	"free":    100,
+	"lite":    250,
+	"regular": 500,
+	"pro":     750,
+	"master":  1000,
+}
+
+var DefaultAutoReplyLimits = map[string]int{
+	"free":    5,
+	"lite":    10,
+	"regular": 20,
+	"pro":     30,
+	"master":  50,
+}
+
+// FallbackFreePlan dipakai bila paket 'free' tidak ditemukan di DB:
+// batas Free sebagai fallback (konsisten dengan FallbackFreeLimit).
+func FallbackFreePlan() models.Plan {
+	return models.Plan{
+		Name:                "Free",
+		Slug:                "free",
+		MonthlyMessageLimit: FallbackFreeLimit,
+		MaxContacts:         DefaultContactLimits["free"],
+		MaxBulk:             DefaultBulkLimits["free"],
+		MaxAutoReply:        DefaultAutoReplyLimits["free"],
+	}
+}
+
 // TrialMonthlyLimit: kuota trial disamakan dengan paket Lite.
 const TrialMonthlyLimit = 15000
 
@@ -223,6 +267,37 @@ func Usage(db *gorm.DB, userID uint) (used int64, err error) {
 	return monthlyUsage(db, userID)
 }
 
+// EffectivePlan menentukan paket efektif user (baris Plan lengkap):
+// langganan yang jendela waktunya mengandung SEKARANG (status active /
+// scheduled yang sudah mulai) > paket free > fallback Free. Baris
+// 'scheduled' yang jendelanya belum mulai (voucher mengantre) dan baris
+// yang sudah lewat TIDAK dihitung. isTrial true bila langganan aktif
+// adalah trial (kuota pesan trial memakai TrialMonthlyLimit, tapi batas
+// kontak/bulk/auto-reply tetap mengikuti baris paketnya — trial di atas
+// paket Lite mendapat batas Lite).
+// Satu-satunya resolver paket efektif selain effectiveLimit (yang kini
+// memakai fungsi ini); dipakai enforce batas kontak/bulk/auto-reply.
+func EffectivePlan(db *gorm.DB, userID uint) (plan *models.Plan, isTrial bool, err error) {
+	now := time.Now()
+	var sub models.Subscription
+	if err := db.Where("user_id = ? AND status IN ? AND start_date <= ? AND end_date > ?",
+		userID, []string{"active", "scheduled"}, now, now).
+		Preload("Plan").Order("start_date ASC").First(&sub).Error; err == nil {
+		return &sub.Plan, sub.IsTrial, nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+
+	var free models.Plan
+	if err := db.Where("slug = ?", "free").First(&free).Error; err == nil {
+		return &free, false, nil
+	}
+	// Paket 'free' tidak ada (atau gagal dibaca): fallback ke batas Free
+	// — sama seperti perilaku effectiveLimit lama (fail-open, bukan error).
+	fb := FallbackFreePlan()
+	return &fb, false, nil
+}
+
 // effectiveLimit menentukan limit & nama paket efektif untuk user:
 // langganan yang jendela waktunya mengandung SEKARANG (status active /
 // scheduled yang sudah mulai) > paket free > fallback. Baris 'scheduled'
@@ -230,25 +305,14 @@ func Usage(db *gorm.DB, userID uint) (used int64, err error) {
 // lewat TIDAK dihitung — paket & kuota yang tampil tetap paket lama sampai
 // antrean benar-benar mulai berlaku.
 func effectiveLimit(db *gorm.DB, userID uint) (limit int, planName string, isTrial bool, err error) {
-	now := time.Now()
-	var sub models.Subscription
-	if err := db.Where("user_id = ? AND status IN ? AND start_date <= ? AND end_date > ?",
-		userID, []string{"active", "scheduled"}, now, now).
-		Preload("Plan").Order("start_date ASC").First(&sub).Error; err == nil {
-		planName = sub.Plan.Name
-		if sub.IsTrial {
-			return TrialMonthlyLimit, planName, true, nil
-		}
-		return sub.Plan.MonthlyMessageLimit, planName, false, nil
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+	plan, trial, err := EffectivePlan(db, userID)
+	if err != nil {
 		return 0, "", false, err
 	}
-
-	var free models.Plan
-	if err := db.Where("slug = ?", "free").First(&free).Error; err == nil {
-		return free.MonthlyMessageLimit, free.Name, false, nil
+	if trial {
+		return TrialMonthlyLimit, plan.Name, true, nil
 	}
-	return FallbackFreeLimit, "Free", false, nil
+	return plan.MonthlyMessageLimit, plan.Name, false, nil
 }
 
 // monthlyUsage menghitung pesan outgoing milik user di bulan kalender
@@ -275,6 +339,29 @@ func BackfillDefaults(db *gorm.DB) error {
 		if err := db.Model(&models.Plan{}).
 			Where("slug = ? AND monthly_message_limit = 0", slug).
 			Update("monthly_message_limit", limit).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BackfillPlanLimits menaikkan batas kontak/bulk/auto-reply paket bawaan
+// ke nilai berjenjang (DefaultContactLimits dst). Idempoten; HANYA
+// menyentuh baris yang masih memegang tripel lama yang SAMA di semua
+// paket (max_contacts=500, max_auto_reply=5, max_bulk=100) — nilai yang
+// disetel admin secara kustom (salah satu dari ketiganya sudah berbeda)
+// TIDAK ditimpa. Slug di luar lima paket bawaan juga tidak disentuh.
+// Dijalankan tiap start server via migratePlanQuotaDefaults.
+func BackfillPlanLimits(db *gorm.DB) error {
+	for slug := range DefaultContactLimits {
+		updates := map[string]interface{}{
+			"max_contacts":   DefaultContactLimits[slug],
+			"max_bulk":       DefaultBulkLimits[slug],
+			"max_auto_reply": DefaultAutoReplyLimits[slug],
+		}
+		if err := db.Model(&models.Plan{}).
+			Where("slug = ? AND max_contacts = 500 AND max_auto_reply = 5 AND max_bulk = 100", slug).
+			Updates(updates).Error; err != nil {
 			return err
 		}
 	}

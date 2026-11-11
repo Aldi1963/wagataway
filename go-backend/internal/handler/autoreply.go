@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -57,6 +58,22 @@ func createAutoReply(db *gorm.DB) gin.HandlerFunc {
 		}
 		if req.ReplyType == "" {
 			req.ReplyType = "text"
+		}
+
+		// Batas aturan auto-reply paket aktif (Item 7): tolak bila sudah
+		// di batas. MaxAutoReply <= 0 = tanpa batas (fail-open, konsisten
+		// dengan MonthlyMessageLimit 0 = unlimited).
+		if plan, _, err := quota.EffectivePlan(udb, userID); err == nil && plan != nil && plan.MaxAutoReply > 0 {
+			var count int64
+			if err := udb.Model(&models.AutoReply{}).Where("user_id = ?", userID).Count(&count).Error; err == nil && count >= int64(plan.MaxAutoReply) {
+				c.JSON(http.StatusForbidden, gin.H{
+					"message": "Batas aturan auto-reply paket " + plan.Name + " tercapai (" + strconv.FormatInt(count, 10) + "/" + strconv.Itoa(plan.MaxAutoReply) + "). Upgrade paket untuk menambah aturan.",
+					"code":    "AUTO_REPLY_LIMIT_REACHED",
+					"limit":   plan.MaxAutoReply,
+					"used":    count,
+				})
+				return
+			}
 		}
 
 		rule := models.AutoReply{

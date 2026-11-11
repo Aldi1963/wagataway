@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
+	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
@@ -52,11 +53,23 @@ func listContacts(db *gorm.DB) gin.HandlerFunc {
 		var contacts []models.Contact
 		query.Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&contacts)
 
+		// Batas kontak paket aktif (Item 7): agar halaman Kontak bisa
+		// menampilkan "total / limit". Gagal baca paket bukan alasan
+		// menggagalkan daftar — limit dikosongkan saja.
+		contactLimit := 0
+		planName := ""
+		if plan, _, err := quota.EffectivePlan(udb, userID); err == nil && plan != nil {
+			contactLimit = plan.MaxContacts
+			planName = plan.Name
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"contacts": contacts,
-			"total":    total,
-			"page":     page,
-			"limit":    limit,
+			"contacts":     contacts,
+			"total":        total,
+			"page":         page,
+			"limit":        limit,
+			"contactLimit": contactLimit,
+			"planName":     planName,
 		})
 	}
 }
@@ -75,6 +88,23 @@ func createContact(db *gorm.DB) gin.HandlerFunc {
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid", "code": "VALIDATION_ERROR"})
 			return
+		}
+
+		// Batas kontak paket aktif (Item 7): tolak bila sudah di batas.
+		// MaxContacts <= 0 = tanpa batas (fail-open, konsisten dengan
+		// MonthlyMessageLimit 0 = unlimited). Gagal baca paket/DB di
+		// sini bukan alasan memblokir — hitung gagal = 0 & lanjut.
+		if plan, _, err := quota.EffectivePlan(udb, userID); err == nil && plan != nil && plan.MaxContacts > 0 {
+			var count int64
+			if err := udb.Model(&models.Contact{}).Where("user_id = ?", userID).Count(&count).Error; err == nil && count >= int64(plan.MaxContacts) {
+				c.JSON(http.StatusForbidden, gin.H{
+					"message": "Batas kontak paket " + plan.Name + " tercapai (" + strconv.FormatInt(count, 10) + "/" + strconv.Itoa(plan.MaxContacts) + "). Upgrade paket untuk menambah kontak.",
+					"code":    "CONTACT_LIMIT_REACHED",
+					"limit":   plan.MaxContacts,
+					"used":    count,
+				})
+				return
+			}
 		}
 
 		contact := models.Contact{
@@ -194,17 +224,53 @@ func importContacts(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Batas kontak paket aktif (Item 7): impor hanya mengisi sisa
+		// slot; sisanya dilaporkan sebagai skippedDueToLimit agar user
+		// tahu harus upgrade. MaxContacts <= 0 = tanpa batas.
+		remaining := -1 // -1 = tanpa batas
+		planName := ""
+		if plan, _, err := quota.EffectivePlan(udb, userID); err == nil && plan != nil {
+			planName = plan.Name
+			if plan.MaxContacts > 0 {
+				var count int64
+				if err := udb.Model(&models.Contact{}).Where("user_id = ?", userID).Count(&count).Error; err == nil {
+					remaining = plan.MaxContacts - int(count)
+					if remaining < 0 {
+						remaining = 0
+					}
+				} else {
+					remaining = plan.MaxContacts
+				}
+			}
+		}
+
 		imported := 0
+		skippedDueToLimit := 0
 		for _, r := range req.Contacts {
 			if r.Phone == "" {
+				continue
+			}
+			if remaining == 0 {
+				skippedDueToLimit++
 				continue
 			}
 			contact := models.Contact{UserID: userID, Name: r.Name, Phone: r.Phone, Email: r.Email, Tags: r.Tags}
 			if udb.Create(&contact).Error == nil {
 				imported++
+				if remaining > 0 {
+					remaining--
+				}
 			}
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "Import selesai", "imported": imported})
+		msg := "Import selesai"
+		if skippedDueToLimit > 0 {
+			msg = "Import selesai: " + strconv.Itoa(skippedDueToLimit) + " kontak dilewati karena batas paket " + planName + " tercapai. Upgrade paket untuk menambah kontak."
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":           msg,
+			"imported":          imported,
+			"skippedDueToLimit": skippedDueToLimit,
+		})
 	}
 }
 

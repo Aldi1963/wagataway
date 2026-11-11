@@ -21,6 +21,12 @@ interface Plan {
   duration: number;
   features: string;
   sortOrder: number;
+  maxDevices?: number;
+  maxMessages?: number;
+  monthlyMessageLimit?: number;
+  maxContacts?: number;
+  maxBulk?: number;
+  maxAutoReply?: number;
 }
 
 interface Subscription {
@@ -391,6 +397,12 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {t("billing.planLimits")
+                      .replace("{contacts}", (plan.maxContacts ?? 0).toLocaleString("id-ID"))
+                      .replace("{bulk}", (plan.maxBulk ?? 0).toLocaleString("id-ID"))
+                      .replace("{autoReply}", String(plan.maxAutoReply ?? 0))}
+                  </p>
                   <ul className="space-y-2 mb-4">
                     {features.map((f) => (
                       <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -14,7 +14,7 @@ INSERT INTO plans (name, slug, description, price, duration, max_devices, max_me
 VALUES
 ('Lite', 'lite',
  'Untuk personal dan UMKM yang baru mulai otomatisasi WhatsApp.',
- 25000, 30, 2, 1000, 15000, 500, 5, 100,
+ 25000, 30, 2, 1000, 15000, 1000, 10, 250,
  '["Semua fitur Free","Kirim attachment","Broadcast & CSV","Notifikasi device","Live chat","Prioritas antrean"]',
  true, 2, NOW(), NOW())
 ON CONFLICT (slug) DO NOTHING;
@@ -23,7 +23,7 @@ INSERT INTO plans (name, slug, description, price, duration, max_devices, max_me
 VALUES
 ('Regular', 'regular',
  'Untuk bisnis yang butuh volume pesan lebih besar dan kampanye terjadwal.',
- 66000, 30, 3, 10000, 100000, 500, 5, 100,
+ 66000, 30, 3, 10000, 100000, 2500, 20, 500,
  '["Semua fitur Lite","Drip campaign","Kalender jadwal","Analitik pengiriman","Grup kontak"]',
  true, 3, NOW(), NOW())
 ON CONFLICT (slug) DO NOTHING;
@@ -32,7 +32,7 @@ INSERT INTO plans (name, slug, description, price, duration, max_devices, max_me
 VALUES
 ('Pro', 'pro',
  'Untuk tim dan agensi dengan banyak device dan kebutuhan webhook lanjutan.',
- 110000, 30, 5, 25000, 300000, 500, 5, 100,
+ 110000, 30, 5, 25000, 300000, 5000, 30, 750,
  '["Semua fitur Regular","Multi device random","Webhook retry","Template unlimited","Support prioritas"]',
  true, 4, NOW(), NOW())
 ON CONFLICT (slug) DO NOTHING;
@@ -41,7 +41,7 @@ INSERT INTO plans (name, slug, description, price, duration, max_devices, max_me
 VALUES
 ('Master', 'master',
  'Untuk enterprise dengan kebutuhan pesan tanpa batas dan support dedicated.',
- 175000, 30, 10, 1000000, 0, 500, 5, 100,
+ 175000, 30, 10, 1000000, 0, 10000, 50, 1000,
  '["Semua fitur Pro","Pesan tanpa batas","API limit tinggi","Dedicated support"]',
  true, 5, NOW(), NOW())
 ON CONFLICT (slug) DO NOTHING;

@@ -11,16 +11,19 @@ import (
 )
 
 type publicPlan struct {
-	ID          uint     `json:"id"`
-	Name        string   `json:"name"`
-	Slug        string   `json:"slug"`
-	Description string   `json:"description"`
-	Price       int64    `json:"price"`
-	Duration    int      `json:"duration"`
-	MaxDevices  int      `json:"maxDevices"`
-	MaxMessages int      `json:"maxMessages"`
-	MaxContacts int      `json:"maxContacts"`
-	Features    []string `json:"features"`
+	ID                  uint     `json:"id"`
+	Name                string   `json:"name"`
+	Slug                string   `json:"slug"`
+	Description         string   `json:"description"`
+	Price               int64    `json:"price"`
+	Duration            int      `json:"duration"`
+	MaxDevices          int      `json:"maxDevices"`
+	MaxMessages         int      `json:"maxMessages"`
+	MonthlyMessageLimit int      `json:"monthlyMessageLimit"`
+	MaxContacts         int      `json:"maxContacts"`
+	MaxAutoReply        int      `json:"maxAutoReply"`
+	MaxBulk             int      `json:"maxBulk"`
+	Features            []string `json:"features"`
 }
 
 // GET /api/public/plans — daftar paket aktif untuk landing page (tanpa auth)
@@ -39,16 +42,19 @@ func publicPlans(db *gorm.DB) gin.HandlerFunc {
 				features = []string{}
 			}
 			out = append(out, publicPlan{
-				ID:          p.ID,
-				Name:        p.Name,
-				Slug:        p.Slug,
-				Description: p.Description,
-				Price:       p.Price,
-				Duration:    p.Duration,
-				MaxDevices:  p.MaxDevices,
-				MaxMessages: p.MaxMessages,
-				MaxContacts: p.MaxContacts,
-				Features:    features,
+				ID:                  p.ID,
+				Name:                p.Name,
+				Slug:                p.Slug,
+				Description:         p.Description,
+				Price:               p.Price,
+				Duration:            p.Duration,
+				MaxDevices:          p.MaxDevices,
+				MaxMessages:         p.MaxMessages,
+				MonthlyMessageLimit: p.MonthlyMessageLimit,
+				MaxContacts:         p.MaxContacts,
+				MaxAutoReply:        p.MaxAutoReply,
+				MaxBulk:             p.MaxBulk,
+				Features:            features,
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"plans": out})
