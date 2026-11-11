@@ -28,6 +28,20 @@ interface Earning {
   createdAt: string;
 }
 
+interface RewardVoucher {
+  id: number;
+  referredUserId: number;
+  transactionId?: number | null;
+  voucherId: number;
+  code: string;
+  duration: number;
+  usedCount: number;
+  maxUses: number;
+  isActive: boolean;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
 function fmtRp(n: number) {
   return "Rp" + n.toLocaleString("id-ID");
 }
@@ -37,21 +51,26 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
   const [info, setInfo] = useState<Affiliate | null>(null);
   const [stats, setStats] = useState<AffiliateStats>({ pending: 0, paid: 0, referrals: 0 });
   const [earnings, setEarnings] = useState<Earning[]>([]);
+  const [rewards, setRewards] = useState<RewardVoucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [i, e] = await Promise.all([
+      const [i, e, r] = await Promise.all([
         apiGet<{ affiliate: Affiliate | null; stats?: AffiliateStats }>("/affiliate").catch(() => null),
         apiGet<{ earnings: Earning[] } | Earning[]>("/affiliate/earnings")
           .then((r) => (Array.isArray(r) ? r : r.earnings ?? []))
           .catch(() => [] as Earning[]),
+        apiGet<{ rewards: RewardVoucher[] } | RewardVoucher[]>("/affiliate/rewards")
+          .then((r) => (Array.isArray(r) ? r : r.rewards ?? []))
+          .catch(() => [] as RewardVoucher[]),
       ]);
       setInfo(i?.affiliate ?? null);
       setStats(i?.stats ?? { pending: 0, paid: 0, referrals: 0 });
       setEarnings(e);
+      setRewards(r);
     } catch (err: any) {
       toast.error(err.message || t("affiliate.loadFail"));
     } finally {
@@ -202,6 +221,64 @@ export default function Affiliate({ embedded = false }: { embedded?: boolean }) 
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("affiliate.rewardVouchers")} {rewards.length > 0 && <span className="text-muted-foreground">({rewards.length})</span>}</CardTitle>
+              <p className="text-xs text-muted-foreground font-normal">{t("affiliate.rewardVouchersDesc")}</p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.colDate")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.rewardColCode")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.rewardColReward")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("affiliate.rewardColReferredUser")}</th>
+                      <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right">{t("affiliate.rewardColStatus")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rewards.length === 0 && (
+                      <tr><td colSpan={5} className="py-8 text-center">
+                        <EmptyState
+                          icon={Gift}
+                          title={t("affiliate.noRewards")}
+                        />
+                      </td></tr>
+                    )}
+                    {rewards.map((r) => {
+                      const expired = r.expiresAt ? new Date(r.expiresAt).getTime() < Date.now() : false;
+                      const used = r.usedCount > 0;
+                      return (
+                        <tr key={r.id} className="border-b border-border last:border-0">
+                          <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(r.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="flex items-center gap-2">
+                              <code className="font-mono text-[13px] font-semibold">{r.code}</code>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copy(r.code, t("affiliate.rewardColCode"))} aria-label={t("affiliate.copyCodeAria")}>
+                                <Copy className="w-3.5 h-3.5" />
+                              </Button>
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">Trial · {t("admin.daysCount").replace("{count}", String(r.duration))}</td>
+                          <td className="py-3 px-4 font-mono text-[13px]">#{r.referredUserId}</td>
+                          <td className="py-3 px-4 text-right">
+                            {used ? <Badge variant="success">{t("affiliate.rewardUsed")}</Badge>
+                              : expired || !r.isActive ? <Badge variant="outline">{t("affiliate.rewardExpired")}</Badge>
+                              : <Badge variant="secondary">{t("affiliate.rewardUnused")}</Badge>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

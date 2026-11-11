@@ -100,6 +100,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.TeamMember{},
 		&models.Affiliate{},
 		&models.AffiliateEarning{},
+		&models.ReferralReward{},
 		&models.MenuBot{},
 		&models.MenuBotItem{},
 		&models.MenuBotSession{},

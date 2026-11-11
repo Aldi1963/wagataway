@@ -87,6 +87,7 @@ interface Voucher {
   usedCount: number;
   isActive: boolean;
   expiresAt?: string | null;
+  source?: string;
 }
 
 // Analitik voucher (Item 7): statistik per kode + ringkasan konversi
@@ -1412,7 +1413,12 @@ function VouchersTab() {
               <tbody>
                 {vouchers.map((v) => (
                   <tr key={v.id} className="border-b border-border last:border-0">
-                    <td className="p-3 font-mono font-semibold text-foreground">{v.code}</td>
+                    <td className="p-3 font-mono font-semibold text-foreground">
+                      {v.code}
+                      {v.source === "referral_reward" && (
+                        <Badge variant="outline" className="ml-2 align-middle">{t("admin.voucherReferralReward")}</Badge>
+                      )}
+                    </td>
                     <td className="p-3">
                       <Badge variant="outline">{typeLabel(v.type)}</Badge>
                     </td>
