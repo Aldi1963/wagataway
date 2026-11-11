@@ -30,7 +30,10 @@ type Subscription struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"index;not null" json:"userId"`
 	PlanID    uint      `gorm:"index;not null" json:"planId"`
-	Status    string    `gorm:"size:20;default:active" json:"status"` // active, expired, cancelled
+	Status    string    `gorm:"size:20;default:active" json:"status"` // active, scheduled, expired, cancelled
+	// scheduled = voucher mengantre: jendela (start_date, end_date) di masa
+	// depan, mulai berlaku saat start_date tiba (diaktifkan scheduler +
+	// dibaca aman oleh quota/subscription lewat jendela waktu).
 	StartDate time.Time `gorm:"not null" json:"startDate"`
 	EndDate   time.Time `gorm:"not null" json:"endDate"`
 	// Pengingat expired otomatis (Fitur 1): timestamp kapan reminder H-3 / H-1

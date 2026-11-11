@@ -76,10 +76,15 @@ func (s *Status) GraceRemaining() int64 {
 }
 
 // Check menentukan status langganan user dari langganan TERAKHIR-nya
-// (berdasarkan end_date, status active/expired/cancelled).
+// (berdasarkan end_date, status active/scheduled/expired/cancelled) yang
+// jendelanya SUDAH MULAI (start_date <= sekarang). Baris 'scheduled' yang
+// jendelanya belum mulai (voucher mengantre) diabaikan: selama antrean,
+// status/grace dihitung dari langganan yang sedang berjalan, bukan dari
+// paket masa depan.
 func Check(db *gorm.DB, userID uint) (*Status, error) {
 	var sub models.Subscription
-	err := db.Where("user_id = ? AND status IN ?", userID, []string{"active", "expired", "cancelled"}).
+	err := db.Where("user_id = ? AND status IN ? AND start_date <= ?",
+		userID, []string{"active", "scheduled", "expired", "cancelled"}, time.Now()).
 		Preload("Plan").
 		Order("end_date DESC").
 		First(&sub).Error

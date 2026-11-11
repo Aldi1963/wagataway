@@ -81,10 +81,13 @@ func prorateQuotePure(now time.Time, sub *models.Subscription, newPlan *models.P
 
 // prorateQuote mengambil langganan aktif yang belum expired lalu mengembalikan
 // quote pergantian paket. Bila tidak ada langganan aktif → (Prorate=false, nil)
-// sehingga caller jatuh ke alur pembelian baru biasa.
+// sehingga caller jatuh ke alur pembelian baru biasa. Baris 'scheduled'
+// (voucher mengantre) yang jendelanya belum mulai tidak dihitung sebagai
+// langganan aktif — kredit prorata dihitung dari paket yang sedang berjalan.
 func prorateQuote(db *gorm.DB, userID uint, newPlan *models.Plan) (ProrateQuote, error) {
 	var sub models.Subscription
-	err := db.Where("user_id = ? AND status = ? AND end_date > ?", userID, "active", time.Now()).
+	now := time.Now()
+	err := db.Where("user_id = ? AND status = ? AND start_date <= ? AND end_date > ?", userID, "active", now, now).
 		Preload("Plan").First(&sub).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

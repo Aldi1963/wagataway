@@ -74,7 +74,8 @@ func TestRedeemVoucherRaceMaxUses(t *testing.T) {
 			defer wg.Done()
 			udb := rls.Scoped(db, uid)
 			results[i] = udb.Transaction(func(tx *gorm.DB) error {
-				return redeemVoucherTx(tx, uid, &voucher, plan, 30, false, now)
+				_, _, err := redeemVoucherTx(tx, uid, &voucher, plan, 30, false, now)
+				return err
 			})
 		}(i, uid)
 	}
@@ -132,7 +133,8 @@ func TestRedeemVoucherRaceSameUser(t *testing.T) {
 			defer wg.Done()
 			udb := rls.Scoped(db, uid)
 			results[i] = udb.Transaction(func(tx *gorm.DB) error {
-				return redeemVoucherTx(tx, uid, &voucher, plan, 30, false, now)
+				_, _, err := redeemVoucherTx(tx, uid, &voucher, plan, 30, false, now)
+				return err
 			})
 		}(i)
 	}

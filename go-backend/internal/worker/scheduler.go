@@ -51,6 +51,10 @@ func (s *Scheduler) Start() {
 	// agar tidak bertabrakan dengan job menit-0 lainnya.
 	s.cron.AddFunc("0 15 * * * *", s.processSubscriptionReminders)
 
+	// Aktifkan langganan voucher yang mengantre (status 'scheduled') begitu
+	// jendela waktunya mulai — tiap menit, lihat subscription_activation.go.
+	s.cron.AddFunc("0 * * * * *", s.processScheduledSubscriptions)
+
 	s.cron.Start()
 	log.Info().Msg("Background scheduler started")
 }

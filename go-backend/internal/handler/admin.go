@@ -15,6 +15,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -24,6 +25,7 @@ func registerAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, w
 	rg.POST("/users", adminCreateUser(db))
 	rg.PUT("/users/:id", adminUpdateUser(db))
 	rg.DELETE("/users/:id", adminDeleteUser(db))
+	rg.POST("/users/:id/reset-password", adminCreateUserResetLink(cfg, db))
 	rg.GET("/packages", adminListPackages(db))
 	rg.POST("/packages", adminCreatePackage(db))
 	rg.PUT("/packages/:id", adminUpdatePackage(db))
@@ -186,6 +188,43 @@ func adminDeleteUser(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// adminCreateUserResetLink membuat link reset password untuk seorang user.
+// Hanya lewat login dashboard admin (JWT) — grup /admin sudah menolak API
+// key via RequireJWT. Link berisi token mentah sekali pakai: dikembalikan
+// SEKALI dalam respons ini saja, TIDAK disimpan di DB (hanya hash-nya via
+// issueResetToken) dan TIDAK PERNAH dicatat ke log server maupun ke
+// admin_activity_logs. Admin meneruskan link lewat kanal aman (mis. WhatsApp).
+// Dipakai saat SMTP belum dikonfigurasi sehingga forgot-password tidak bisa
+// mengirim email.
+func adminCreateUserResetLink(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var user models.User
+		if err := db.First(&user, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "User tidak ditemukan"})
+			return
+		}
+		if user.Status == "banned" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "User diblokir, tidak bisa dibuatkan link reset"})
+			return
+		}
+		token, expiresAt, err := issueResetToken(db, user.ID)
+		if err != nil {
+			// JANGAN catat token/link ke log — catat hanya email + status gagal.
+			log.Error().Err(err).Str("email", user.Email).Msg("gagal membuat token reset (admin)")
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat link reset"})
+			return
+		}
+		resetURL := strings.TrimRight(cfg.AppURL, "/") + "/reset-password?token=" + token
+		logAdminAction(db, middleware.GetUserID(c), "create_reset_link", "user",
+			strconv.FormatUint(id, 10), "Link reset untuk: "+user.Email)
+		c.JSON(http.StatusOK, gin.H{
+			"resetUrl":  resetURL,
+			"expiresAt": expiresAt,
+			"email":     user.Email,
+		})
+	}
+}
 
 func adminListPackages(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -563,7 +602,7 @@ func adminBroadcastWA(db *gorm.DB, wm *whatsapp.Manager) gin.HandlerFunc {
 				time.Sleep(time.Second) // jeda agar tidak membanjiri WhatsApp
 			}
 			// DIKECUALIKAN dari kuota pesan (Fitur 3): pengumuman sistem oleh admin.
-		if err := wm.SendMessageNoQuota(d.ID, d.Phone, "text", req.Message, ""); err != nil {
+			if err := wm.SendMessageNoQuota(d.ID, d.Phone, "text", req.Message, ""); err != nil {
 				failed++
 			} else {
 				sent++

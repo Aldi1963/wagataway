@@ -224,11 +224,17 @@ func Usage(db *gorm.DB, userID uint) (used int64, err error) {
 }
 
 // effectiveLimit menentukan limit & nama paket efektif untuk user:
-// langganan aktif (trial -> TrialMonthlyLimit) > paket free > fallback.
+// langganan yang jendela waktunya mengandung SEKARANG (status active /
+// scheduled yang sudah mulai) > paket free > fallback. Baris 'scheduled'
+// yang jendelanya belum mulai (voucher mengantre) dan baris yang sudah
+// lewat TIDAK dihitung — paket & kuota yang tampil tetap paket lama sampai
+// antrean benar-benar mulai berlaku.
 func effectiveLimit(db *gorm.DB, userID uint) (limit int, planName string, isTrial bool, err error) {
+	now := time.Now()
 	var sub models.Subscription
-	if err := db.Where("user_id = ? AND status = ?", userID, "active").
-		Preload("Plan").First(&sub).Error; err == nil {
+	if err := db.Where("user_id = ? AND status IN ? AND start_date <= ? AND end_date > ?",
+		userID, []string{"active", "scheduled"}, now, now).
+		Preload("Plan").Order("start_date ASC").First(&sub).Error; err == nil {
 		planName = sub.Plan.Name
 		if sub.IsTrial {
 			return TrialMonthlyLimit, planName, true, nil

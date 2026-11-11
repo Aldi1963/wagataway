@@ -99,9 +99,11 @@ func TestClipkuAmountSufficient(t *testing.T) {
 		{"nominal jauh kurang", &clipkuTxData{Amount: 1000}, 66000, false},
 		{"fallback total_amount", &clipkuTxData{TotalAmount: 66000}, 66000, true},
 		{"fallback total_amount kurang", &clipkuTxData{TotalAmount: 1000}, 66000, false},
-		{"tanpa nominal (API tidak melapor)", &clipkuTxData{}, 66000, true},
-		{"remote nil", nil, 66000, true},
+		{"tanpa nominal (API tidak melapor) -> MODE KETAT tolak", &clipkuTxData{}, 66000, false},
+		{"remote nil -> MODE KETAT tolak", nil, 66000, false},
+		{"nominal 0 eksplisit -> MODE KETAT tolak", &clipkuTxData{Amount: 0, TotalAmount: 0}, 66000, false},
 		{"tagihan 0 (prorata bayar-0)", &clipkuTxData{Amount: 0}, 0, true},
+		{"tagihan 0, remote nil -> lolos (0 >= 0)", nil, 0, true},
 	}
 	for _, c := range cases {
 		if got := clipkuAmountSufficient(c.remote, c.expected); got != c.want {
@@ -113,6 +115,7 @@ func TestClipkuAmountSufficient(t *testing.T) {
 func TestDecideClipkuWebhook(t *testing.T) {
 	paidFull := &clipkuTxData{Status: "paid", Amount: 66000}
 	paidShort := &clipkuTxData{Status: "paid", Amount: 1000}
+	paidNoAmount := &clipkuTxData{Status: "paid"} // MODE KETAT: amount 0 -> tolak
 	pending := &clipkuTxData{Status: "pending", Amount: 66000}
 	expired := &clipkuTxData{Status: "expired", Amount: 66000}
 	failed := &clipkuTxData{Status: "failed", Amount: 66000}
@@ -130,6 +133,7 @@ func TestDecideClipkuWebhook(t *testing.T) {
 	}{
 		{"paid + remote paid penuh -> aktivasi", 66000, "paid", paidFull, nil, clipkuActionActivate, "activated", ""},
 		{"paid + remote paid kurang -> tolak", 66000, "paid", paidShort, nil, clipkuActionIgnore, "status_mismatch", ""},
+		{"paid + remote paid tanpa nominal -> MODE KETAT tolak", 66000, "paid", paidNoAmount, nil, clipkuActionIgnore, "status_mismatch", ""},
 		{"paid + remote pending -> tolak", 66000, "paid", pending, nil, clipkuActionIgnore, "status_mismatch", ""},
 		{"paid + remote expired -> tolak", 66000, "paid", expired, nil, clipkuActionIgnore, "status_mismatch", ""},
 		{"paid + verifikasi gagal -> abaikan", 66000, "paid", nil, verifyErr, clipkuActionIgnore, "verify_failed", ""},

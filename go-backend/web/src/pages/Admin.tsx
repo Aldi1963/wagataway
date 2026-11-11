@@ -27,6 +27,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  KeyRound,
   Copy,
   CreditCard,
 } from "lucide-react";
@@ -481,6 +482,10 @@ function UsersTab() {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const [resettingBusy, setResettingBusy] = useState(false);
+  const [resetLink, setResetLink] = useState<{ user: AdminUser; url: string; expiresAt: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "user", plan: "free" });
@@ -568,6 +573,34 @@ function UsersTab() {
     }
   };
 
+  const handleCreateResetLink = async () => {
+    if (!resetting) return;
+    setResettingBusy(true);
+    try {
+      const res = await apiPost<{ resetUrl: string; expiresAt: string; email: string }>(
+        `/admin/users/${resetting.id}/reset-password`
+      );
+      setResetLink({ user: resetting, url: res.resetUrl, expiresAt: res.expiresAt });
+      setCopied(false);
+      setResetting(null);
+    } catch (e) {
+      toast.error(errMsg(e, t("admin.errResetPassword")));
+    } finally {
+      setResettingBusy(false);
+    }
+  };
+
+  const copyResetLink = async () => {
+    if (!resetLink) return;
+    try {
+      await navigator.clipboard.writeText(resetLink.url);
+      setCopied(true);
+      toast.success(t("admin.linkCopied"));
+    } catch {
+      toast.error(t("admin.errCopyLink"));
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
 
   const exportCsv = async () => {
@@ -647,6 +680,16 @@ function UsersTab() {
                       </td>
                       <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(u.createdAt)}</td>
                       <td className="p-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setResetting(u)}
+                          aria-label={t("admin.resetPassword")}
+                          title={t("admin.resetPassword")}
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -737,6 +780,45 @@ function UsersTab() {
             </Button>
             <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deletingBusy}>
               {deletingBusy ? t("admin.deleting") : t("admin.delete")}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {resetting && (
+        <Modal title={t("admin.resetPasswordTitle")} onClose={() => setResetting(null)}>
+          <p className="text-sm text-muted-foreground">
+            {t("admin.resetPasswordBody1")} <b className="text-foreground">{resetting.email}</b>.{" "}
+            {t("admin.resetPasswordBody2")}
+          </p>
+          <div className="flex justify-end gap-2 mt-5">
+            <Button variant="outline" size="sm" onClick={() => setResetting(null)}>
+              {t("admin.cancel")}
+            </Button>
+            <Button size="sm" onClick={handleCreateResetLink} disabled={resettingBusy}>
+              {resettingBusy ? t("admin.creatingResetLink") : t("admin.createResetLink")}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {resetLink && (
+        <Modal title={t("admin.resetLinkTitle")} onClose={() => setResetLink(null)}>
+          <p className="text-sm text-muted-foreground">
+            {t("admin.resetLinkExpires").replace("{expiresAt}", fmtDate(resetLink.expiresAt))}
+          </p>
+          <div className="flex gap-2 mt-3">
+            <Input value={resetLink.url} readOnly onFocus={(e) => e.target.select()} className="font-mono text-xs" />
+            <Button size="sm" variant="outline" onClick={copyResetLink} className="gap-1.5 shrink-0">
+              <Copy className="w-4 h-4" /> {copied ? t("admin.linkCopied") : t("admin.copyLink")}
+            </Button>
+          </div>
+          <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mt-3">
+            {t("admin.resetLinkWarning")}
+          </p>
+          <div className="flex justify-end gap-2 mt-5">
+            <Button variant="outline" size="sm" onClick={() => setResetLink(null)}>
+              {t("admin.closeModal")}
             </Button>
           </div>
         </Modal>

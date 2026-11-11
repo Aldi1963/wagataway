@@ -66,7 +66,7 @@ jobs:
             ./server
             ```
 
-            **Docker:** `ghcr.io/aldi1963/wagataway:${{ github.ref_name }}`
+            **Docker:** `ghcr.io/aldi1963/wblash:${{ github.ref_name }}`
 
   publish-docker:
     name: Publish container image (ghcr.io)
@@ -89,5 +89,5 @@ jobs:
           file: go-backend/Dockerfile
           push: true
           tags: |
-            ghcr.io/aldi1963/wagataway:${{ github.ref_name }}
-            ghcr.io/aldi1963/wagataway:latest
+            ghcr.io/aldi1963/wblash:${{ github.ref_name }}
+            ghcr.io/aldi1963/wblash:latest

@@ -65,8 +65,14 @@ func getSubscription(db *gorm.DB) gin.HandlerFunc {
 			subState = string(st.State)
 		}
 		var sub models.Subscription
-		err := udb.Where("user_id = ? AND status = ?", userID, "active").
-			Preload("Plan").First(&sub).Error
+		// Langganan yang SEDANG berjalan: jendela waktunya mengandung
+		// sekarang. Baris 'scheduled' (voucher mengantre) yang jendelanya
+		// belum mulai — dan baris yang jendelanya sudah lewat — tidak
+		// ditampilkan sebagai langganan aktif.
+		now := time.Now()
+		err := udb.Where("user_id = ? AND status IN ? AND start_date <= ? AND end_date > ?",
+			userID, []string{"active", "scheduled"}, now, now).
+			Preload("Plan").Order("start_date ASC").First(&sub).Error
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{"subscription": nil, "subState": subState})
 			return
@@ -383,9 +389,11 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 		// Cek + catat redeem + increment used_count + terapkan efek voucher
 		// berjalan atomik dalam satu transaksi.
 		now := java_time_now()
-		endsAt := now.AddDate(0, 0, durationDays)
+		var startsAt, endsAt time.Time
 		err = udb.Transaction(func(tx *gorm.DB) error {
-			return redeemVoucherTx(tx, userID, &voucher, plan, durationDays, isTrial, now)
+			var err error
+			startsAt, endsAt, err = redeemVoucherTx(tx, userID, &voucher, plan, durationDays, isTrial, now)
+			return err
 		})
 		if err != nil {
 			if errors.Is(err, errVoucherExhausted) {
@@ -405,7 +413,12 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			"voucher":      voucher,
 			"planName":     plan.Name,
 			"durationDays": durationDays,
-			"endsAt":       endsAt,
+			// startsAt > now berarti langganan MENGANTRE: mulai berlaku
+			// setelah langganan (dan antrean) yang sudah ada berakhir.
+			// endsAt = akhir langganan baru ini, bukan akhir antrean.
+			"startsAt": startsAt,
+			"endsAt":   endsAt,
+			"queued":   startsAt.After(now),
 		})
 	}
 }
@@ -413,6 +426,9 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 // redeemVoucherTx menjalankan inti penukaran voucher di dalam satu
 // transaksi: kunci baris voucher (SELECT ... FOR UPDATE), cek ulang kuota,
 // catat penukaran, increment kondisional, lalu berikan langganan.
+// Mengembalikan jendela (startsAt, endsAt) langganan yang diberikan —
+// startsAt bisa di masa depan bila voucher mengantre (lihat
+// grantVoucherSubscription).
 //
 // Kunci baris + increment kondisional (WHERE used_count < max_uses) menutup
 // balapan dua request bersamaan yang sama-sama lolos cek MaxUses di luar
@@ -420,26 +436,26 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 // sudah habis; increment kondisional menjadi penjaga terakhir bila MaxUses
 // berubah di tengah jalan (mis. admin menurunkan kuota saat transaksi
 // berjalan) — RowsAffected=0 membatalkan seluruh transaksi.
-func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan models.Plan, durationDays int, isTrial bool, now time.Time) error {
+func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan models.Plan, durationDays int, isTrial bool, now time.Time) (startsAt time.Time, endsAt time.Time, err error) {
 	// Kunci baris voucher: request lain yang mengincar voucher yang sama
 	// antre di sini sampai transaksi ini selesai.
 	var locked models.Voucher
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("id = ?", voucher.ID).First(&locked).Error; err != nil {
-		return err
+		return time.Time{}, time.Time{}, err
 	}
 	if locked.MaxUses > 0 && locked.UsedCount >= locked.MaxUses {
-		return errVoucherExhausted
+		return time.Time{}, time.Time{}, errVoucherExhausted
 	}
 
 	var count int64
 	if err := tx.Model(&models.VoucherRedemption{}).
 		Where("voucher_id = ? AND user_id = ?", voucher.ID, userID).
 		Count(&count).Error; err != nil {
-		return err
+		return time.Time{}, time.Time{}, err
 	}
 	if count > 0 {
-		return errAlreadyRedeemed
+		return time.Time{}, time.Time{}, errAlreadyRedeemed
 	}
 
 	if err := tx.Create(&models.VoucherRedemption{
@@ -449,9 +465,9 @@ func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan mod
 		// Balapan dua request bersamaan: unique index gabungan
 		// menjadi penjaga terakhir.
 		if strings.Contains(err.Error(), "duplicate key") {
-			return errAlreadyRedeemed
+			return time.Time{}, time.Time{}, errAlreadyRedeemed
 		}
-		return err
+		return time.Time{}, time.Time{}, err
 	}
 
 	// Increment kondisional: RowsAffected=0 berarti kuota habis →
@@ -460,14 +476,13 @@ func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan mod
 		Where("id = ? AND (max_uses = 0 OR used_count < max_uses)", voucher.ID).
 		Update("used_count", gorm.Expr("used_count + 1"))
 	if res.Error != nil {
-		return res.Error
+		return time.Time{}, time.Time{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return errVoucherExhausted
+		return time.Time{}, time.Time{}, errVoucherExhausted
 	}
 
-	// Berikan langganan: nonaktifkan yang lama, buat yang baru mulai
-	// sekarang (konvensi yang sama dengan activateSubscription).
+	// Berikan langganan (mengantre bila sudah ada langganan aktif).
 	return grantVoucherSubscription(tx, userID, plan, durationDays, isTrial, now)
 }
 
@@ -513,31 +528,81 @@ func voucherGrantPlan(udb *gorm.DB, voucher *models.Voucher) (models.Plan, int, 
 	}
 }
 
-// grantVoucherSubscription mengaktifkan langganan dari voucher: nonaktifkan
-// langganan aktif yang lama lalu buat langganan baru mulai sekarang selama
-// durationDays hari (konvensi yang sama dengan activateSubscription).
-func grantVoucherSubscription(tx *gorm.DB, userID uint, plan models.Plan, durationDays int, isTrial bool, now time.Time) error {
-	if err := tx.Model(&models.Subscription{}).
-		Where("user_id = ? AND status = ?", userID, "active").
-		Update("status", "expired").Error; err != nil {
-		return err
+// grantVoucherSubscription memberikan langganan dari voucher —
+// MEMPERPANJANG / MENGANTRE, bukan menimpa (keputusan user 11 Nov 2026,
+// menggantikan konvensi lama "nonaktifkan yang lama, mulai sekarang").
+//
+//   - Tidak ada langganan yang masih berjalan → langganan baru mulai
+//     sekarang (status 'active'), users.plan disinkronkan.
+//   - Ada langganan aktif / sudah mengantre → langganan baru mulai di
+//     ends_at TERAKHIR antrean (status 'scheduled'), berakhir di ujung
+//     antrean + durationDays. Langganan lama TIDAK dinonaktifkan — tetap
+//     aktif sampai jendelanya berakhir. users.plan TIDAK diubah: paket &
+//     kuota yang tampil tetap mengikuti langganan yang sedang berjalan;
+//     yang mengantre diterapkan scheduler saat jendelanya mulai (lihat
+//     worker.activateDueScheduledSubscriptions). Pembaca kuota/status
+//     (quota.effectiveLimit, subscription.Check) menentukan langganan
+//     aktif dari jendela waktu, jadi baris 'scheduled' yang jendelanya
+//     sudah mulai tetap terbaca benar walau scheduler sempat tertinggal.
+//
+// Mengembalikan jendela (startsAt, endsAt) langganan yang dibuat.
+//
+// Race: baris user dikunci (SELECT ... FOR UPDATE) sebelum membaca ujung
+// antrean, sehingga dua redeem bersamaan (voucher berbeda) untuk user yang
+// sama diserialisasi — yang kedua baru membaca antrean setelah yang pertama
+// commit, jadi voucher kedua mengantre di belakang yang pertama, bukan
+// menimpanya. Urutan kunci konsisten (baris voucher dulu di
+// redeemVoucherTx, lalu baris user di sini) di semua jalur.
+func grantVoucherSubscription(tx *gorm.DB, userID uint, plan models.Plan, durationDays int, isTrial bool, now time.Time) (time.Time, time.Time, error) {
+	var lockedUser models.User
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", userID).First(&lockedUser).Error; err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+
+	// Ujung antrean: ends_at TERAKHIR di antara langganan yang masih
+	// berjalan atau sudah mengantre. Baris yang jendelanya sudah lewat
+	// tidak memperpanjang antrean.
+	var last models.Subscription
+	start := now
+	queued := false
+	err := tx.Where("user_id = ? AND status IN ? AND end_date > ?",
+		userID, []string{"active", "scheduled"}, now).
+		Order("end_date DESC").First(&last).Error
+	if err == nil {
+		start = last.EndDate
+		queued = true
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return time.Time{}, time.Time{}, err
+	}
+	end := start.AddDate(0, 0, durationDays)
+
+	status := "active"
+	if queued {
+		status = "scheduled"
 	}
 	sub := models.Subscription{
 		UserID:    userID,
 		PlanID:    plan.ID,
-		Status:    "active",
-		StartDate: now,
-		EndDate:   now.AddDate(0, 0, durationDays),
+		Status:    status,
+		StartDate: start,
+		EndDate:   end,
 		IsTrial:   isTrial,
 	}
 	if err := tx.Create(&sub).Error; err != nil {
-		return err
+		return time.Time{}, time.Time{}, err
 	}
-	planSlug := plan.Slug
-	if isTrial {
-		planSlug = "trial"
+	if !queued {
+		planSlug := plan.Slug
+		if isTrial {
+			planSlug = "trial"
+		}
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).
+			Update("plan", planSlug).Error; err != nil {
+			return time.Time{}, time.Time{}, err
+		}
 	}
-	return tx.Model(&models.User{}).Where("id = ?", userID).Update("plan", planSlug).Error
+	return start, end, nil
 }
 
 // GET /api/billing/voucher/redemptions — riwayat penukaran voucher milik

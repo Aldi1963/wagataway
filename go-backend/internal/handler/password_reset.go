@@ -25,6 +25,33 @@ func hashResetToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// issueResetToken membuat token reset sekali pakai untuk seorang user:
+// membatalkan token lama yang belum dipakai, menyimpan HANYA hash token
+// (bukan token mentah) dengan TTL 30 menit, lalu mengembalikan token mentah
+// SEKALI ke pemanggil. Pemanggil wajib TIDAK mencatat token mentah itu ke
+// log server, ke admin_activity_logs, atau menyimpannya di mana pun.
+func issueResetToken(db *gorm.DB, userID uint) (string, time.Time, error) {
+	now := time.Now()
+	db.Model(&models.PasswordResetToken{}).
+		Where("user_id = ? AND used_at IS NULL", userID).
+		Update("used_at", now)
+
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", time.Time{}, err
+	}
+	token := hex.EncodeToString(raw)
+	expiresAt := now.Add(resetTokenTTL)
+	if err := db.Create(&models.PasswordResetToken{
+		UserID:    userID,
+		TokenHash: hashResetToken(token),
+		ExpiresAt: expiresAt,
+	}).Error; err != nil {
+		return "", time.Time{}, err
+	}
+	return token, expiresAt, nil
+}
+
 // handleForgotPassword membuat token reset sekali pakai dan mengirim link via email.
 // Selalu balas sukses agar tidak membocorkan email terdaftar atau tidak.
 func handleForgotPassword(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
@@ -40,22 +67,10 @@ func handleForgotPassword(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 
 		var user models.User
 		if err := db.Where("email = ?", email).First(&user).Error; err == nil && user.Status == "active" {
-			// Batalkan token lama yang belum dipakai
-			now := time.Now()
-			db.Model(&models.PasswordResetToken{}).
-				Where("user_id = ? AND used_at IS NULL", user.ID).
-				Update("used_at", now)
-
-			raw := make([]byte, 32)
-			if _, err := rand.Read(raw); err != nil {
+			token, _, err := issueResetToken(db, user.ID)
+			if err != nil {
 				log.Error().Err(err).Msg("gagal membuat token reset")
 			} else {
-				token := hex.EncodeToString(raw)
-				db.Create(&models.PasswordResetToken{
-					UserID:    user.ID,
-					TokenHash: hashResetToken(token),
-					ExpiresAt: now.Add(resetTokenTTL),
-				})
 				resetURL := strings.TrimRight(cfg.AppURL, "/") + "/reset-password?token=" + token
 				if err := sendResetEmail(cfg, user.Email, user.Name, resetURL); err != nil {
 					// JANGAN catat resetURL/token ke log: link berisi token

@@ -36,7 +36,8 @@ import (
 //   Bila API key mentah tidak tersedia (mode CLI), verifikasi HMAC tidak bisa
 //   dilakukan di sini; sebagai gantinya SETIAP cabang webhook (paid maupun
 //   non-paid) diverifikasi ulang ke API Clipku Pay sebelum status lokal
-//   berubah, dan aktivasi menolak nominal remote yang kurang dari tagihan.
+//   berubah, dan aktivasi menolak nominal remote yang kurang dari tagihan
+//   atau tidak diketahui (mode ketat).
 
 type clipkuPay struct {
 	webhookURL string
@@ -367,16 +368,15 @@ func clipkuRemoteAmount(r *clipkuTxData) int64 {
 	return r.TotalAmount
 }
 
-// clipkuAmountSufficient: nominal remote yang diketahui tidak boleh kurang
-// dari tagihan lokal. Nominal 0 = API tidak melaporkannya → bukan bukti
-// kurang bayar, jadi tidak memblokir (perilaku lama dipertahankan); bila
-// API melaporkan nominal, nominal itu yang dipakai.
+// clipkuAmountSufficient (MODE KETAT): nominal remote harus diketahui DAN
+// tidak kurang dari tagihan lokal. Nominal 0/tidak diketahui = API tidak
+// melaporkannya → aktivasi DITOLAK (bukan lagi diizinkan seperti perilaku
+// lama), karena get_transaction terbukti mengembalikan "amount" untuk
+// transaksi nyata (verifikasi 2026-11-11: order WAG-34-1791150537 → amount
+// 66000, WAG-1-1794260976 → amount 25000). Pengecualian: tagihan 0
+// (mis. prorata bayar-0) tetap lolos karena 0 >= 0.
 func clipkuAmountSufficient(remote *clipkuTxData, expectedAmount int64) bool {
-	amt := clipkuRemoteAmount(remote)
-	if amt <= 0 {
-		return true
-	}
-	return amt >= expectedAmount
+	return clipkuRemoteAmount(remote) >= expectedAmount
 }
 
 // clipkuWebhookAction adalah keputusan webhook setelah verifikasi ulang ke
