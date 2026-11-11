@@ -1328,7 +1328,6 @@ function VouchersTab() {
         count: n,
         type,
         duration: Number(duration) || 0,
-        discount: Number(discount) || 0,
         max_uses: Number(maxUses) || 1,
       };
       if (type === "plan" && planId.trim()) body.plan_id = Number(planId);
@@ -1635,6 +1634,7 @@ function VouchersTab() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
+                    </td>
                   </tr>
                 ))}
                 {vouchers.length === 0 && (

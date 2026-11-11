@@ -74,6 +74,11 @@ func (f *fakeWASender) SendMessageNoQuota(deviceID uint, to, msgType, content, m
 	return f.err
 }
 
+// FireEvent no-op: waSender (Item 8) menuntut method ini; jalur invoice
+// tidak pernah memicu webhook outbound, jadi test mengabaikannya.
+func (f *fakeWASender) FireEvent(userID, deviceID uint, event string, payload map[string]interface{}) {
+}
+
 func seedInvUser(t *testing.T, db *gorm.DB, uid uint) {
 	t.Helper()
 	// Bersihkan sisa run sebelumnya untuk uid ini (DB test dipakai ulang).
