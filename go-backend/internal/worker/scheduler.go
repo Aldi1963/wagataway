@@ -60,6 +60,11 @@ func (s *Scheduler) Start() {
 	// Lihat voucher_expiry.go.
 	s.cron.AddFunc("0 30 * * * *", s.processExpiredVouchers)
 
+	// Tandai tagihan pelanggan yang jatuh temponya lewat sebagai expired
+	// (Item 3) — tiap jam, di menit ke-30 agar tidak bertabrakan dengan
+	// job menit-0 / menit-15 lainnya.
+	s.cron.AddFunc("0 30 * * * *", s.processExpiredCustomerInvoices)
+
 	// Cadangan percakapan harian (Item 11) setiap hari 02:00 — satu file
 	// JSON per pasangan (user, device), retensi 30 hari.
 	s.cron.AddFunc("0 0 2 * * *", s.processChatBackups)
