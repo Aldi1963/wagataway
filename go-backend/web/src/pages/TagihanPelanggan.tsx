@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dropdown } from "@/components/ui/dropdown";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { apiGet, apiPost } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
@@ -322,27 +323,23 @@ export default function TagihanPelanggan() {
               <CardContent className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">{t("billing.invColCustomer")}</label>
-                  <select
-                    className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    value={invContactId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setInvContactId(id);
-                      const ct = contacts.find((c) => String(c.id) === id);
-                      if (ct) {
-                        setInvName(ct.name);
-                        setInvPhone(ct.phone);
-                        setInvEmail(ct.email || "");
-                      }
-                    }}
-                  >
-                    <option value="">{t("billing.invPickContact")}</option>
-                    {contacts.map((ct) => (
-                      <option key={ct.id} value={ct.id}>
-                        {ct.name} — {ct.phone}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-1">
+                    <Dropdown
+                      value={invContactId}
+                      onChange={(id) => {
+                        setInvContactId(id);
+                        const ct = contacts.find((c) => String(c.id) === id);
+                        if (ct) {
+                          setInvName(ct.name);
+                          setInvPhone(ct.phone);
+                          setInvEmail(ct.email || "");
+                        }
+                      }}
+                      options={contacts.map((ct) => ({ value: String(ct.id), label: `${ct.name} — ${ct.phone}` }))}
+                      placeholder={t("billing.invPickContact")}
+                      ariaLabel={t("billing.invColCustomer")}
+                    />
+                  </div>
                   <p className="text-[11px] text-muted-foreground mt-1">{t("billing.invManual")}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
