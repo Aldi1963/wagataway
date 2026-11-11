@@ -57,6 +57,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.AutoReply{},
 		&models.AIReplyConfig{},
 		&models.AIConnection{},
+		&models.AIChatbotFAQ{},
+		&models.AIChatbotLog{},
 		&models.ApiKey{},
 		&models.Plan{},
 		&models.Subscription{},

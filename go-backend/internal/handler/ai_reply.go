@@ -58,6 +58,10 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 			TriggerKeywords string `json:"triggerKeywords"`
 			IgnoreGroups    *bool  `json:"ignoreGroups"`
 			InjectionGuard  *bool  `json:"injectionGuard"`
+			UseFAQ          *bool  `json:"useFaq"`
+			StrictFAQ       *bool  `json:"strictFaq"`
+			MaxReplyLength  int    `json:"maxReplyLength"`
+			ContextMessages *int   `json:"contextMessages"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
@@ -76,6 +80,22 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 		if req.InjectionGuard != nil {
 			injectionGuard = *req.InjectionGuard
 		}
+		useFAQ := true
+		if req.UseFAQ != nil {
+			useFAQ = *req.UseFAQ
+		}
+		strictFAQ := false
+		if req.StrictFAQ != nil {
+			strictFAQ = *req.StrictFAQ
+		}
+		maxReplyLength := req.MaxReplyLength
+		if maxReplyLength <= 0 {
+			maxReplyLength = service.DefaultMaxReplyLength
+		}
+		contextMessages := 10
+		if req.ContextMessages != nil {
+			contextMessages = *req.ContextMessages
+		}
 		cfg := models.AIReplyConfig{
 			UserID:          userID,
 			DeviceID:        req.DeviceID,
@@ -84,6 +104,10 @@ func createAIReplyConfig(db *gorm.DB) gin.HandlerFunc {
 			IgnoreGroups:    ignoreGroups,
 			InjectionGuard:  injectionGuard,
 			IsEnabled:       true,
+			UseFAQ:          useFAQ,
+			StrictFAQ:       strictFAQ,
+			MaxReplyLength:  maxReplyLength,
+			ContextMessages: contextMessages,
 		}
 		if err := udb.Create(&cfg).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menyimpan"})
