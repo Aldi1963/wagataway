@@ -71,6 +71,7 @@ const topItems: NavItem[] = [
   { labelKey: "chatBackup", href: "/chat-backups", icon: DatabaseBackup },
   { labelKey: "contacts", href: "/contacts", icon: Users },
   { labelKey: "billing", href: "/billing", icon: CreditCard },
+  { labelKey: "customerInvoices", href: "/tagihan-pelanggan", icon: ReceiptText },
   { labelKey: "affiliate", href: "/affiliate", icon: Gift },
 ];
 

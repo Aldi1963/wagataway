@@ -39,6 +39,7 @@ export const routeTitleKeys: Record<string, string> = {
   "/analytics": "title.analytics",
   "/anti-banned": "title.antiBanned",
   "/billing": "title.billing",
+  "/tagihan-pelanggan": "title.customerInvoices",
   "/affiliate": "title.affiliate",
   "/settings": "title.settings",
   "/templates": "title.templates",
