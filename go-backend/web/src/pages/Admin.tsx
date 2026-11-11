@@ -30,6 +30,7 @@ import {
   KeyRound,
   Copy,
   CreditCard,
+  AlertTriangle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -1221,6 +1222,24 @@ function VouchersTab() {
 
   const typeLabel = (tv: string) => VOUCHER_TYPES.find((x) => x.value === tv)?.label || tv;
 
+  // Peringatan stok & kedaluwarsa (Item 8): pemakaian >= 90% dari MaxUses
+  // dianggap hampir habis; ExpiresAt yang lewat berarti kedaluwarsa
+  // (job per jam + lazy-expiry di GET /admin/vouchers menonaktifkannya).
+  const usageRatio = (v: Voucher) => (v.maxUses > 0 ? v.usedCount / v.maxUses : 0);
+  const isExpired = (v: Voucher) => !!v.expiresAt && new Date(v.expiresAt).getTime() <= Date.now();
+  const isNearlyUsed = (v: Voucher) => {
+    const r = usageRatio(v);
+    return r >= 0.9 && r < 1;
+  };
+  const isUsedUp = (v: Voucher) => usageRatio(v) >= 1;
+  const alertCounts = useMemo(
+    () => ({
+      lowStock: vouchers.filter((v) => usageRatio(v) >= 0.9).length,
+      expired: vouchers.filter(isExpired).length,
+    }),
+    [vouchers],
+  );
+
   const planOptions = [
     { value: "", label: t("admin.selectPackage") },
     ...plans.map((p) => ({ value: String(p.id), label: `${p.name} — ${fmtRp(p.price)}` })),
@@ -1256,6 +1275,20 @@ function VouchersTab() {
       {loading && <LoadingRows />}
       {!loading && error && <ErrorCard message={error} onRetry={load} />}
 
+      {!loading && !error && (alertCounts.lowStock > 0 || alertCounts.expired > 0) && (
+        <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            {alertCounts.lowStock > 0 && (
+              <p>{t("admin.voucherAlertLowStock").replace("{count}", String(alertCounts.lowStock))}</p>
+            )}
+            {alertCounts.expired > 0 && (
+              <p>{t("admin.voucherAlertExpired").replace("{count}", String(alertCounts.expired))}</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {!loading && !error && (
         <Card>
           <div className="overflow-x-auto">
@@ -1283,14 +1316,25 @@ function VouchersTab() {
                     <td className="p-3 text-muted-foreground">{t("admin.discountPct").replace("{pct}", String(v.discount))}</td>
                     <td className="p-3 text-muted-foreground whitespace-nowrap">
                       {fmtNum(v.usedCount)} / {fmtNum(v.maxUses)}
+                      {isUsedUp(v) && (
+                        <Badge className="ml-2 bg-red-500/10 text-red-600 border-red-500/20">{t("admin.voucherExhausted")}</Badge>
+                      )}
+                      {!isUsedUp(v) && isNearlyUsed(v) && (
+                        <Badge className="ml-2 bg-amber-500/10 text-amber-600 border-amber-500/20">{t("admin.voucherAlmostUsed")}</Badge>
+                      )}
                     </td>
                     <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(v.expiresAt)}</td>
                     <td className="p-3">
-                      {v.isActive ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{t("admin.statusActive")}</Badge>
-                      ) : (
-                        <Badge variant="outline">{t("admin.statusInactive")}</Badge>
-                      )}
+                      <span className="inline-flex flex-wrap gap-1">
+                        {v.isActive ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{t("admin.statusActive")}</Badge>
+                        ) : (
+                          <Badge variant="outline">{t("admin.statusInactive")}</Badge>
+                        )}
+                        {isExpired(v) && (
+                          <Badge className="bg-red-500/10 text-red-600 border-red-500/20">{t("admin.voucherExpired")}</Badge>
+                        )}
+                      </span>
                     </td>
                     <td className="p-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">

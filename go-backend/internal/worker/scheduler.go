@@ -55,6 +55,11 @@ func (s *Scheduler) Start() {
 	// jendela waktunya mulai — tiap menit, lihat subscription_activation.go.
 	s.cron.AddFunc("0 * * * * *", s.processScheduledSubscriptions)
 
+	// Nonaktifkan voucher kedaluwarsa (ExpiresAt lewat) setiap jam, di menit
+	// ke-30 agar tidak bertabrakan dengan job menit-0 lainnya.
+	// Lihat voucher_expiry.go.
+	s.cron.AddFunc("0 30 * * * *", s.processExpiredVouchers)
+
 	s.cron.Start()
 	log.Info().Msg("Background scheduler started")
 }
