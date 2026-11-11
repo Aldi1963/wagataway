@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -32,6 +33,7 @@ func registerAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, w
 	rg.DELETE("/packages/:id", adminDeletePackage(db))
 	rg.GET("/vouchers", adminListVouchers(db))
 	rg.POST("/vouchers", adminCreateVoucher(db))
+	rg.PUT("/vouchers/:id", adminUpdateVoucher(db))
 	rg.DELETE("/vouchers/:id", adminDeleteVoucher(db))
 	rg.GET("/settings", adminGetSettings(db))
 	rg.PUT("/settings", adminUpdateSettings(db))
@@ -304,6 +306,250 @@ func adminDeleteVoucher(db *gorm.DB) gin.HandlerFunc {
 		logAdminAction(db, middleware.GetUserID(c), "delete_voucher", "voucher",
 			strconv.FormatUint(id, 10), "")
 		c.JSON(http.StatusOK, gin.H{"message": "Voucher dihapus"})
+	}
+}
+
+// adminUpdateVoucher mengubah voucher. Aturan penguncian (item 11):
+//   - Voucher yang BELUM dipakai (used_count == 0 dan tanpa baris
+//     redemption) boleh diubah semua field utamanya.
+//   - Voucher yang SUDAH dipakai mengunci kode, tipe, paket, durasi, dan
+//     maks pakai — mengubahnya akan mengubah arti penukaran yang sudah
+//     terjadi. Status aktif dan tanggal berakhir tetap bisa diubah.
+//   - Kode baru harus unik (unique index menjadi penjaga terakhir bila dua
+//     admin berlomba mengganti ke kode yang sama).
+//
+// Frontend mengirim key camelCase (key snake_case tidak ter-bind ke model
+// Go — lihat catatan bug binding di adminCreateVoucher). Key yang tidak
+// dikenal (mis. discount, usedCount) diabaikan: discount TIDAK bisa
+// dihidupkan lagi lewat endpoint ini dan usedCount tidak bisa diubah manual.
+func adminUpdateVoucher(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+		var voucher models.Voucher
+		if err := db.First(&voucher, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Voucher tidak ditemukan"})
+			return
+		}
+
+		var raw map[string]json.RawMessage
+		if err := c.ShouldBindJSON(&raw); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+
+		// "Sudah dipakai" = used_count > 0 ATAU ada baris redemption.
+		// Keduanya dicek: counter di-increment dalam transaksi yang sama
+		// dengan pencatatan redemption, tapi baris redemption adalah bukti
+		// yang bertahan bila counter suatu saat diubah manual.
+		used := voucher.UsedCount > 0
+		if !used {
+			var n int64
+			if err := db.Model(&models.VoucherRedemption{}).Where("voucher_id = ?", voucher.ID).Count(&n).Error; err == nil && n > 0 {
+				used = true
+			}
+		}
+
+		// Dekode hanya key yang dikirim; key yang tidak ada = tidak diubah.
+		// RawMessage membedakan "dikirim null" (hadir → bersihkan field,
+		// berlaku untuk planId & expiresAt) dari "tidak dikirim".
+		var (
+			code      *string
+			vtype     *string
+			planID    *uint
+			duration  *int
+			maxUses   *int
+			isActive  *bool
+			expiresAt *time.Time
+		)
+		present := map[string]bool{}
+		for key, b := range raw {
+			if string(b) == "null" {
+				present[key] = true
+				continue
+			}
+			var err error
+			switch key {
+			case "code":
+				err = json.Unmarshal(b, &code)
+			case "type":
+				err = json.Unmarshal(b, &vtype)
+			case "planId":
+				err = json.Unmarshal(b, &planID)
+			case "duration":
+				err = json.Unmarshal(b, &duration)
+			case "maxUses":
+				err = json.Unmarshal(b, &maxUses)
+			case "isActive":
+				err = json.Unmarshal(b, &isActive)
+			case "expiresAt":
+				err = json.Unmarshal(b, &expiresAt)
+			default:
+				continue // key tak dikenal diabaikan
+			}
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+				return
+			}
+			present[key] = true
+		}
+
+		sameUint := func(a, b *uint) bool {
+			if a == nil || b == nil {
+				return a == b
+			}
+			return *a == *b
+		}
+		sameTime := func(a, b *time.Time) bool {
+			if a == nil || b == nil {
+				return a == b
+			}
+			return a.Equal(*b)
+		}
+
+		// Field terkunci bila sudah dipakai: nilai baru yang berbeda dari
+		// nilai sekarang ditolak 400. Nilai yang sama (form mengirim ulang
+		// field yang tampil disabled) lolos sebagai no-op.
+		if used {
+			if present["code"] && code != nil && strings.ToUpper(strings.TrimSpace(*code)) != voucher.Code {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Voucher sudah dipakai: kode tidak dapat diubah"})
+				return
+			}
+			if present["type"] && vtype != nil && *vtype != voucher.Type {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Voucher sudah dipakai: tipe tidak dapat diubah"})
+				return
+			}
+			if present["planId"] && !sameUint(planID, voucher.PlanID) {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Voucher sudah dipakai: paket tidak dapat diubah"})
+				return
+			}
+			if present["duration"] && duration != nil && *duration != voucher.Duration {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Voucher sudah dipakai: durasi tidak dapat diubah"})
+				return
+			}
+			if present["maxUses"] && maxUses != nil && *maxUses != voucher.MaxUses {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Voucher sudah dipakai: maks pakai tidak dapat diubah"})
+				return
+			}
+		}
+
+		// Validasi nilai baru (berlaku untuk voucher yang belum dipakai
+		// maupun yang sudah dipakai — untuk yang sudah dipakai, nilai yang
+		// lolos kunci di atas sudah pasti sama dengan nilai sekarang).
+		newCode := voucher.Code
+		if present["code"] {
+			if code == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Kode voucher wajib diisi"})
+				return
+			}
+			newCode = strings.ToUpper(strings.TrimSpace(*code))
+			if newCode == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Kode voucher wajib diisi"})
+				return
+			}
+		}
+		newType := voucher.Type
+		if present["type"] {
+			if vtype == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Tipe voucher tidak valid"})
+				return
+			}
+			newType = *vtype
+			// Tipe "discount" tidak bisa dipilih lagi (sudah dihapus dari
+			// admin), tapi voucher diskon lama boleh tetap bertipe discount
+			// bila tipenya tidak diubah.
+			if newType != voucher.Type && newType != "trial" && newType != "plan" {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Tipe voucher tidak valid"})
+				return
+			}
+		}
+		newPlanID := voucher.PlanID
+		if present["planId"] {
+			newPlanID = planID // nil = bersihkan paket
+		}
+		if newType == "plan" && newPlanID == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Pilih paket dulu"})
+			return
+		}
+		if newPlanID != nil {
+			var plan models.Plan
+			if err := db.First(&plan, *newPlanID).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Paket tidak ditemukan"})
+				return
+			}
+		}
+		if present["duration"] {
+			if duration == nil || *duration < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Durasi tidak valid"})
+				return
+			}
+		}
+		if present["maxUses"] {
+			if maxUses == nil || *maxUses < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Maks pakai tidak valid"})
+				return
+			}
+			if *maxUses < voucher.UsedCount {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Maks pakai tidak boleh kurang dari jumlah pemakaian"})
+				return
+			}
+		}
+		if present["isActive"] && isActive == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+
+		// Kode baru harus unik.
+		if newCode != voucher.Code {
+			var n int64
+			db.Model(&models.Voucher{}).Where("code = ? AND id <> ?", newCode, voucher.ID).Count(&n)
+			if n > 0 {
+				c.JSON(http.StatusConflict, gin.H{"message": "Kode voucher sudah dipakai"})
+				return
+			}
+		}
+
+		changed := []string{}
+		if present["code"] && newCode != voucher.Code {
+			voucher.Code = newCode
+			changed = append(changed, "code")
+		}
+		if present["type"] && newType != voucher.Type {
+			voucher.Type = newType
+			changed = append(changed, "type")
+		}
+		if present["planId"] && !sameUint(newPlanID, voucher.PlanID) {
+			voucher.PlanID = newPlanID
+			changed = append(changed, "planId")
+		}
+		if present["duration"] && *duration != voucher.Duration {
+			voucher.Duration = *duration
+			changed = append(changed, "duration")
+		}
+		if present["maxUses"] && *maxUses != voucher.MaxUses {
+			voucher.MaxUses = *maxUses
+			changed = append(changed, "maxUses")
+		}
+		if present["isActive"] && *isActive != voucher.IsActive {
+			voucher.IsActive = *isActive
+			changed = append(changed, "isActive")
+		}
+		if present["expiresAt"] && !sameTime(expiresAt, voucher.ExpiresAt) {
+			voucher.ExpiresAt = expiresAt
+			changed = append(changed, "expiresAt")
+		}
+		if err := db.Save(&voucher).Error; err != nil {
+			// Balapan dengan pembuatan voucher lain berkode sama: unique
+			// index menjadi penjaga terakhir.
+			if strings.Contains(err.Error(), "duplicate key") {
+				c.JSON(http.StatusConflict, gin.H{"message": "Kode voucher sudah dipakai"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengubah voucher"})
+			return
+		}
+		logAdminAction(db, middleware.GetUserID(c), "update_voucher", "voucher",
+			strconv.FormatUint(id, 10), "Ubah: "+strings.Join(changed, ", "))
+		c.JSON(http.StatusOK, gin.H{"voucher": voucher, "message": "Voucher diperbarui"})
 	}
 }
 

@@ -159,12 +159,14 @@ function Select({
   options,
   className,
   ariaLabel,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   className?: string;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <Dropdown
@@ -173,6 +175,7 @@ function Select({
       options={options}
       className={className}
       ariaLabel={ariaLabel}
+      disabled={disabled}
     />
   );
 }
@@ -1082,8 +1085,23 @@ function VouchersTab() {
   const [duration, setDuration] = useState("7");
   const [maxUses, setMaxUses] = useState("100");
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<Voucher | null>(null);
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [editExpiresAt, setEditExpiresAt] = useState("");
   const [deleting, setDeleting] = useState<Voucher | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+
+  // Voucher yang sudah dipakai mengunci kode/tipe/paket/durasi/maks pakai
+  // (backend menolak 400 bila dikirim berubah); status aktif dan tanggal
+  // berakhir tetap bisa diubah.
+  const editingUsed = (editing?.usedCount ?? 0) > 0;
+  // Opsi diskon hanya tampil bila voucher yang diedit memang bertipe
+  // diskon (legacy) — tipe diskon sudah dihapus dari admin, tidak bisa
+  // dipilih untuk voucher baru.
+  const editTypeOptions =
+    editing?.type === "discount"
+      ? [...VOUCHER_TYPES, { value: "discount", label: t("settings.voucherTypeDiscount") }]
+      : VOUCHER_TYPES;
 
   const load = () => {
     setLoading(true);
@@ -1096,13 +1114,13 @@ function VouchersTab() {
 
   useEffect(load, []);
 
-  // Muat daftar paket saat form tambah dibuka (untuk dropdown paket).
+  // Muat daftar paket saat form tambah/edit dibuka (untuk dropdown paket).
   useEffect(() => {
-    if (!showForm) return;
+    if (!showForm && !editing) return;
     apiGet<{ packages: Pkg[] }>("/admin/packages")
       .then((res) => setPlans(res.packages || []))
       .catch(() => setPlans([]));
-  }, [showForm]);
+  }, [showForm, editing]);
 
   const resetForm = () => {
     setCode("");
@@ -1154,6 +1172,50 @@ function VouchersTab() {
       toast.error(errMsg(e, t("admin.errDeleteVoucher")));
     } finally {
       setDeletingBusy(false);
+    }
+  };
+
+  const openEdit = (v: Voucher) => {
+    setCode(v.code);
+    setType(v.type);
+    setPlanId(v.planId ? String(v.planId) : "");
+    setDuration(String(v.duration));
+    setMaxUses(String(v.maxUses));
+    setEditIsActive(v.isActive);
+    setEditExpiresAt(v.expiresAt ? v.expiresAt.slice(0, 10) : "");
+    setEditing(v);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editing) return;
+    if (!code.trim()) {
+      toast.error(t("admin.errVoucherCode"));
+      return;
+    }
+    if (type === "plan" && !planId.trim()) {
+      toast.error(t("admin.errVoucherPlan"));
+      return;
+    }
+    setSaving(true);
+    try {
+      // Key camelCase agar ter-bind ke model Go (snake_case tidak ter-bind).
+      const body: Record<string, unknown> = {
+        code: code.trim().toUpperCase(),
+        type,
+        planId: planId.trim() ? Number(planId) : null,
+        duration: Number(duration) || 0,
+        maxUses: Number(maxUses) || 1,
+        isActive: editIsActive,
+        expiresAt: editExpiresAt ? new Date(`${editExpiresAt}T00:00:00`).toISOString() : null,
+      };
+      await apiPut(`/admin/vouchers/${editing.id}`, body);
+      toast.success(t("admin.voucherUpdated"));
+      setEditing(null);
+      load();
+    } catch (e) {
+      toast.error(errMsg(e, t("admin.errUpdateVoucher")));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1230,10 +1292,15 @@ function VouchersTab() {
                         <Badge variant="outline">{t("admin.statusInactive")}</Badge>
                       )}
                     </td>
-                    <td className="p-3 text-right">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(v)} aria-label={t("admin.deleteVoucher")}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                    <td className="p-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(v)} aria-label={t("admin.editVoucher")}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(v)} aria-label={t("admin.deleteVoucher")}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1311,6 +1378,53 @@ function VouchersTab() {
                 {t("admin.cancel")}
               </Button>
               <Button size="sm" onClick={handleAdd} disabled={saving}>
+                {saving ? t("admin.saving") : t("admin.save")}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {editing && (
+        <Modal title={t("admin.editVoucherTitle")} onClose={() => setEditing(null)}>
+          <div className="space-y-4">
+            {editingUsed && (
+              <p className="text-xs leading-relaxed rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
+                {t("admin.voucherLockedNote").replace("{count}", String(editing.usedCount))}
+              </p>
+            )}
+            <Field label={t("admin.voucherCodeLabel")}>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="cth: HEMAT50" className="font-mono uppercase" disabled={editingUsed} />
+            </Field>
+            <Field label={t("admin.typeLabel")}>
+              <Select value={type} onChange={setType} options={editTypeOptions} className="h-10 w-full text-sm" ariaLabel={t("admin.voucherTypeAria")} disabled={editingUsed} />
+            </Field>
+            {type === "plan" && (
+              <Field label={t("admin.packageIdLabel")}>
+                <Select value={planId} onChange={setPlanId} options={planOptions} className="h-10 w-full text-sm" ariaLabel={t("admin.packageIdLabel")} disabled={editingUsed} />
+              </Field>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("admin.durationLabel")}>
+                <Input type="number" min="0" value={duration} onChange={(e) => setDuration(e.target.value)} disabled={editingUsed} />
+              </Field>
+              <Field label={t("admin.maxUsesLabel")}>
+                <Input type="number" min="1" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} disabled={editingUsed} />
+              </Field>
+            </div>
+            <Field label={t("admin.expiresAtLabel")}>
+              <Input type="date" value={editExpiresAt} onChange={(e) => setEditExpiresAt(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t("admin.expiresAtHint")}</p>
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input type="checkbox" checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} className="w-4 h-4 accent-primary" />
+              {t("admin.voucherActiveLabel")}
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+                {t("admin.cancel")}
+              </Button>
+              <Button size="sm" onClick={handleSaveEdit} disabled={saving}>
                 {saving ? t("admin.saving") : t("admin.save")}
               </Button>
             </div>
@@ -2206,6 +2320,7 @@ function actionLabel(t: (k: string) => string, a: string) {
     update_package: t("admin.actionUpdatePackage"),
     delete_package: t("admin.actionDeletePackage"),
     create_voucher: t("admin.actionCreateVoucher"),
+    update_voucher: t("admin.actionUpdateVoucher"),
     delete_voucher: t("admin.actionDeleteVoucher"),
     send_notification: t("admin.actionSendNotification"),
     broadcast_wa: t("admin.actionBroadcastWa"),
