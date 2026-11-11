@@ -32,6 +32,7 @@ func registerAdminRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB, w
 	rg.DELETE("/packages/:id", adminDeletePackage(db))
 	rg.GET("/vouchers", adminListVouchers(db))
 	rg.POST("/vouchers", adminCreateVoucher(db))
+	rg.POST("/vouchers/bulk", adminBulkCreateVouchers(db))
 	rg.DELETE("/vouchers/:id", adminDeleteVoucher(db))
 	rg.GET("/settings", adminGetSettings(db))
 	rg.PUT("/settings", adminUpdateSettings(db))

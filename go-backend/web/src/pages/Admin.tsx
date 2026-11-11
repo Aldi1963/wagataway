@@ -74,6 +74,19 @@ interface Pkg {
   isActive: boolean;
 }
 
+interface BulkFailure {
+  code: string;
+  reason: string;
+}
+
+interface BulkResult {
+  created: Voucher[];
+  failed: BulkFailure[];
+  createdCount: number;
+  failedCount: number;
+  total: number;
+}
+
 interface Voucher {
   id: number;
   code: string;
@@ -1086,6 +1099,11 @@ function VouchersTab() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Voucher | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  // Mode massal: buat banyak kode sekaligus dengan satu prefix.
+  const [bulkMode, setBulkMode] = useState(false);
+  const [prefix, setPrefix] = useState("");
+  const [count, setCount] = useState("10");
+  const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -1113,6 +1131,14 @@ function VouchersTab() {
     setDuration("7");
     setDiscount("0");
     setMaxUses("100");
+    setPrefix("");
+    setCount("10");
+    setBulkResult(null);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    resetForm();
   };
 
   const handleAdd = async () => {
@@ -1146,6 +1172,42 @@ function VouchersTab() {
     }
   };
 
+  const handleBulk = async () => {
+    if (!prefix.trim()) {
+      toast.error(t("admin.errVoucherPrefix"));
+      return;
+    }
+    const n = Number(count);
+    if (!Number.isInteger(n) || n < 1 || n > 500) {
+      toast.error(t("admin.errVoucherCount"));
+      return;
+    }
+    if (type === "plan" && !planId.trim()) {
+      toast.error(t("admin.errVoucherPlan"));
+      return;
+    }
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        prefix: prefix.trim().toUpperCase(),
+        count: n,
+        type,
+        duration: Number(duration) || 0,
+        discount: Number(discount) || 0,
+        max_uses: Number(maxUses) || 1,
+      };
+      if (type === "plan" && planId.trim()) body.plan_id = Number(planId);
+      const res = await apiPost<BulkResult>("/admin/vouchers/bulk", body);
+      setBulkResult(res);
+      toast.success(t("admin.bulkVoucherCreated"));
+      load();
+    } catch (e) {
+      toast.error(errMsg(e, t("admin.errCreateBulkVoucher")));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     setDeletingBusy(true);
@@ -1171,7 +1233,7 @@ function VouchersTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+        <Button size="sm" className="gap-1.5" onClick={() => { setBulkResult(null); setShowForm(true); }}>
           <Plus className="w-3.5 h-3.5" /> {t("admin.addVoucher")}
         </Button>
       </div>
@@ -1236,11 +1298,30 @@ function VouchersTab() {
       )}
 
       {showForm && (
-        <Modal title={t("admin.addVoucherTitle")} onClose={() => setShowForm(false)}>
+        <Modal title={bulkMode ? t("admin.addBulkVoucherTitle") : t("admin.addVoucherTitle")} onClose={closeForm}>
           <div className="space-y-4">
-            <Field label={t("admin.voucherCodeLabel")}>
-              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="cth: HEMAT50" className="font-mono uppercase" />
-            </Field>
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              <Button variant={!bulkMode ? "default" : "ghost"} size="sm" className="flex-1" onClick={() => { setBulkMode(false); setBulkResult(null); }}>
+                {t("admin.bulkModeSingle")}
+              </Button>
+              <Button variant={bulkMode ? "default" : "ghost"} size="sm" className="flex-1" onClick={() => { setBulkMode(true); setBulkResult(null); }}>
+                {t("admin.bulkModeBulk")}
+              </Button>
+            </div>
+            {bulkMode ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t("admin.voucherPrefixLabel")}>
+                  <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="cth: HEMAT50" className="font-mono uppercase" />
+                </Field>
+                <Field label={t("admin.voucherCountLabel")}>
+                  <Input type="number" min="1" max="500" value={count} onChange={(e) => setCount(e.target.value)} />
+                </Field>
+              </div>
+            ) : (
+              <Field label={t("admin.voucherCodeLabel")}>
+                <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="cth: HEMAT50" className="font-mono uppercase" />
+              </Field>
+            )}
             <Field label={t("admin.typeLabel")}>
               <Select value={type} onChange={setType} options={VOUCHER_TYPES} className="h-10 w-full text-sm" ariaLabel={t("admin.voucherTypeAria")} />
             </Field>
@@ -1261,13 +1342,32 @@ function VouchersTab() {
               </Field>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>
+              <Button variant="outline" size="sm" onClick={closeForm}>
                 {t("admin.cancel")}
               </Button>
-              <Button size="sm" onClick={handleAdd} disabled={saving}>
+              <Button size="sm" onClick={bulkMode ? handleBulk : handleAdd} disabled={saving}>
                 {saving ? t("admin.saving") : t("admin.save")}
               </Button>
             </div>
+            {bulkResult && (
+              <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
+                <p className="font-medium">
+                  {t("admin.bulkResultCreated").replace("{count}", String(bulkResult.createdCount))}
+                  {" · "}
+                  {t("admin.bulkResultFailed").replace("{count}", String(bulkResult.failedCount))}
+                </p>
+                {bulkResult.failed.length > 0 && (
+                  <ul className="space-y-1">
+                    {bulkResult.failed.map((f) => (
+                      <li key={f.code} className="flex justify-between gap-2 text-xs">
+                        <span className="font-mono font-semibold">{f.code}</span>
+                        <span className="text-muted-foreground text-right">{f.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </Modal>
       )}
