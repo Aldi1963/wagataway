@@ -366,6 +366,7 @@ export default {
     addVoucher: "Add Voucher",
     noVouchers: "No vouchers yet.",
     deleteVoucher: "Delete voucher",
+    copyRedeemLink: "Copy redeem link",
     addVoucherTitle: "Add Voucher",
     voucherCodeLabel: "Voucher code",
     typeLabel: "Type",
@@ -2372,6 +2373,9 @@ export default {
     timeLabel: "Send time",
     title: "Recurring Schedules",
     updated: "Updated",
+  },
+  redeem: {
+    backToDashboard: "Back to Dashboard",
   },
   register: {
     title: "Create a free account",

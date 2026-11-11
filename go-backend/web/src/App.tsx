@@ -10,10 +10,12 @@ const DashboardLayoutLazy = lazy(() =>
 );
 import { PageTransitionLoader } from "@/components/ui/page-transition";
 import { Toaster } from "sonner";
+import { consumePostLoginRedirect } from "@/lib/post-login-redirect";
 
 // ── Lazy Pages ────────────────────────────────────────────────────────────────
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
+const Redeem = lazy(() => import("@/pages/Redeem"));
 const OAuthCallback = lazy(() => import("@/pages/OAuthCallback"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
@@ -94,7 +96,11 @@ function HomeRoute() {
 function GuestRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (user) return <Redirect to="/" />;
+  if (user) {
+    // Login/register berhasil: kembali ke target yang disimpan halaman
+    // tujuan (mis. /redeem?code=XXX), bila ada; kalau tidak, ke dashboard.
+    return <Redirect to={consumePostLoginRedirect() ?? "/"} />;
+  }
   return <>{children}</>;
 }
 
@@ -115,6 +121,9 @@ function AppRouter() {
         </Route>
         <Route path="/register">
           <GuestRoute><Register /></GuestRoute>
+        </Route>
+        <Route path="/redeem">
+          <Redeem />
         </Route>
         <Route path="/forgot-password">
           <GuestRoute><ForgotPassword /></GuestRoute>

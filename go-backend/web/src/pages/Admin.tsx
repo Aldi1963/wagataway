@@ -29,6 +29,7 @@ import {
   EyeOff,
   KeyRound,
   Copy,
+  Link2,
   CreditCard,
 } from "lucide-react";
 import {
@@ -1161,6 +1162,18 @@ function VouchersTab() {
     }
   };
 
+  // Link redeem yang bisa dibagikan: dibuka dari luar, kode sudah terisi
+  // di halaman /redeem (pengguna diminta login dulu bila belum login).
+  const copyRedeemLink = async (v: Voucher) => {
+    const url = `${window.location.origin}/redeem?code=${encodeURIComponent(v.code)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t("admin.linkCopied"));
+    } catch {
+      toast.error(t("admin.errCopyLink"));
+    }
+  };
+
   const typeLabel = (tv: string) => VOUCHER_TYPES.find((x) => x.value === tv)?.label || tv;
 
   const planOptions = [
@@ -1215,7 +1228,10 @@ function VouchersTab() {
                         <Badge variant="outline">{t("admin.statusInactive")}</Badge>
                       )}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyRedeemLink(v)} aria-label={t("admin.copyRedeemLink")}>
+                        <Link2 className="w-3.5 h-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(v)} aria-label={t("admin.deleteVoucher")}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>

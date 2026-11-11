@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,10 +44,20 @@ interface Redemption {
  * Pesan error memakai pesan spesifik dari server (kode tidak ditemukan /
  * kedaluwarsa / sudah dipakai / sudah pernah ditukar), sedangkan sukses
  * menampilkan paket + masa berlaku baru.
+ *
+ * Dipakai ulang halaman /redeem dengan `initialCode` terisi dari
+ * ?code=XXX — tombol tukar langsung difokuskan supaya pengguna tinggal
+ * menekan Enter/klik untuk menukar.
  */
-export default function VoucherRedeem() {
+export default function VoucherRedeem({ initialCode = "" }: { initialCode?: string }) {
   const { t, lang } = useLang();
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(initialCode.trim().toUpperCase());
+  const redeemBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Kode dari link redeem: fokuskan tombol tukar (pengguna tinggal konfirmasi).
+  useEffect(() => {
+    if (initialCode.trim()) redeemBtnRef.current?.focus();
+  }, [initialCode]);
   const [redeeming, setRedeeming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<RedeemResponse | null>(null);
@@ -166,6 +176,7 @@ export default function VoucherRedeem() {
             />
           </div>
           <Button
+            ref={redeemBtnRef}
             size="sm"
             onClick={handleRedeem}
             disabled={redeeming || code.trim().length === 0}

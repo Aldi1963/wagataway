@@ -380,6 +380,7 @@ const id = {
     addVoucher: "Tambah Voucher",
     noVouchers: "Belum ada voucher.",
     deleteVoucher: "Hapus voucher",
+    copyRedeemLink: "Salin link redeem",
     addVoucherTitle: "Tambah Voucher",
     voucherCodeLabel: "Kode voucher",
     typeLabel: "Tipe",
@@ -2386,6 +2387,9 @@ const id = {
     timeLabel: "Jam Kirim",
     title: "Jadwal Berulang",
     updated: "Diperbarui",
+  },
+  redeem: {
+    backToDashboard: "Kembali ke Dashboard",
   },
   register: {
     title: "Buat akun gratis",
