@@ -895,7 +895,7 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 		if msg.Info.IsGroup {
 			go m.checkAIReply(sess, senderJID, senderPhone, text, true)
 		} else if m.findAutoReplyRule(sess, text) != nil {
-			go m.checkAutoReply(sess, senderJID, text)
+			go m.checkAutoReply(sess, senderJID, senderPhone, text)
 		} else {
 			go m.checkAIReply(sess, senderJID, senderPhone, text, false)
 		}
@@ -1190,7 +1190,7 @@ func (m *Manager) findAutoReplyRule(sess *SessionState, text string) *models.Aut
 }
 
 // checkAutoReply checks if an incoming message matches any auto-reply rules
-func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
+func (m *Manager) checkAutoReply(sess *SessionState, senderJID, senderPhone, text string) {
 	rule := m.findAutoReplyRule(sess, text)
 	if rule == nil {
 		return
@@ -1203,6 +1203,7 @@ func (m *Manager) checkAutoReply(sess *SessionState, senderJID, text string) {
 		log.Error().Err(err).Uint("ruleID", rule.ID).Msg("Auto-reply failed")
 	} else {
 		log.Info().Uint("ruleID", rule.ID).Str("to", senderJID).Msg("Auto-reply sent")
+		m.RecordFirstResponse(sess.UserID, sess.DeviceID, senderPhone)
 	}
 }
 
@@ -1214,7 +1215,7 @@ func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushN
 
 	now := time.Now()
 	if result.Error != nil {
-		// Create new conversation
+		// Create new conversation — pesan masuk ini memulai episode FRT.
 		conv = models.ChatConversation{
 			UserID:          sess.UserID,
 			DeviceID:        sess.DeviceID,
@@ -1225,6 +1226,7 @@ func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushN
 			LastMessageType: msgType,
 			UnreadCount:     1,
 			LastActivity:    now,
+			FirstInboundAt:  &now,
 		}
 		m.db.Create(&conv)
 	} else {
@@ -1239,8 +1241,47 @@ func (m *Manager) updateConversation(sess *SessionState, phone, senderJID, pushN
 		if senderJID != "" {
 			updates["sender_j_id"] = senderJID
 		}
+		// CS multi-agent: pesan masuk pertama yang belum dibalas memulai
+		// pengukuran first response time (FRT).
+		if conv.FirstInboundAt == nil {
+			updates["first_inbound_at"] = now
+		}
+		// Pesan masuk baru di percakapan yang sudah resolved/done membuka
+		// lagi percakapan itu dan memulai ulang episode FRT. (Expr("NULL"):
+		// GORM Updates(map) melewati nilai nil untuk *time.Time.)
+		if conv.Status == "resolved" || conv.Status == "done" {
+			updates["status"] = "open"
+			updates["resolved_at"] = gorm.Expr("NULL")
+			updates["resolution_secs"] = gorm.Expr("NULL")
+			updates["first_inbound_at"] = now
+			updates["first_response_at"] = gorm.Expr("NULL")
+			updates["first_response_secs"] = gorm.Expr("NULL")
+		}
 		m.db.Model(&conv).Updates(updates)
 	}
+}
+
+// RecordFirstResponse mencatat balasan pertama CS atas episode FRT yang
+// sedang berjalan: FirstResponseAt + durasi detik sejak FirstInboundAt.
+// No-op bila tidak ada episode berjalan atau sudah ada balasan pertama.
+func (m *Manager) RecordFirstResponse(userID, deviceID uint, phone string) {
+	var conv models.ChatConversation
+	if err := m.db.Where("user_id = ? AND device_id = ? AND phone = ?",
+		userID, deviceID, phone).First(&conv).Error; err != nil {
+		return
+	}
+	if conv.FirstInboundAt == nil || conv.FirstResponseAt != nil {
+		return
+	}
+	now := time.Now()
+	secs := int(now.Sub(*conv.FirstInboundAt).Seconds())
+	if secs < 0 {
+		secs = 0
+	}
+	m.db.Model(&conv).Updates(map[string]interface{}{
+		"first_response_at":   now,
+		"first_response_secs": secs,
+	})
 }
 
 // migrateLIDConversation memindahkan percakapan + pesan inbox dari kunci LID

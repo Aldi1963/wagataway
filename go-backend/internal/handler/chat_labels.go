@@ -166,7 +166,8 @@ func upsertChatAssignment(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 		var assignment models.ChatAssignment
-		err := udb.Where("user_id = ? AND chat_jid = ?", userID, req.ChatJID).First(&assignment).Error
+<<<<<<< HEAD
+		err := udb.Where("user_id = ? AND chat_j_id = ?", userID, req.ChatJID).First(&assignment).Error
 		prevLabelID := assignment.LabelID
 		if err == gorm.ErrRecordNotFound {
 			assignment = models.ChatAssignment{
