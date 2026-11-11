@@ -68,6 +68,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 		// JANGAN pindahkan ke grup protected: platform luar tidak punya sesi user.
 		registerIntegrationInboxRoute(api, db, waManager)
 
+		// Inbound webhook (Item 8) — publik, auth via HMAC/secret (bukan auth user).
+		// JANGAN pindahkan ke grup protected: platform luar tidak punya sesi user.
+		registerInboundWebhookRoute(api, db, waManager)
+
 		// Webhook Clipku Pay — publik, diverifikasi via X-Signature
 		api.POST("/billing/clipkupay/webhook", clipkuPayWebhook(cfg, db, waManager))
 
@@ -96,6 +100,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, waManager *whatsapp.Manager) *gi
 			registerScheduleRoutes(protected, db)
 			registerScheduleAliasRoutes(protected, db)
 			registerWebhookRoutes(protected, db)
+			registerSheetsWebhookRoutes(protected, db, waManager)
 			registerPluginRoutes(protected, db)
 			registerTemplateRoutes(protected, db)
 			registerCsBotRoutes(protected, cfg, db)

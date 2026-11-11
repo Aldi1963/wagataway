@@ -11,8 +11,8 @@ import (
 	"github.com/Aldi1963/wagataway/internal/config"
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
-	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/quota"
+	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/Aldi1963/wagataway/internal/subscription"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -79,7 +79,7 @@ func getSubscription(db *gorm.DB) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, gin.H{"subscription": subscriptionWithState{
 			Subscription: sub,
-			SubState:      subState,
+			SubState:     subState,
 		}})
 	}
 }
@@ -193,6 +193,8 @@ func createSubscription(cfg *config.Config, db *gorm.DB, wm waSender) gin.Handle
 				// Fitur 6: tepat di momen transisi → paid (prorata bayar-0).
 				// Error notifikasi tidak menggagalkan aktivasi.
 				_ = notifyPaymentSuccess(udb, wm, tx.ID)
+				// Item 8: event webhook outbound subscription.activated.
+				fireSubscriptionActivated(udb, wm, tx.ID)
 			}
 			c.JSON(http.StatusCreated, gin.H{
 				"transaction": tx,
@@ -284,6 +286,8 @@ func getBillingTransaction(cfg *config.Config, db *gorm.DB, wm waSender) gin.Han
 						// notifikasi tidak menggagalkan sinkronisasi.
 						if activated, _ := activateSubscription(udb, tx.ID); activated {
 							_ = notifyPaymentSuccess(udb, wm, tx.ID)
+							// Item 8: event webhook outbound subscription.activated.
+							fireSubscriptionActivated(udb, wm, tx.ID)
 						}
 						udb.Where("id = ?", tx.ID).Preload("Plan").First(&tx)
 					}

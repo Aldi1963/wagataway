@@ -28,6 +28,33 @@ import (
 // *whatsapp.Manager memenuhinya; memudahkan unit test dengan fake.
 type waSender interface {
 	SendMessageNoQuota(deviceID uint, to, msgType, content, mediaURL string) error
+	// FireEvent memicu webhook outbound (Item 8: subscription.activated).
+	FireEvent(userID, deviceID uint, event string, payload map[string]interface{})
+}
+
+// fireSubscriptionActivated memicu event webhook outbound
+// "subscription.activated" ke semua webhook aktif milik user. Dipanggil di
+// titik yang sama dengan notifikasi sukses bayar (webhook Clipku Pay,
+// sinkronisasi status, aktivasi prorata bayar-0). Gagal memicu webhook tidak
+// pernah menggagalkan aktivasi — hanya log.
+func fireSubscriptionActivated(db *gorm.DB, wm waSender, txID uint) {
+	var tx models.Transaction
+	if err := db.Select("id", "user_id", "plan_id").Where("id = ?", txID).First(&tx).Error; err != nil {
+		log.Warn().Uint("txID", txID).Msg("fireSubscriptionActivated: transaksi tidak ditemukan")
+		return
+	}
+	var deviceID uint
+	var dev models.Device
+	if err := db.Select("id").Where("user_id = ?", tx.UserID).Order("id ASC").First(&dev).Error; err == nil {
+		deviceID = dev.ID
+	}
+	planID := uint(0)
+	if tx.PlanID != nil {
+		planID = *tx.PlanID
+	}
+	go wm.FireEvent(tx.UserID, deviceID, "subscription.activated", map[string]interface{}{
+		"userId": tx.UserID, "planId": planID, "transactionId": tx.ID,
+	})
 }
 
 // formatRupiahID memformat nominal ala id-ID: "Rp25.000".
