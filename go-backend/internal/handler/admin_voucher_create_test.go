@@ -293,3 +293,99 @@ func TestAdminCreateVoucherUsedCountIgnored(t *testing.T) {
 		t.Errorf("usedCount = %d, mau 0 (tidak boleh diisi dari create)", v.UsedCount)
 	}
 }
+
+// Test validasi tipe di create voucher satuan: bulk + update sudah
+// memvalidasi trial/plan, tapi create satuan tidak — voucher bertipe tak
+// dikenal bisa dibuat padahal tidak bisa ditebus. Sekarang tipe kosong
+// atau tak dikenal dijawab 400 dan baris tidak dibuat.
+func TestAdminCreateVoucherInvalidType(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-TIPE-XXX"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, res := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "hadiah", "duration": 7,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("tipe tak dikenal: status = %d, mau 400 — body: %v", status, res)
+	}
+	if res["message"] != "Tipe voucher tidak valid" {
+		t.Errorf("message = %v, mau 'Tipe voucher tidak valid'", res["message"])
+	}
+	var n int64
+	db.Model(&models.Voucher{}).Where("code = ?", code).Count(&n)
+	if n != 0 {
+		t.Errorf("voucher di DB = %d, mau 0 (baris tidak boleh dibuat)", n)
+	}
+}
+
+func TestAdminCreateVoucherEmptyType(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-TIPE-KOSONG"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	// Tanpa field type sama sekali.
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "duration": 7,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("tipe kosong: status = %d, mau 400", status)
+	}
+	var n int64
+	db.Model(&models.Voucher{}).Where("code = ?", code).Count(&n)
+	if n != 0 {
+		t.Errorf("voucher di DB = %d, mau 0", n)
+	}
+}
+
+// Tipe "discount" sudah dihapus dari admin — tidak boleh dibuat lagi lewat
+// create satuan (voucher diskon lama tetap ada di DB, tapi tidak bisa
+// dibuat yang baru).
+func TestAdminCreateVoucherDiscountTypeRejected(t *testing.T) {
+	db := auditTestDB(t)
+	code := "UJI-TIPE-DISKON"
+	deleteVoucherByCode(t, db, code)
+	defer deleteVoucherByCode(t, db, code)
+
+	r := voucherCreateRouter(db)
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": code, "type": "discount", "duration": 7, "discount": 50,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("tipe discount: status = %d, mau 400", status)
+	}
+	var n int64
+	db.Model(&models.Voucher{}).Where("code = ?", code).Count(&n)
+	if n != 0 {
+		t.Errorf("voucher di DB = %d, mau 0", n)
+	}
+}
+
+// Tipe yang diizinkan (trial dan plan) tetap lolos 201.
+func TestAdminCreateVoucherValidTypes(t *testing.T) {
+	db := auditTestDB(t)
+	plan := seedVoucherCreatePlan(t, db)
+	codes := []string{"UJI-TIPE-TRIAL", "UJI-TIPE-PLAN"}
+	for _, code := range codes {
+		deleteVoucherByCode(t, db, code)
+		defer deleteVoucherByCode(t, db, code)
+	}
+
+	r := voucherCreateRouter(db)
+	status, _ := callVoucherCreate(t, r, map[string]interface{}{
+		"code": codes[0], "type": "trial", "duration": 7,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("tipe trial: status = %d, mau 201", status)
+	}
+	status, _ = callVoucherCreate(t, r, map[string]interface{}{
+		"code": codes[1], "type": "plan", "planId": plan.ID, "duration": 30,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("tipe plan: status = %d, mau 201", status)
+	}
+}

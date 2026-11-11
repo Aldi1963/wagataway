@@ -644,6 +644,14 @@ func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Kode voucher wajib diisi"})
 			return
 		}
+		// Tipe hanya trial dan plan — sama seperti update; "discount"
+		// sudah dihapus dari admin dan tidak boleh dibuat lagi. Tanpa
+		// validasi ini, voucher bertipe tak dikenal bisa dibuat tapi
+		// tidak bisa ditebus.
+		if req.Type != "trial" && req.Type != "plan" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tipe voucher tidak valid"})
+			return
+		}
 		// Jendela berlaku: bila keduanya diisi, berakhir harus setelah mulai.
 		if req.StartsAt != nil && req.EndsAt != nil && !req.EndsAt.After(*req.StartsAt) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal berakhir harus setelah tanggal mulai"})
