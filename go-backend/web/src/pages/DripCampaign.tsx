@@ -15,7 +15,23 @@ interface DripStep {
   campaignId: number;
   stepOrder: number;
   delayHours: number;
+  delayMinutes: number;
+  skipIfReplied: boolean;
+  requireOrderStatus: string;
   content: string;
+}
+
+interface Enrollment {
+  id: number;
+  campaignId: number;
+  phone: string;
+  currentStep: number;
+  status: string;
+  nextSendAt: string | null;
+  lastSentAt: string | null;
+  triggerEvent: string;
+  triggerRef: string;
+  cancelReason: string;
 }
 
 interface Campaign {
@@ -27,6 +43,8 @@ interface Campaign {
   triggerVal: string;
   isActive: boolean;
   enrolled: number;
+  cancelOnReply: boolean;
+  optOutKeyword: string;
   steps?: DripStep[];
 }
 
@@ -65,7 +83,29 @@ function Modal({
   );
 }
 
-const emptyForm = { name: "", description: "", triggerType: "manual", triggerVal: "" };
+const emptyForm = { name: "", description: "", triggerType: "manual", triggerVal: "", cancelOnReply: true, optOutKeyword: "STOP" };
+
+// Jeda step: nilai + satuan -> delayMinutes (menit). Satuan jam/hari
+// dikonversi agar backend cukup membaca satu kolom.
+function delayToMinutes(value: string, unit: string): number {
+  const n = Number(value) || 0;
+  if (unit === "days") return n * 24 * 60;
+  if (unit === "hours") return n * 60;
+  return n;
+}
+
+function formatDelay(s: DripStep, t: (k: string) => string): string {
+  if (s.delayMinutes > 0) {
+    if (s.delayMinutes % (24 * 60) === 0) {
+      return t("dripCampaign.stepDelayDays").replace("{days}", String(s.delayMinutes / (24 * 60)));
+    }
+    if (s.delayMinutes % 60 === 0) {
+      return t("dripCampaign.stepDelay").replace("{hours}", String(s.delayMinutes / 60));
+    }
+    return t("dripCampaign.stepDelayMinutes").replace("{minutes}", String(s.delayMinutes));
+  }
+  return t("dripCampaign.stepDelay").replace("{hours}", String(s.delayHours));
+}
 
 export default function DripCampaign({ embedded = false }: { embedded?: boolean }) {
   const { t } = useLang();
@@ -81,12 +121,20 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
   const [expanded, setExpanded] = useState<number | null>(null);
   const [stepContent, setStepContent] = useState("");
   const [stepDelay, setStepDelay] = useState("24");
+  const [stepDelayUnit, setStepDelayUnit] = useState("hours");
+  const [stepSkipIfReplied, setStepSkipIfReplied] = useState(false);
+  const [stepRequireOrderStatus, setStepRequireOrderStatus] = useState("");
   const [addingStep, setAddingStep] = useState(false);
   const [analytics, setAnalytics] = useState<Record<number, DripAnalytics>>({});
   const [loadingAnalytics, setLoadingAnalytics] = useState<Record<number, boolean>>({});
+  const [enrollments, setEnrollments] = useState<Record<number, Enrollment[]>>({});
+  const [enrollmentsTotal, setEnrollmentsTotal] = useState<Record<number, number>>({});
+  const [loadingEnrollments, setLoadingEnrollments] = useState<Record<number, boolean>>({});
+  const [totalSteps, setTotalSteps] = useState<Record<number, number>>({});
 
   const enrollmentStatusLabel: Record<string, string> = {
     active: t("dripCampaign.enrollmentActive"),
+    paused: t("dripCampaign.enrollmentPaused"),
     completed: t("dripCampaign.enrollmentCompleted"),
     cancelled: t("dripCampaign.enrollmentCancelled"),
   };
@@ -95,6 +143,21 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
     manual: t("dripCampaign.triggerManual"),
     keyword: t("dripCampaign.triggerKeyword"),
     webhook: t("dripCampaign.triggerWebhook"),
+    new_contact: t("dripCampaign.triggerNewContact"),
+    order_created: t("dripCampaign.triggerOrderCreated"),
+    order_paid: t("dripCampaign.triggerOrderPaid"),
+    tag_added: t("dripCampaign.triggerTagAdded"),
+    days_since_purchase: t("dripCampaign.triggerDaysSincePurchase"),
+    event: t("dripCampaign.triggerEvent"),
+  };
+
+  const triggerHintKey: Record<string, string> = {
+    new_contact: "triggerHintNewContact",
+    order_created: "triggerHintOrderCreated",
+    order_paid: "triggerHintOrderPaid",
+    tag_added: "triggerHintTagAdded",
+    days_since_purchase: "triggerHintDays",
+    event: "triggerHintEvent",
   };
 
   const load = () => {
@@ -127,6 +190,8 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
       description: c.description || "",
       triggerType: c.triggerType || "manual",
       triggerVal: c.triggerVal || "",
+      cancelOnReply: c.cancelOnReply ?? true,
+      optOutKeyword: c.optOutKeyword || "STOP",
     });
     setShowForm(true);
   };
@@ -148,6 +213,8 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
         deviceId: editing ? editing.deviceId : activeDeviceId,
         triggerType: form.triggerType,
         triggerVal: form.triggerVal.trim(),
+        cancelOnReply: form.cancelOnReply,
+        optOutKeyword: form.optOutKeyword.trim() || "STOP",
       };
       if (editing) {
         const res = await apiPut<{ campaign: Campaign }>(`/drip/${editing.id}`, payload);
@@ -195,17 +262,48 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
   const toggleExpand = (id: number) => {
     setExpanded((prev) => {
       const next = prev === id ? null : id;
-      if (next !== null && !analytics[next]) {
-        setLoadingAnalytics((p) => ({ ...p, [next]: true }));
-        apiGet<DripAnalytics>(`/drip/${next}/analytics`)
-          .then((a) => setAnalytics((p) => ({ ...p, [next]: a })))
-          .catch(() => {})
-          .finally(() => setLoadingAnalytics((p) => ({ ...p, [next]: false })));
+      if (next !== null) {
+        if (!analytics[next]) {
+          setLoadingAnalytics((p) => ({ ...p, [next]: true }));
+          apiGet<DripAnalytics>(`/drip/${next}/analytics`)
+            .then((a) => setAnalytics((p) => ({ ...p, [next]: a })))
+            .catch(() => {})
+            .finally(() => setLoadingAnalytics((p) => ({ ...p, [next]: false })));
+        }
+        if (!enrollments[next]) {
+          setLoadingEnrollments((p) => ({ ...p, [next]: true }));
+          apiGet<{ enrollments: Enrollment[]; total: number; totalSteps: number }>(`/drip/${next}/enrollments?limit=50`)
+            .then((r) => {
+              setEnrollments((p) => ({ ...p, [next]: r.enrollments || [] }));
+              setEnrollmentsTotal((p) => ({ ...p, [next]: r.total || 0 }));
+              setTotalSteps((p) => ({ ...p, [next]: r.totalSteps || 0 }));
+            })
+            .catch(() => {})
+            .finally(() => setLoadingEnrollments((p) => ({ ...p, [next]: false })));
+        }
       }
       return next;
     });
     setStepContent("");
     setStepDelay("24");
+    setStepDelayUnit("hours");
+    setStepSkipIfReplied(false);
+    setStepRequireOrderStatus("");
+  };
+
+  const setEnrollmentStatus = async (campaignId: number, enrollmentId: number, action: "pause" | "resume" | "cancel") => {
+    try {
+      const res = await apiPost<{ enrollment: Enrollment }>(`/drip/enrollments/${enrollmentId}/${action}`, {});
+      setEnrollments((prev) => ({
+        ...prev,
+        [campaignId]: (prev[campaignId] || []).map((e) => (e.id === enrollmentId ? res.enrollment : e)),
+      }));
+      toast.success(
+        action === "pause" ? t("dripCampaign.enrollPaused") : action === "resume" ? t("dripCampaign.enrollResumed") : t("dripCampaign.enrollCancelled")
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("dripCampaign.enrollStatusFail"));
+    }
   };
 
   const addStep = async (campaignId: number) => {
@@ -217,7 +315,9 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
     try {
       const res = await apiPost<{ step: DripStep }>(`/drip/${campaignId}/steps`, {
         content: stepContent.trim(),
-        delayHours: Number(stepDelay) || 24,
+        delayMinutes: delayToMinutes(stepDelay, stepDelayUnit),
+        skipIfReplied: stepSkipIfReplied,
+        requireOrderStatus: stepRequireOrderStatus || undefined,
       });
       setCampaigns((prev) =>
         prev.map((c) =>
@@ -226,6 +326,9 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
       );
       setStepContent("");
       setStepDelay("24");
+      setStepDelayUnit("hours");
+      setStepSkipIfReplied(false);
+      setStepRequireOrderStatus("");
       toast.success(t("dripCampaign.stepAdded"));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("dripCampaign.stepAddFail"));
@@ -315,7 +418,7 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">
                             {triggerLabels[c.triggerType] || c.triggerType}
-                            {c.triggerType === "keyword" && c.triggerVal ? `: ${c.triggerVal}` : ""}
+                            {["keyword", "tag_added", "event", "days_since_purchase"].includes(c.triggerType) && c.triggerVal ? `: ${c.triggerVal}` : ""}
                           </Badge>
                         </div>
                         {c.description && (
@@ -426,9 +529,23 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-foreground">
                                 {t("dripCampaign.stepTitle").replace("{order}", String(s.stepOrder))}{" "}
-                                <span className="font-normal text-muted-foreground">· {t("dripCampaign.stepDelay").replace("{hours}", String(s.delayHours))}</span>
+                                <span className="font-normal text-muted-foreground">· {formatDelay(s, t)}</span>
                               </p>
                               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{s.content}</p>
+                              {(s.skipIfReplied || s.requireOrderStatus) && (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {s.skipIfReplied && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {t("dripCampaign.stepConditionReplied")}
+                                    </Badge>
+                                  )}
+                                  {s.requireOrderStatus && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {t("dripCampaign.stepConditionOrder").replace("{status}", s.requireOrderStatus)}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <Button
                               variant="ghost"
@@ -449,7 +566,7 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                           value={stepContent}
                           onChange={(e) => setStepContent(e.target.value)}
                         />
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5">
                             <Input
                               type="number"
@@ -458,12 +575,102 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                               value={stepDelay}
                               onChange={(e) => setStepDelay(e.target.value)}
                             />
+                            <Dropdown
+                              value={stepDelayUnit}
+                              onChange={setStepDelayUnit}
+                              ariaLabel={t("dripCampaign.delayMinutesUnit")}
+                              className="w-28"
+                              options={[
+                                { value: "minutes", label: t("dripCampaign.delayMinutesUnit") },
+                                { value: "hours", label: t("dripCampaign.delayHoursUnit") },
+                                { value: "days", label: t("dripCampaign.delayDays") },
+                              ]}
+                            />
                             <span className="text-xs text-muted-foreground">{t("dripCampaign.hoursAfterPrev")}</span>
                           </div>
                           <Button size="sm" className="ml-auto gap-1" onClick={() => addStep(c.id)} disabled={addingStep}>
                             <Plus className="w-3.5 h-3.5" /> {addingStep ? "..." : t("dripCampaign.addStepBtn")}
                           </Button>
                         </div>
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={stepSkipIfReplied}
+                            onChange={(e) => setStepSkipIfReplied(e.target.checked)}
+                            className="w-4 h-4 accent-primary"
+                          />
+                          {t("dripCampaign.skipIfRepliedLabel")}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-muted-foreground shrink-0">{t("dripCampaign.requireOrderStatusLabel")}</label>
+                          <Dropdown
+                            value={stepRequireOrderStatus}
+                            onChange={setStepRequireOrderStatus}
+                            ariaLabel={t("dripCampaign.requireOrderStatusLabel")}
+                            className="flex-1"
+                            options={[
+                              { value: "", label: t("dripCampaign.requireOrderStatusAny") },
+                              { value: "pending", label: "pending" },
+                              { value: "paid", label: "paid" },
+                              { value: "confirmed", label: "confirmed" },
+                              { value: "cancelled", label: "cancelled" },
+                            ]}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Sequence per kontak: progres + jeda/lanjutkan/batalkan */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium">
+                          {t("dripCampaign.enrollmentsTitle")}
+                          {enrollmentsTotal[c.id] != null && ` (${enrollmentsTotal[c.id]})`}
+                        </p>
+                        {loadingEnrollments[c.id] ? (
+                          <div className="h-14 rounded-md bg-secondary animate-pulse" />
+                        ) : (enrollments[c.id] || []).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">{t("dripCampaign.enrollmentsEmpty")}</p>
+                        ) : (
+                          (enrollments[c.id] || []).map((e) => (
+                            <div key={e.id} className="rounded-md border border-border p-3 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold text-foreground">{e.phone}</p>
+                                <Badge variant={e.status === "active" ? "default" : "outline"} className="text-[10px]">
+                                  {enrollmentStatusLabel[e.status] || e.status}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("dripCampaign.enrollmentProgress")
+                                  .replace("{current}", String(e.currentStep))
+                                  .replace("{total}", String(totalSteps[c.id] || 0))}
+                                {e.triggerEvent ? ` · ${t("dripCampaign.enrollmentTrigger").replace("{event}", e.triggerEvent)}` : ""}
+                              </p>
+                              {e.status === "active" && e.nextSendAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  {t("dripCampaign.enrollmentNextSend").replace(
+                                    "{time}",
+                                    new Date(e.nextSendAt).toLocaleString()
+                                  )}
+                                </p>
+                              )}
+                              {(e.status === "active" || e.status === "paused") && (
+                                <div className="flex gap-1.5 pt-0.5">
+                                  {e.status === "active" ? (
+                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEnrollmentStatus(c.id, e.id, "pause")}>
+                                      {t("dripCampaign.pauseTitle")}
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEnrollmentStatus(c.id, e.id, "resume")}>
+                                      {t("dripCampaign.activateTitle")}
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => setEnrollmentStatus(c.id, e.id, "cancel")}>
+                                    {t("dripCampaign.delete")}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   )}
@@ -506,8 +713,19 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                   { value: "manual", label: t("dripCampaign.triggerManual") },
                   { value: "keyword", label: t("dripCampaign.triggerKeyword") },
                   { value: "webhook", label: t("dripCampaign.triggerWebhook") },
+                  { value: "new_contact", label: t("dripCampaign.triggerNewContact") },
+                  { value: "order_created", label: t("dripCampaign.triggerOrderCreated") },
+                  { value: "order_paid", label: t("dripCampaign.triggerOrderPaid") },
+                  { value: "tag_added", label: t("dripCampaign.triggerTagAdded") },
+                  { value: "days_since_purchase", label: t("dripCampaign.triggerDaysSincePurchase") },
+                  { value: "event", label: t("dripCampaign.triggerEvent") },
                 ]}
               />
+              {triggerHintKey[form.triggerType] && (
+                <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground mt-2">
+                  {t(`dripCampaign.${triggerHintKey[form.triggerType]}`)}
+                </p>
+              )}
             </div>
             <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
               {t("dripCampaign.runsOn")}{" "}
@@ -526,6 +744,73 @@ export default function DripCampaign({ embedded = false }: { embedded?: boolean 
                 />
               </div>
             )}
+            {form.triggerType === "tag_added" && (
+              <div>
+                <label className="text-xs font-medium">{t("dripCampaign.labelNameLabel")}</label>
+                <Input
+                  className="mt-1"
+                  placeholder={t("dripCampaign.labelNamePlaceholder")}
+                  value={form.triggerVal}
+                  onChange={(e) => setForm({ ...form, triggerVal: e.target.value })}
+                />
+              </div>
+            )}
+            {form.triggerType === "days_since_purchase" && (
+              <div>
+                <label className="text-xs font-medium">{t("dripCampaign.daysLabel")}</label>
+                <Input
+                  type="number"
+                  min={0}
+                  className="mt-1"
+                  placeholder={t("dripCampaign.daysPlaceholder")}
+                  value={form.triggerVal}
+                  onChange={(e) => setForm({ ...form, triggerVal: e.target.value })}
+                />
+              </div>
+            )}
+            {form.triggerType === "event" && (
+              <div>
+                <label className="text-xs font-medium">{t("dripCampaign.eventNameLabel")}</label>
+                <Input
+                  className="mt-1 font-mono"
+                  placeholder={t("dripCampaign.eventNamePlaceholder")}
+                  value={form.triggerVal}
+                  onChange={(e) => setForm({ ...form, triggerVal: e.target.value })}
+                />
+              </div>
+            )}
+            {(form.triggerType === "order_created" || form.triggerType === "order_paid") && (
+              <div>
+                <label className="text-xs font-medium">{t("dripCampaign.productIdLabel")}</label>
+                <Input
+                  className="mt-1"
+                  placeholder={t("dripCampaign.productIdPlaceholder")}
+                  value={form.triggerVal}
+                  onChange={(e) => setForm({ ...form, triggerVal: e.target.value })}
+                />
+              </div>
+            )}
+            <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.cancelOnReply}
+                onChange={(e) => setForm({ ...form, cancelOnReply: e.target.checked })}
+                className="w-4 h-4 accent-primary mt-0.5"
+              />
+              <span>
+                {t("dripCampaign.cancelOnReplyLabel")}
+                <span className="block text-[11px] opacity-80">{t("dripCampaign.cancelOnReplyHint")}</span>
+              </span>
+            </label>
+            <div>
+              <label className="text-xs font-medium">{t("dripCampaign.optOutLabel")}</label>
+              <Input
+                className="mt-1 font-mono"
+                placeholder={t("dripCampaign.optOutPlaceholder")}
+                value={form.optOutKeyword}
+                onChange={(e) => setForm({ ...form, optOutKeyword: e.target.value })}
+              />
+            </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
                 {t("dripCampaign.cancel")}

@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/drip"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/rls"
 	"github.com/gin-gonic/gin"
@@ -165,6 +167,7 @@ func upsertChatAssignment(db *gorm.DB) gin.HandlerFunc {
 		}
 		var assignment models.ChatAssignment
 		err := udb.Where("user_id = ? AND chat_jid = ?", userID, req.ChatJID).First(&assignment).Error
+		prevLabelID := assignment.LabelID
 		if err == gorm.ErrRecordNotFound {
 			assignment = models.ChatAssignment{
 				UserID:     userID,
@@ -187,8 +190,53 @@ func upsertChatAssignment(db *gorm.DB) gin.HandlerFunc {
 			udb.Save(&assignment)
 		}
 		udb.Preload("Label").First(&assignment, assignment.ID)
+		// Drip berbasis aksi: label baru ditempel ke chat -> pemicu tag_added.
+		// Hanya bila label benar-benar berubah (bukan upsert yang sama).
+		if req.LabelID != nil && (prevLabelID == nil || *prevLabelID != *req.LabelID) {
+			fireTagAddedDrip(udb, userID, req.ChatJID, *req.LabelID)
+		}
 		c.JSON(http.StatusOK, gin.H{"assignment": assignment})
 	}
+}
+
+// fireTagAddedDrip memicu campaign tag_added saat sebuah label ditempel ke
+// chat. Gagal diam-diam agar penempelan label tidak ikut gagal.
+func fireTagAddedDrip(db *gorm.DB, userID uint, chatJID string, labelID uint) {
+	var label models.ChatLabel
+	if err := db.Where("id = ? AND user_id = ?", labelID, userID).First(&label).Error; err != nil {
+		return
+	}
+	phone := phoneFromChatJID(db, userID, chatJID)
+	if phone == "" {
+		return
+	}
+	// deviceID=0: label bersifat per user, jadi semua device milik user
+	// yang punya campaign tag_added cocok ikut memicu.
+	_, _ = drip.FireEvent(db, userID, 0, drip.TriggerTagAdded, phone,
+		"label:"+strconv.FormatUint(uint64(labelID), 10),
+		map[string]string{"label": label.Name})
+}
+
+// phoneFromChatJID mengambil nomor telepon dari JID chat ("62812...@...").
+// Bila JID bukan nomor (mis. LID), cari lewat percakapan tersimpan.
+func phoneFromChatJID(db *gorm.DB, userID uint, chatJID string) string {
+	phone := strings.SplitN(chatJID, "@", 2)[0]
+	isDigits := phone != ""
+	for _, r := range phone {
+		if r < '0' || r > '9' {
+			isDigits = false
+			break
+		}
+	}
+	if isDigits {
+		return phone
+	}
+	var conv models.ChatConversation
+	if err := db.Where("user_id = ? AND sender_jid = ?", userID, chatJID).
+		Order("updated_at DESC").First(&conv).Error; err == nil {
+		return conv.Phone
+	}
+	return ""
 }
 
 func deleteChatAssignment(db *gorm.DB) gin.HandlerFunc {
