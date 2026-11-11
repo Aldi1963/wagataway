@@ -240,15 +240,47 @@ func adminListPackages(db *gorm.DB) gin.HandlerFunc {
 
 func adminCreatePackage(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req models.Plan
-		if err := c.ShouldBindJSON(&req); err != nil {
+		// Form admin mengirim max_devices/max_messages/max_contacts/
+		// is_active (snake_case) sementara tag JSON model camelCase:
+		// tanpa normalisasi, field itu diam-diam hilang (paket baru
+		// tersimpan 1/1000/500/true padahal form mengirim 5/5000/250/false).
+		raw, err := readJSONBody(c)
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
-		db.Create(&req)
+		normalizeJSONKeys(raw, planSnakeKeys)
+		norm, err := json.Marshal(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		var req models.Plan
+		if err := json.Unmarshal(norm, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		// Dibuat lewat map, bukan struct: GORM Create(struct) mengganti
+		// nilai nol dengan nilai `default:` pada tag (is_active=false
+		// jadi true, max_messages=0 jadi 1000), sementara map menyimpan
+		// nilai persis seperti yang dikirim form.
+		create := planCreateMap(&req, raw)
+		now := time.Now().UTC()
+		create["created_at"] = now
+		create["updated_at"] = now
+		if err := db.Model(&models.Plan{}).Create(create).Error; err != nil {
+			log.Error().Err(err).Msg("Gagal membuat paket")
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat paket"})
+			return
+		}
+		var created models.Plan
+		if err := db.Where("slug = ?", req.Slug).First(&created).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca paket"})
+			return
+		}
 		logAdminAction(db, middleware.GetUserID(c), "create_package", "package",
-			strconv.FormatUint(uint64(req.ID), 10), req.Name)
-		c.JSON(http.StatusCreated, gin.H{"package": req})
+			strconv.FormatUint(uint64(created.ID), 10), created.Name)
+		c.JSON(http.StatusCreated, gin.H{"package": created})
 	}
 }
 
@@ -261,10 +293,30 @@ func adminUpdatePackage(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		var req map[string]interface{}
-		c.ShouldBindJSON(&req)
-		db.Model(&plan).Updates(req)
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
+			return
+		}
+		// GORM Updates(map) memakai kunci map apa adanya sebagai nama
+		// kolom: kunci camelCase (maxBulk, maxAutoReply) membuat UPDATE
+		// gagal total ("no such column: maxAutoReply") dan error-nya dulu
+		// ditelan lalu dibalas 200 — edit paket jadi no-op diam-diam.
+		// Normalisasi dulu ke nama kolom, dan kembalikan error bila
+		// UPDATE gagal.
+		updates := normalizePlanUpdateMap(req)
+		if err := db.Model(&plan).Updates(updates).Error; err != nil {
+			log.Error().Err(err).Msg("Gagal mengubah paket")
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengubah paket"})
+			return
+		}
+		// Muat ulang agar respons berisi nilai terbaru (Updates dengan
+		// map tidak menyegarkan struct).
+		if err := db.First(&plan, id).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membaca paket"})
+			return
+		}
 		logAdminAction(db, middleware.GetUserID(c), "update_package", "package",
-			strconv.FormatUint(id, 10), "Ubah: "+summarizeChanges(req))
+			strconv.FormatUint(id, 10), "Ubah: "+summarizeChanges(updates))
 		c.JSON(http.StatusOK, gin.H{"package": plan})
 	}
 }
@@ -313,19 +365,12 @@ var voucherSnakeKeys = map[string]string{
 	"min_plan_id":    "minPlanId",
 }
 
-// bindVoucherJSON mengikat body JSON ke model Voucher dengan menerima kunci
-// camelCase (tag JSON model) MAUPUN snake_case (form admin). Bila kedua
-// ejaan dikirim, camelCase menang — dukungan camelCase lama tidak berubah.
-func bindVoucherJSON(c *gin.Context, v *models.Voucher) error {
-	body, err := c.GetRawData()
-	if err != nil {
-		return err
-	}
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return err
-	}
-	for snake, camel := range voucherSnakeKeys {
+// normalizeJSONKeys menyalin nilai kunci snake_case ke kunci camelCase-nya
+// bila kunci camelCase tidak ada (camelCase menang bila keduanya dikirim).
+// Dipakai form admin yang mengirim snake_case sementara tag JSON model
+// memakai camelCase.
+func normalizeJSONKeys(raw map[string]json.RawMessage, snakeToCamel map[string]string) {
+	for snake, camel := range snakeToCamel {
 		if _, ok := raw[camel]; ok {
 			continue
 		}
@@ -333,11 +378,141 @@ func bindVoucherJSON(c *gin.Context, v *models.Voucher) error {
 			raw[camel] = val
 		}
 	}
+}
+
+// readJSONBody membaca body request sebagai map JSON mentah.
+func readJSONBody(c *gin.Context) (map[string]json.RawMessage, error) {
+	body, err := c.GetRawData()
+	if err != nil {
+		return nil, err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// bindJSONWithAliases mengikat body JSON ke struct target dengan menerima
+// kunci camelCase (tag JSON model) MAUPUN snake_case (form admin).
+func bindJSONWithAliases(c *gin.Context, v interface{}, snakeToCamel map[string]string) error {
+	raw, err := readJSONBody(c)
+	if err != nil {
+		return err
+	}
+	normalizeJSONKeys(raw, snakeToCamel)
 	norm, err := json.Marshal(raw)
 	if err != nil {
 		return err
 	}
 	return json.Unmarshal(norm, v)
+}
+
+// bindVoucherJSON mengikat body JSON ke model Voucher dengan menerima kunci
+// camelCase (tag JSON model) MAUPUN snake_case (form admin). Bila kedua
+// ejaan dikirim, camelCase menang — dukungan camelCase lama tidak berubah.
+func bindVoucherJSON(c *gin.Context, v *models.Voucher) error {
+	return bindJSONWithAliases(c, v, voucherSnakeKeys)
+}
+
+// Kunci snake_case yang dikirim form paket (Admin.tsx handleSave) beserta
+// padanan camelCase-nya (tag JSON model Plan). name/slug/description/
+// price/duration/features ejaannya sama di kedua casing, jadi tidak perlu
+// dipetakan.
+var planSnakeKeys = map[string]string{
+	"max_devices":           "maxDevices",
+	"max_messages":          "maxMessages",
+	"monthly_message_limit": "monthlyMessageLimit",
+	"max_contacts":          "maxContacts",
+	"max_auto_reply":        "maxAutoReply",
+	"max_bulk":              "maxBulk",
+	"is_active":             "isActive",
+	"sort_order":            "sortOrder",
+}
+
+// planCreateMap membangun map kolom DB untuk Create(map) dari struct Plan
+// yang sudah terikat, hanya untuk field yang dikirim di body (kunci camelCase
+// setelah normalisasi). Nilai nol eksplisit (is_active=false,
+// max_messages=0) ikut tersimpan apa adanya; field yang tidak dikirim
+// memakai DEFAULT kolom di DB.
+func planCreateMap(req *models.Plan, raw map[string]json.RawMessage) map[string]interface{} {
+	fields := []struct {
+		key string
+		col string
+		val interface{}
+	}{
+		{"name", "name", req.Name},
+		{"slug", "slug", req.Slug},
+		{"description", "description", req.Description},
+		{"price", "price", req.Price},
+		{"duration", "duration", req.Duration},
+		{"maxDevices", "max_devices", req.MaxDevices},
+		{"maxMessages", "max_messages", req.MaxMessages},
+		{"monthlyMessageLimit", "monthly_message_limit", req.MonthlyMessageLimit},
+		{"maxContacts", "max_contacts", req.MaxContacts},
+		{"maxAutoReply", "max_auto_reply", req.MaxAutoReply},
+		{"maxBulk", "max_bulk", req.MaxBulk},
+		{"features", "features", req.Features},
+		{"isActive", "is_active", req.IsActive},
+		{"sortOrder", "sort_order", req.SortOrder},
+	}
+	out := make(map[string]interface{}, len(fields))
+	for _, f := range fields {
+		if _, ok := raw[f.key]; ok {
+			out[f.col] = f.val
+		}
+	}
+	return out
+}
+
+// planUpdateColumns memetakan setiap kunci body update paket yang diizinkan
+// ke nama kolom DB-nya. Kunci camelCase maupun snake_case diterima.
+var planUpdateColumns = map[string]string{
+	"name":                  "name",
+	"slug":                  "slug",
+	"description":           "description",
+	"price":                 "price",
+	"duration":              "duration",
+	"maxDevices":            "max_devices",
+	"max_devices":           "max_devices",
+	"maxMessages":           "max_messages",
+	"max_messages":          "max_messages",
+	"monthlyMessageLimit":   "monthly_message_limit",
+	"monthly_message_limit": "monthly_message_limit",
+	"maxContacts":           "max_contacts",
+	"max_contacts":          "max_contacts",
+	"maxAutoReply":          "max_auto_reply",
+	"max_auto_reply":        "max_auto_reply",
+	"maxBulk":               "max_bulk",
+	"max_bulk":              "max_bulk",
+	"features":              "features",
+	"isActive":              "is_active",
+	"is_active":             "is_active",
+	"sortOrder":             "sort_order",
+	"sort_order":            "sort_order",
+}
+
+// normalizePlanUpdateMap mengubah body update paket (map) menjadi map dengan
+// kunci nama kolom DB, siap untuk GORM Updates. GORM memakai kunci map apa
+// adanya sebagai nama kolom, jadi kunci camelCase (maxBulk, maxAutoReply)
+// membuat UPDATE gagal total ("no such column"). Dua pass memastikan
+// camelCase menang bila kedua ejaan dikirim untuk satu kolom. Kunci yang
+// bukan kolom paket (mis. id, createdAt) dibuang agar tidak merusak UPDATE.
+func normalizePlanUpdateMap(req map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(req))
+	// Pass 1: kunci snake_case (sudah berupa nama kolom) + field satu kata.
+	for key, val := range req {
+		if col, ok := planUpdateColumns[key]; ok && key == col {
+			out[col] = val
+		}
+	}
+	// Pass 2: kunci camelCase menimpa — camelCase menang bila keduanya ada.
+	for key, val := range req {
+		if col, ok := planUpdateColumns[key]; ok && key != col {
+			out[col] = val
+		}
+	}
+	return out
 }
 
 func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
