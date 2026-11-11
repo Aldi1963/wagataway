@@ -55,6 +55,11 @@ func (s *Scheduler) Start() {
 	// jendela waktunya mulai — tiap menit, lihat subscription_activation.go.
 	s.cron.AddFunc("0 * * * * *", s.processScheduledSubscriptions)
 
+	// Tandai tagihan pelanggan yang jatuh temponya lewat sebagai expired
+	// (Item 3) — tiap jam, di menit ke-30 agar tidak bertabrakan dengan
+	// job menit-0 / menit-15 lainnya.
+	s.cron.AddFunc("0 30 * * * *", s.processExpiredCustomerInvoices)
+
 	s.cron.Start()
 	log.Info().Msg("Background scheduler started")
 }

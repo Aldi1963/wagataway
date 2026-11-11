@@ -42,6 +42,8 @@ func registerBillingRoutes(rg *gin.RouterGroup, cfg *config.Config, db *gorm.DB,
 		b.GET("/transactions/:id/invoice.pdf", getInvoicePDF(db))
 		b.POST("/voucher/redeem", redeemVoucher(db))
 		b.GET("/voucher/redemptions", listVoucherRedemptions(db))
+		// Tagihan pelanggan (Item 3): invoice + QRIS Clipku Pay di WA.
+		registerCustomerInvoiceRoutes(b, cfg, db, wm)
 	}
 }
 

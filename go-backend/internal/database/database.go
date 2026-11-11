@@ -79,6 +79,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.PasswordResetToken{},
 		&models.WalletTransaction{},
 		&models.PaymentWebhookLog{},
+		&models.CustomerInvoice{},
 		&models.CannedResponse{},
 		&models.DripCampaign{},
 		&models.DripStep{},

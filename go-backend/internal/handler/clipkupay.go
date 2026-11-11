@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -65,6 +66,21 @@ func newClipkuPay(cfg *config.Config, db *gorm.DB) clipkuPay {
 		appURL:     strings.TrimSuffix(strings.TrimSpace(cfg.AppURL), "/"),
 		db:         db,
 	}
+}
+
+// clipkuPayClient adalah antarmuka minimal klien Clipku Pay — clipkuPay
+// memenuhinya. Handler tagihan pelanggan memakai factory di bawah (bukan
+// newClipkuPay langsung) supaya unit test bisa menyuntikkan fake tanpa
+// memanggil API Clipku Pay sungguhan.
+type clipkuPayClient interface {
+	enabled() bool
+	mode() string
+	createTransaction(orderID string, amount int64, customerName, customerEmail string) (*clipkuTxData, error)
+	getTransaction(orderID string) (*clipkuTxData, error)
+}
+
+var newClipkuPayClient = func(cfg *config.Config, db *gorm.DB) clipkuPayClient {
+	return newClipkuPay(cfg, db)
 }
 
 func (k clipkuPay) enabled() bool {
@@ -523,8 +539,11 @@ func activateSubscription(db *gorm.DB, txID uint) (activated bool, err error) {
 }
 
 // POST /api/billing/clipkupay/webhook — publik, diverifikasi via X-Signature.
+// Menangani dua jenis order: transaksi langganan (models.Transaction) dan
+// tagihan pelanggan (models.CustomerInvoice), dicocokkan via external_id.
+// Keduanya memakai verifikasi ulang + mode ketat yang sama.
 func clipkuPayWebhook(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerFunc {
-	kp := newClipkuPay(cfg, db)
+	kp := newClipkuPayClient(cfg, db)
 	return func(c *gin.Context) {
 		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
 		if err != nil || len(raw) == 0 {
@@ -569,45 +588,102 @@ func clipkuPayWebhook(cfg *config.Config, db *gorm.DB, wm waSender) gin.HandlerF
 		}
 
 		var tx models.Transaction
-		if err := db.Where("external_id = ?", orderID).First(&tx).Error; err != nil {
-			db.Model(&log).Update("status", "unknown_order")
+		txErr := db.Where("external_id = ?", orderID).First(&tx).Error
+		if txErr == nil {
+			handleClipkuTxWebhook(c, db, kp, wm, &log, &tx, status)
+			return
+		}
+		if txErr != nil && !errors.Is(txErr, gorm.ErrRecordNotFound) {
+			db.Model(&log).Update("status", "lookup_failed")
 			c.JSON(http.StatusOK, gin.H{"message": "OK"})
 			return
 		}
 
-		if clipkuIsPaid(status) {
-			// Verifikasi ulang ke Clipku Pay sebagai sumber kebenaran:
-			// status DAN nominal harus cocok sebelum aktivasi.
-			remote, err := kp.getTransaction(orderID)
-			action, logStatus, _ := decideClipkuWebhook(tx.Amount, status, remote, err)
-			if action != clipkuActionActivate {
-				db.Model(&log).Update("status", logStatus)
-				c.JSON(http.StatusOK, gin.H{"message": "OK"})
-				return
-			}
-			activated, err := activateSubscription(db, tx.ID)
-			if err != nil {
-				db.Model(&log).Update("status", "activate_failed")
-				c.JSON(http.StatusOK, gin.H{"message": "OK"})
-				return
-			}
-			if activated {
-				// Fitur 6: tepat di momen transisi → paid. Error notifikasi
-				// tidak menggagalkan webhook (sudah dicatat di log).
-				_ = notifyPaymentSuccess(db, wm, tx.ID)
-			}
-			db.Model(&log).Update("status", logStatus)
-		} else {
-			// Cabang non-paid juga diverifikasi ulang: status webhook tidak
-			// dipercaya begitu saja (webhook palsu bisa mematikan transaksi
-			// yang sebenarnya sudah lunas).
-			remote, err := kp.getTransaction(orderID)
-			action, logStatus, syncStatus := decideClipkuWebhook(tx.Amount, status, remote, err)
-			if action == clipkuActionSync {
-				db.Model(&tx).Update("status", syncStatus)
-			}
-			db.Model(&log).Update("status", logStatus)
+		// Bukan transaksi langganan — coba tagihan pelanggan.
+		var inv models.CustomerInvoice
+		if err := db.Where("external_id = ?", orderID).First(&inv).Error; err != nil {
+			db.Model(&log).Update("status", "unknown_order")
+			c.JSON(http.StatusOK, gin.H{"message": "OK"})
+			return
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "OK"})
+		handleClipkuInvoiceWebhook(c, db, kp, wm, &log, &inv, status)
 	}
+}
+
+// handleClipkuTxWebhook menangani webhook untuk satu transaksi langganan
+// (sudah ditemukan di DB). Dipisah dari handler utama agar webhook tagihan
+// pelanggan bisa memakai pola yang sama.
+func handleClipkuTxWebhook(c *gin.Context, db *gorm.DB, kp clipkuPayClient, wm waSender, log *models.PaymentWebhookLog, tx *models.Transaction, status string) {
+	if clipkuIsPaid(status) {
+		// Verifikasi ulang ke Clipku Pay sebagai sumber kebenaran:
+		// status DAN nominal harus cocok sebelum aktivasi.
+		remote, err := kp.getTransaction(tx.ExternalID)
+		action, logStatus, _ := decideClipkuWebhook(tx.Amount, status, remote, err)
+		if action != clipkuActionActivate {
+			db.Model(&log).Update("status", logStatus)
+			c.JSON(http.StatusOK, gin.H{"message": "OK"})
+			return
+		}
+		activated, err := activateSubscription(db, tx.ID)
+		if err != nil {
+			db.Model(&log).Update("status", "activate_failed")
+			c.JSON(http.StatusOK, gin.H{"message": "OK"})
+			return
+		}
+		if activated {
+			// Fitur 6: tepat di momen transisi → paid. Error notifikasi
+			// tidak menggagalkan webhook (sudah dicatat di log).
+			_ = notifyPaymentSuccess(db, wm, tx.ID)
+		}
+		db.Model(&log).Update("status", logStatus)
+	} else {
+		// Cabang non-paid juga diverifikasi ulang: status webhook tidak
+		// dipercaya begitu saja (webhook palsu bisa mematikan transaksi
+		// yang sebenarnya sudah lunas).
+		remote, err := kp.getTransaction(tx.ExternalID)
+		action, logStatus, syncStatus := decideClipkuWebhook(tx.Amount, status, remote, err)
+		if action == clipkuActionSync {
+			db.Model(&tx).Update("status", syncStatus)
+		}
+		db.Model(&log).Update("status", logStatus)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+// handleClipkuInvoiceWebhook menangani webhook untuk satu tagihan pelanggan
+// (sudah ditemukan di DB). Pola sama dengan langganan: verifikasi ulang ke
+// Clipku Pay, mode ketat nominal (tolak bila nominal kurang / tak diketahui),
+// dan hanya transisi pending → paid yang memicu notifikasi WA ke pelanggan.
+// Status non-paid terminal dari Clipku Pay disinkronkan (failed dipetakan ke
+// expired: tautan bayar QRIS-nya sudah tidak bisa dipakai lagi).
+func handleClipkuInvoiceWebhook(c *gin.Context, db *gorm.DB, kp clipkuPayClient, wm waSender, log *models.PaymentWebhookLog, inv *models.CustomerInvoice, status string) {
+	if clipkuIsPaid(status) {
+		remote, err := kp.getTransaction(inv.ExternalID)
+		action, logStatus, _ := decideClipkuWebhook(inv.Amount, status, remote, err)
+		if action != clipkuActionActivate {
+			db.Model(&log).Update("status", logStatus)
+			c.JSON(http.StatusOK, gin.H{"message": "OK"})
+			return
+		}
+		paid, err := markCustomerInvoicePaid(db, wm, inv.ID)
+		if err != nil {
+			db.Model(&log).Update("status", "activate_failed")
+			c.JSON(http.StatusOK, gin.H{"message": "OK"})
+			return
+		}
+		_ = paid // transisi sudah terjadi atau sudah lunas sebelumnya
+		db.Model(&log).Update("status", logStatus)
+	} else {
+		remote, err := kp.getTransaction(inv.ExternalID)
+		action, logStatus, syncStatus := decideClipkuWebhook(inv.Amount, status, remote, err)
+		if action == clipkuActionSync {
+			invStatus := syncStatus
+			if invStatus == "failed" {
+				invStatus = "expired"
+			}
+			db.Model(&inv).Update("status", invStatus)
+		}
+		db.Model(&log).Update("status", logStatus)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
