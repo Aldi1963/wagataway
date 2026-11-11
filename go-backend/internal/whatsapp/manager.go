@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/drip"
 	"github.com/Aldi1963/wagataway/internal/realtime"
 	"github.com/Aldi1963/wagataway/internal/security"
 	"github.com/rs/zerolog/log"
@@ -935,7 +936,19 @@ func (m *Manager) handleIncomingMessage(sess *SessionState, msg *events.Message)
 	m.db.Create(&inbox)
 
 	// Update or create conversation
+	// Drip berbasis aksi: kontak baru = belum ada percakapan sebelumnya.
+	var existingConv models.ChatConversation
+	isNewContact := m.db.Where("user_id = ? AND device_id = ? AND phone = ?",
+		sess.UserID, sess.DeviceID, senderPhone).First(&existingConv).Error != nil
 	m.updateConversation(sess, senderPhone, senderJID, msg.Info.PushName, text, getMessageType(msg))
+
+	// Drip berbasis aksi (non-blocking, gagal diam-diam): STOP/balasan,
+	// pesan pertama kontak baru, dan keyword.
+	go func() {
+		if err := drip.HandleIncoming(m.db, sess.UserID, sess.DeviceID, senderPhone, text, isNewContact); err != nil {
+			log.Error().Err(err).Msg("Drip trigger gagal")
+		}
+	}()
 
 	// Fire webhook
 	go m.fireWebhooks(sess.UserID, sess.DeviceID, "message.received", map[string]interface{}{

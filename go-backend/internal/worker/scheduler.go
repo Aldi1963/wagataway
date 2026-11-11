@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Aldi1963/wagataway/internal/database/models"
+	"github.com/Aldi1963/wagataway/internal/drip"
 	"github.com/Aldi1963/wagataway/internal/quota"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
 	"github.com/robfig/cron/v3"
@@ -37,6 +38,11 @@ func (s *Scheduler) Start() {
 
 	// Process drip campaign steps every minute
 	s.cron.AddFunc("0 * * * * *", s.processDripSteps)
+
+	// Evaluasi pemicu drip berbasis waktu (mis. X hari sejak pembelian
+	// terakhir) setiap jam, di menit ke-30 agar tidak bertabrakan dengan
+	// job menit-0 lainnya.
+	s.cron.AddFunc("0 30 * * * *", s.processDripTimeTriggers)
 
 	// Process recurring schedules every minute
 	s.cron.AddFunc("0 * * * * *", s.processRecurringSchedules)
@@ -198,6 +204,19 @@ func (s *Scheduler) processChatReminders() {
 	}
 }
 
+// processDripTimeTriggers mengevaluasi pemicu drip berbasis waktu
+// (days_since_purchase) — lihat drip.ProcessTimeTriggers.
+func (s *Scheduler) processDripTimeTriggers() {
+	n, err := drip.ProcessTimeTriggers(s.db, time.Now())
+	if err != nil {
+		log.Error().Err(err).Msg("Drip time triggers gagal")
+		return
+	}
+	if n > 0 {
+		log.Info().Int("count", n).Msg("Drip time triggers: kontak baru terdaftar")
+	}
+}
+
 func (s *Scheduler) processDripSteps() {
 	var enrollments []models.DripEnrollment
 	now := time.Now()
@@ -207,45 +226,90 @@ func (s *Scheduler) processDripSteps() {
 		Find(&enrollments)
 
 	for _, enrollment := range enrollments {
-		// Get the campaign and current step
-		var step models.DripStep
-		err := s.db.Where("campaign_id = ? AND step_order = ?", enrollment.CampaignID, enrollment.CurrentStep+1).
-			First(&step).Error
-
-		if err != nil {
-			// No more steps — mark completed
-			s.db.Model(&enrollment).Update("status", "completed")
+		// Klaim atomik dulu: bila dua worker jalan bersamaan, hanya satu
+		// yang boleh mengirim langkah ini (idempotent).
+		if !drip.ClaimEnrollment(s.db, enrollment.ID, time.Now()) {
 			continue
 		}
+		s.processOneDripEnrollment(enrollment)
+	}
+}
 
-		// Get campaign to find device
-		var campaign models.DripCampaign
-		s.db.First(&campaign, enrollment.CampaignID)
+// processOneDripEnrollment memproses satu enrollment yang sudah diklaim:
+// evaluasi kondisi langkah, kirim tepat sekali, lalu majukan progres.
+// Klaim selalu dilepas di akhir (defer) agar enrollment tidak macet.
+func (s *Scheduler) processOneDripEnrollment(enrollment models.DripEnrollment) {
+	defer drip.ReleaseClaim(s.db, enrollment.ID)
 
-		// Send the step message
-		sendErr := s.waManager.SendMessage(campaign.DeviceID, enrollment.Phone, step.Type, step.Content, step.MediaURL)
-		if sendErr != nil {
-			// Kuota habis (Fitur 3): tunda 6 jam agar tidak spam log tiap menit;
-			// enrollment tetap aktif dan lanjut otomatis setelah user upgrade.
-			if quota.IsExceeded(sendErr) {
-				nextRetry := time.Now().Add(6 * time.Hour)
-				s.db.Model(&enrollment).Update("next_send_at", &nextRetry)
-				log.Warn().Uint("enrollmentID", enrollment.ID).Msg("Drip ditunda 6 jam: kuota pesan habis")
-				continue
-			}
-			log.Error().Err(sendErr).Uint("enrollmentID", enrollment.ID).Msg("Failed to send drip step")
-			continue
-		}
+	// Get the campaign and current step
+	var step models.DripStep
+	err := s.db.Where("campaign_id = ? AND step_order = ?", enrollment.CampaignID, enrollment.CurrentStep+1).
+		First(&step).Error
 
-		// Advance to next step
-		nextStep := enrollment.CurrentStep + 1
-		nextSend := time.Now().Add(time.Duration(step.DelayHours) * time.Hour)
+	if err != nil {
+		// No more steps — mark completed
+		s.db.Model(&enrollment).Update("status", "completed")
+		return
+	}
 
+	// Get campaign to find device + kondisi
+	var campaign models.DripCampaign
+	if err := s.db.First(&campaign, enrollment.CampaignID).Error; err != nil {
+		log.Error().Err(err).Uint("enrollmentID", enrollment.ID).Msg("Drip: campaign tidak ditemukan")
+		return
+	}
+	// Campaign dijeda: lewati siklus ini tanpa mengubah jadwal.
+	if !campaign.IsActive {
+		return
+	}
+
+	// Kondisi langkah: lewati tanpa kirim bila tidak terpenuhi, lalu
+	// majukan ke langkah berikutnya (jeda dari langkah yang dilewati).
+	if drip.ShouldSkipStep(s.db, enrollment, campaign, step) {
+		nextSend := time.Now().Add(drip.StepDelay(step))
 		s.db.Model(&enrollment).Updates(map[string]interface{}{
-			"current_step": nextStep,
+			"current_step": enrollment.CurrentStep + 1,
 			"next_send_at": &nextSend,
 		})
+		log.Info().Uint("enrollmentID", enrollment.ID).Int("step", step.StepOrder).
+			Msg("Drip: langkah dilewati karena kondisi tidak terpenuhi")
+		return
 	}
+
+	// Kuota pesan (Fitur 3): bila habis, tunda 6 jam agar tidak spam log
+	// tiap menit; enrollment tetap aktif dan lanjut otomatis setelah upgrade.
+	if qr, qerr := quota.Check(s.db, campaign.UserID); qerr == nil && !qr.Allowed {
+		nextRetry := time.Now().Add(6 * time.Hour)
+		s.db.Model(&enrollment).Update("next_send_at", &nextRetry)
+		log.Warn().Uint("enrollmentID", enrollment.ID).Msg("Drip ditunda 6 jam: kuota pesan habis")
+		return
+	}
+
+	// Send the step message
+	sendErr := s.waManager.SendMessage(campaign.DeviceID, enrollment.Phone, step.Type, step.Content, step.MediaURL)
+	if sendErr != nil {
+		// Kuota habis di tengah kirim (race dengan pre-check di atas):
+		// tunda 6 jam juga.
+		if quota.IsExceeded(sendErr) {
+			nextRetry := time.Now().Add(6 * time.Hour)
+			s.db.Model(&enrollment).Update("next_send_at", &nextRetry)
+			log.Warn().Uint("enrollmentID", enrollment.ID).Msg("Drip ditunda 6 jam: kuota pesan habis")
+			return
+		}
+		log.Error().Err(sendErr).Uint("enrollmentID", enrollment.ID).Msg("Failed to send drip step")
+		return
+	}
+
+	// Advance to next step
+	nextStep := enrollment.CurrentStep + 1
+	nextSend := time.Now().Add(drip.StepDelay(step))
+	sentAt := time.Now()
+
+	s.db.Model(&enrollment).Updates(map[string]interface{}{
+		"current_step": nextStep,
+		"next_send_at": &nextSend,
+		"last_sent_at": &sentAt,
+	})
 }
 
 func (s *Scheduler) cleanupExpiredSessions() {
