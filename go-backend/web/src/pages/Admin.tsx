@@ -1164,6 +1164,25 @@ function VouchersTab() {
     ...plans.map((p) => ({ value: String(p.id), label: `${p.name} — ${fmtRp(p.price)}` })),
   ];
 
+  // Pratinjau live: hanya membaca state form (tanpa API baru).
+  const previewCode = code.trim().toUpperCase() || "—";
+  const previewDaysNum = Number(duration);
+  const previewDays = previewDaysNum > 0 ? String(previewDaysNum) : "—";
+  const previewUsesNum = Number(maxUses);
+  const previewUses = previewUsesNum > 0 ? fmtNum(previewUsesNum) : "—";
+  const previewPlan = plans.find((p) => String(p.id) === planId);
+  const previewSummary =
+    type === "plan"
+      ? t("admin.voucherPreviewPlan")
+          .replace("{code}", previewCode)
+          .replace("{plan}", previewPlan ? previewPlan.name : "—")
+          .replace("{days}", previewDays)
+          .replace("{uses}", previewUses)
+      : t("admin.voucherPreviewTrial")
+          .replace("{code}", previewCode)
+          .replace("{days}", previewDays)
+          .replace("{uses}", previewUses);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -1252,6 +1271,40 @@ function VouchersTab() {
               <Field label={t("admin.maxUsesLabel")}>
                 <Input type="number" min="1" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
               </Field>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-foreground">{t("admin.voucherPreviewTitle")}</p>
+              <p className="text-sm text-muted-foreground">{previewSummary}</p>
+              <dl className="space-y-1 pt-1 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">{t("admin.voucherCodeLabel")}</dt>
+                  <dd className="font-mono font-medium text-foreground">{previewCode}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">{t("admin.typeLabel")}</dt>
+                  <dd className="font-medium text-foreground">{typeLabel(type)}</dd>
+                </div>
+                {type === "plan" && (
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">{t("admin.packageIdLabel")}</dt>
+                    <dd className="font-medium text-foreground text-right">
+                      {previewPlan ? `${previewPlan.name} — ${fmtRp(previewPlan.price)}` : t("admin.voucherPreviewNoPlan")}
+                    </dd>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">{t("admin.durationLabel")}</dt>
+                  <dd className="font-medium text-foreground">
+                    {previewDaysNum > 0 ? t("admin.daysCount").replace("{count}", String(previewDaysNum)) : "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">{t("admin.maxUsesLabel")}</dt>
+                  <dd className="font-medium text-foreground">
+                    {previewUsesNum > 0 ? t("admin.voucherPreviewUses").replace("{count}", fmtNum(previewUsesNum)) : "—"}
+                  </dd>
+                </div>
+              </dl>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>
