@@ -39,6 +39,7 @@ var sensitiveSettingKeys = map[string]bool{
 	settingClipkuAPIKey:       true,
 	settingGoogleClientSecret: true,
 	settingGithubClientSecret: true,
+	settingMetaWabaAccessToken: true,
 	"ai_api_key":              true,
 }
 

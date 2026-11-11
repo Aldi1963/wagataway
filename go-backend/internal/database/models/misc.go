@@ -230,18 +230,45 @@ type ChatReminder struct {
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
-
+// MessageTemplate: template pesan reusable dengan variabel {{nama}} / {{1}}.
+// Status mengikuti alur persetujuan resmi:
+//   draft → pending (diajukan) → approved / rejected.
+// PERSETUJUAN META BERADA DI LUAR KENDALI KODE: endpoint approve/reject di
+// sini hanya MENCATAT keputusan yang sudah dibuat di Meta Business Manager
+// (atau oleh admin) — bukan persetujuan otomatis. Template hanya boleh
+// dikirim lewat /templates/:id/send bila statusnya approved.
 type MessageTemplate struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index;not null" json:"userId"`
-	Name      string    `gorm:"size:255;not null" json:"name"`
-	Category  string    `gorm:"size:50" json:"category"`
-	Content   string    `gorm:"type:text;not null" json:"content"`
-	Variables string    `gorm:"type:text" json:"variables"` // JSON array
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	UserID          uint      `gorm:"index;not null" json:"userId"`
+	Name            string    `gorm:"size:255;not null" json:"name"`
+	Category        string    `gorm:"size:50" json:"category"` // utility, marketing, authentication
+	Language        string    `gorm:"size:10;default:id" json:"language"` // id, en
+	Content         string    `gorm:"type:text;not null" json:"content"`
+	Variables       string    `gorm:"type:text" json:"variables"` // JSON array, mis. ["nama","kode"]
+	ExampleValues   string    `gorm:"type:text" json:"exampleValues"` // JSON object, mis. {"nama":"Budi"}
+	Status          string    `gorm:"size:20;default:draft;index" json:"status"` // draft,pending,approved,rejected
+	RejectionReason string    `gorm:"type:text" json:"rejectionReason"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+// MessageTemplateApproval: satu baris riwayat persetujuan per perubahan
+// status template — siapa, kapan, dari status apa ke apa, dan alasan
+// penolakan bila ada.
+type MessageTemplateApproval struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	TemplateID uint      `gorm:"index;not null" json:"templateId"`
+	UserID     uint      `gorm:"index;not null" json:"userId"`
+	ActorName  string    `gorm:"size:255" json:"actorName"` // snapshot nama saat aksi
+	Action     string    `gorm:"size:20;not null" json:"action"` // submitted, approved, rejected, edited
+	FromStatus string    `gorm:"size:20" json:"fromStatus"`
+	ToStatus   string    `gorm:"size:20;not null" json:"toStatus"`
+	Reason     string    `gorm:"type:text" json:"reason"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	Template MessageTemplate `gorm:"foreignKey:TemplateID" json:"-"`
 }
 
 // ── Email OTP ─────────────────────────────────────────────────────────────────

@@ -75,6 +75,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ChatInbox{},
 		&models.ChatConversation{},
 		&models.MessageTemplate{},
+		&models.MessageTemplateApproval{},
 		&models.EmailOtp{},
 		&models.PasswordResetToken{},
 		&models.WalletTransaction{},
@@ -130,7 +131,10 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := migrateTransactionExternalIDUniqueIndex(db); err != nil {
 		return err
 	}
-	return migrateAPIKeyHashes(db)
+	if err := migrateAPIKeyHashes(db); err != nil {
+		return err
+	}
+	return migrateMessageTemplateGrandfather(db)
 }
 
 // migrateMessageIdempotencyUniqueIndex membuat unique index parsial untuk
@@ -256,6 +260,57 @@ func migrateAPIKeyHashes(db *gorm.DB) error {
 		log.Info().Int("count", len(keys)).Msg("Migrated plaintext API keys to key_hash")
 	}
 	return nil
+}
+
+// migrateMessageTemplateGrandfather menganggap template yang sudah ada
+// sebelum alur persetujuan (kolom status baru, semua baris lama = draft)
+// sebagai sudah disetujui, agar TemplatePicker / Live Chat / kirim pesan
+// yang sudah memakainya tidak tiba-tiba rusak. Satu baris riwayat
+// "approved" ditulis per template. Idempoten via kunci di tabel settings:
+// hanya berjalan sekali, pada boot pertama sesudah deploy — template draft
+// yang dibuat sesudah itu TIDAK ikut di-approve otomatis.
+func migrateMessageTemplateGrandfather(db *gorm.DB) error {
+	const flagKey = "templates_approval_grandfathered_v1"
+	var flag models.Setting
+	if err := db.Where("key = ?", flagKey).First(&flag).Error; err == nil {
+		return nil
+	}
+	var templates []models.MessageTemplate
+	if err := db.Where("status = ?", "draft").Find(&templates).Error; err != nil {
+		return err
+	}
+	if len(templates) == 0 {
+		return db.Where("key = ?", flagKey).Assign(models.Setting{Key: flagKey, Value: "1"}).
+			FirstOrCreate(&models.Setting{}).Error
+	}
+	var users []models.User
+	if err := db.Select("id", "name").Find(&users).Error; err != nil {
+		return err
+	}
+	names := map[uint]string{}
+	for _, u := range users {
+		names[u.ID] = u.Name
+	}
+	for _, tpl := range templates {
+		actor := names[tpl.UserID]
+		if actor == "" {
+			actor = "Sistem"
+		}
+		if err := db.Model(&models.MessageTemplate{}).Where("id = ?", tpl.ID).
+			Update("status", "approved").Error; err != nil {
+			return err
+		}
+		if err := db.Create(&models.MessageTemplateApproval{
+			TemplateID: tpl.ID, UserID: tpl.UserID, ActorName: actor,
+			Action: "approved", FromStatus: "draft", ToStatus: "approved",
+			Reason: "Template lama: dianggap sudah disetujui (migrasi ke alur persetujuan).",
+		}).Error; err != nil {
+			return err
+		}
+	}
+	log.Info().Int("count", len(templates)).Msg("Grandfathered legacy message templates to approved")
+	return db.Where("key = ?", flagKey).Assign(models.Setting{Key: flagKey, Value: "1"}).
+		FirstOrCreate(&models.Setting{}).Error
 }
 
 // migratePlanQuotaDefaults mengisi monthly_message_limit (Fitur 3) dan
