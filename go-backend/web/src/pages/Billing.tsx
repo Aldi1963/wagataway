@@ -3,6 +3,7 @@ import { Check, ExternalLink, Loader2, QrCode, Receipt, RefreshCw, X } from "luc
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
@@ -1043,12 +1044,9 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">{t("billing.invDueDate")}</label>
-                  <input
-                    type="date"
-                    className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    value={invDue}
-                    onChange={(e) => setInvDue(e.target.value)}
-                  />
+                  <div className="mt-1">
+                    <DateTimePicker showTime={false} value={invDue} onChange={setInvDue} />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">{t("billing.invTotal")}</label>

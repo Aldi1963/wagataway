@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import { apiGet, apiPost, apiDelete, apiFetch } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 
@@ -311,23 +312,17 @@ export default function ChatBackup() {
               <label className="text-xs font-medium text-muted-foreground">
                 {t("chatBackup.from")}
               </label>
-              <Input
-                type="date"
-                className="w-40"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
+              <div className="w-40">
+                <DateTimePicker showTime={false} value={from} onChange={setFrom} />
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
                 {t("chatBackup.to")}
               </label>
-              <Input
-                type="date"
-                className="w-40"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
+              <div className="w-40">
+                <DateTimePicker showTime={false} value={to} onChange={setTo} />
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">

@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 
@@ -1697,10 +1698,10 @@ function VouchersTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t("admin.voucherStartsAtLabel")}>
-                <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+                <DateTimePicker value={startsAt} onChange={setStartsAt} />
               </Field>
               <Field label={t("admin.voucherEndsAtLabel")}>
-                <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+                <DateTimePicker value={endsAt} onChange={setEndsAt} />
               </Field>
             </div>
             <label className="flex items-start gap-2 text-sm text-foreground cursor-pointer">
@@ -1823,7 +1824,7 @@ function VouchersTab() {
               </Field>
             </div>
             <Field label={t("admin.expiresAtLabel")}>
-              <Input type="date" value={editExpiresAt} onChange={(e) => setEditExpiresAt(e.target.value)} />
+              <DateTimePicker showTime={false} value={editExpiresAt} onChange={setEditExpiresAt} />
               <p className="text-xs text-muted-foreground mt-1">{t("admin.expiresAtHint")}</p>
             </Field>
             <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">

@@ -14,14 +14,14 @@ interface Parts {
 }
 
 function parseDT(v: string): Parts | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v || "");
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(v || "");
   if (!m) return null;
   return {
     y: Number(m[1]),
     m: Number(m[2]) - 1,
     d: Number(m[3]),
-    hh: Number(m[4]),
-    mm: Number(m[5]),
+    hh: Number(m[4] ?? 0),
+    mm: Number(m[5] ?? 0),
   };
 }
 
@@ -30,20 +30,29 @@ function toDT(p: Parts): string {
   return `${p.y}-${pad(p.m + 1)}-${pad(p.d)}T${pad(p.hh)}:${pad(p.mm)}`;
 }
 
+function toDate(p: Parts): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${p.y}-${pad(p.m + 1)}-${pad(p.d)}`;
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 // DateTimePicker custom — pengganti <input type="datetime-local"> agar tidak
 // memicu picker bawaan Android. Kalender + jam/menit inline sesuai tema aplikasi.
+// showTime=false: mode tanggal saja (pengganti <input type="date">), nilai
+// yang dikirim "YYYY-MM-DD" dan bagian jam disembunyikan.
 export function DateTimePicker({
   value,
   onChange,
   min,
   placeholder,
+  showTime = true,
 }: {
   value: string;
   onChange: (v: string) => void;
   min?: string;
   placeholder?: string;
+  showTime?: boolean;
 }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
@@ -112,7 +121,7 @@ export function DateTimePicker({
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const w = Math.min(320, vw - 24);
-      const h = 470; // perkiraan tinggi panel
+      const h = showTime ? 470 : 380; // perkiraan tinggi panel
       const left = Math.max(12, Math.min(r.left, vw - w - 12));
       const top = r.bottom + 6 + h > vh ? Math.max(12, r.top - h - 6) : r.bottom + 6;
       setPanelStyle({ left, top, width: w });
@@ -153,7 +162,9 @@ export function DateTimePicker({
     ? (() => {
         const p = parseDT(value);
         if (!p) return "";
-        return `${p.d} ${monthNames[p.m]} ${p.y}, ${pad2(p.hh)}:${pad2(p.mm)}`;
+        return showTime
+          ? `${p.d} ${monthNames[p.m]} ${p.y}, ${pad2(p.hh)}:${pad2(p.mm)}`
+          : `${p.d} ${monthNames[p.m]} ${p.y}`;
       })()
     : "";
 
@@ -255,6 +266,7 @@ export function DateTimePicker({
           </div>
 
           {/* Jam & menit */}
+          {showTime && (
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>
               <p className="text-[10px] font-medium text-muted-foreground mb-1">
@@ -279,6 +291,7 @@ export function DateTimePicker({
               />
             </div>
           </div>
+          )}
 
           {/* Aksi */}
           <div className="mt-3 flex items-center justify-between">
@@ -295,7 +308,7 @@ export function DateTimePicker({
             <button
               type="button"
               onClick={() => {
-                onChange(toDT(draft));
+                onChange(showTime ? toDT(draft) : toDate(draft));
                 setOpen(false);
               }}
               className="h-8 px-4 rounded-full bg-[#243370] dark:bg-[#4c63d2] text-white text-xs font-semibold"
