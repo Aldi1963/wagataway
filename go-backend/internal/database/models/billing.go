@@ -96,10 +96,15 @@ type Voucher struct {
 	MaxUses   int        `gorm:"default:1" json:"maxUses"`
 	UsedCount int        `gorm:"default:0" json:"usedCount"`
 	IsActive  bool       `gorm:"default:true" json:"isActive"`
-	ExpiresAt *time.Time `json:"expiresAt"`
 	// Source: asal voucher — "" (dibuat admin) atau "referral_reward"
 	// (diterbitkan otomatis sebagai hadiah referral).
 	Source    string     `gorm:"size:20;default:''" json:"source"`
+	// Jendela berlaku (Item 3): voucher hanya bisa ditukar bila sekarang
+	// berada di dalam [StartsAt, EndsAt]. Keduanya opsional — sisi yang
+	// kosong tidak membatasi. Berlaku DI SAMPING ExpiresAt + durasi hari,
+	// bukan menggantikannya.
+	StartsAt *time.Time `json:"startsAt"`
+	EndsAt   *time.Time `json:"endsAt"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 }

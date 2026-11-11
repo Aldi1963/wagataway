@@ -300,6 +300,11 @@ func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Data tidak valid"})
 			return
 		}
+		// Jendela berlaku: bila keduanya diisi, berakhir harus setelah mulai.
+		if req.StartsAt != nil && req.EndsAt != nil && !req.EndsAt.After(*req.StartsAt) {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal berakhir harus setelah tanggal mulai"})
+			return
+		}
 		db.Create(&req)
 		logAdminAction(db, middleware.GetUserID(c), "create_voucher", "voucher",
 			strconv.FormatUint(uint64(req.ID), 10), req.Code)

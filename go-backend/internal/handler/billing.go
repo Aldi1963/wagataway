@@ -374,6 +374,19 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Jendela berlaku (Item 3): berlaku DI SAMPING ExpiresAt — pesan
+		// dibedakan dari "sudah kadaluarsa" supaya admin/user tahu ini
+		// soal jadwal mulai/berakhir, bukan tanggal kedaluwarsa voucher.
+		now := java_time_now()
+		if voucher.StartsAt != nil && now.Before(*voucher.StartsAt) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "Voucher belum berlaku"})
+			return
+		}
+		if voucher.EndsAt != nil && now.After(*voucher.EndsAt) {
+			c.JSON(http.StatusGone, gin.H{"message": "Voucher sudah berakhir"})
+			return
+		}
+
 		// Voucher diskon belum punya mekanisme penerapan (tidak ada tempat
 		// menyimpan diskon untuk pembayaran berikutnya) — tolak dengan jelas
 		// daripada mencatat penukaran yang tidak memberi apa-apa.
@@ -392,7 +405,6 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 
 		// Cek + catat redeem + increment used_count + terapkan efek voucher
 		// berjalan atomik dalam satu transaksi.
-		now := java_time_now()
 		var startsAt, endsAt time.Time
 		err = udb.Transaction(func(tx *gorm.DB) error {
 			var err error
