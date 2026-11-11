@@ -1069,7 +1069,6 @@ function VouchersTab() {
   const { t } = useLang();
   const VOUCHER_TYPES = [
     { value: "trial", label: "Trial" },
-    { value: "discount", label: t("admin.voucherDiscount") },
     { value: "plan", label: t("admin.voucherPackage") },
   ];
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
@@ -1081,7 +1080,6 @@ function VouchersTab() {
   const [planId, setPlanId] = useState("");
   const [plans, setPlans] = useState<Pkg[]>([]);
   const [duration, setDuration] = useState("7");
-  const [discount, setDiscount] = useState("0");
   const [maxUses, setMaxUses] = useState("100");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Voucher | null>(null);
@@ -1111,7 +1109,6 @@ function VouchersTab() {
     setType("trial");
     setPlanId("");
     setDuration("7");
-    setDiscount("0");
     setMaxUses("100");
   };
 
@@ -1130,7 +1127,6 @@ function VouchersTab() {
         code: code.trim().toUpperCase(),
         type,
         duration: Number(duration) || 0,
-        discount: Number(discount) || 0,
         max_uses: Number(maxUses) || 1,
       };
       if (type === "plan" && planId.trim()) body.plan_id = Number(planId);
@@ -1249,12 +1245,9 @@ function VouchersTab() {
                 <Select value={planId} onChange={setPlanId} options={planOptions} className="h-10 w-full text-sm" ariaLabel={t("admin.packageIdLabel")} />
               </Field>
             )}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <Field label={t("admin.durationLabel")}>
                 <Input type="number" min="0" value={duration} onChange={(e) => setDuration(e.target.value)} />
-              </Field>
-              <Field label={t("admin.discountLabel")}>
-                <Input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} />
               </Field>
               <Field label={t("admin.maxUsesLabel")}>
                 <Input type="number" min="1" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
