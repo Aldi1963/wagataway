@@ -305,6 +305,16 @@ func adminCreateVoucher(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal berakhir harus setelah tanggal mulai"})
 			return
 		}
+		// Paket minimal (MinPlanID) harus menunjuk paket yang ada — kalau
+		// tidak, redeem nanti tidak bisa mengukur tier dan batas jadi
+		// tidak berarti. NULL (tidak diisi) = berlaku untuk semua paket.
+		if req.MinPlanID != nil {
+			var min models.Plan
+			if err := db.First(&min, *req.MinPlanID).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Paket minimal tidak ditemukan"})
+				return
+			}
+		}
 		db.Create(&req)
 		logAdminAction(db, middleware.GetUserID(c), "create_voucher", "voucher",
 			strconv.FormatUint(uint64(req.ID), 10), req.Code)

@@ -423,6 +423,16 @@ func redeemVoucher(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Paket minimal (MinPlanID): bandingkan dengan paket yang AKAN
+		// diberikan voucher ini — bukan paket user saat ini. Trial tanpa
+		// PlanID memberi paket Free (tier terendah), jadi voucher trial
+		// bermininum Pro otomatis ditolak; trial ber-PlanID Pro/Master
+		// lolos. Voucher diskon sudah ditolak di atas, tidak sampai sini.
+		if err := checkVoucherMinPlan(udb, &voucher, plan); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+
 		// Cek + catat redeem + increment used_count + terapkan efek voucher
 		// berjalan atomik dalam satu transaksi.
 		var startsAt, endsAt time.Time
@@ -545,6 +555,40 @@ func redeemVoucherTx(tx *gorm.DB, userID uint, voucher *models.Voucher, plan mod
 
 	// Berikan langganan (mengantre bila sudah ada langganan aktif).
 	return grantVoucherSubscription(tx, userID, plan, durationDays, isTrial, now)
+}
+
+// planTierBelow melaporkan apakah paket yang diberikan tier-nya DI BAWAH
+// paket minimum. Tier diukur dari SortOrder — urutan kanonis paket yang
+// dipakai listPlans, adminListPackages, dan daftar paket publik. Data live
+// konsisten: SortOrder naik seiring harga (Free 1/0, Lite 2/25000, Regular
+// 3/66000, Pro 4/110000, Master 5/175000), jadi SortOrder saja sudah
+// menentukan tier; Price hanya penyeimbang bila dua paket berbagi
+// SortOrder yang sama (mis. paket baru yang belum diurutkan admin).
+func planTierBelow(granted, min models.Plan) bool {
+	if granted.SortOrder != min.SortOrder {
+		return granted.SortOrder < min.SortOrder
+	}
+	return granted.Price < min.Price
+}
+
+// checkVoucherMinPlan menolak redeem bila paket yang akan diberikan voucher
+// tier-nya di bawah paket minimal voucher (MinPlanID). Tanpa MinPlanID
+// voucher berlaku untuk semua paket. Bila baris paket minimum sudah tidak
+// ada lagi (dihapus admin setelah voucher dibuat), batas tidak bisa diukur
+// — voucher dianggap berlaku untuk semua paket, bukan ditolak, karena
+// penghapusan paket tidak seharusnya mematikan voucher yang sudah beredar.
+func checkVoucherMinPlan(udb *gorm.DB, voucher *models.Voucher, granted models.Plan) error {
+	if voucher.MinPlanID == nil {
+		return nil
+	}
+	var min models.Plan
+	if err := udb.Where("id = ?", *voucher.MinPlanID).First(&min).Error; err != nil {
+		return nil
+	}
+	if planTierBelow(granted, min) {
+		return fmt.Errorf("Voucher ini hanya berlaku untuk paket %s ke atas", min.Name)
+	}
+	return nil
 }
 
 // voucherGrantPlan menentukan paket + durasi + status trial yang diberikan

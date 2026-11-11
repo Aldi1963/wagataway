@@ -96,6 +96,7 @@ interface Voucher {
   code: string;
   type: string;
   planId?: number | null;
+  minPlanId?: number | null;
   duration: number;
   discount: number;
   maxUses: number;
@@ -1157,6 +1158,7 @@ function VouchersTab() {
   const [code, setCode] = useState("");
   const [type, setType] = useState("trial");
   const [planId, setPlanId] = useState("");
+  const [minPlanId, setMinPlanId] = useState("");
   const [plans, setPlans] = useState<Pkg[]>([]);
   const [duration, setDuration] = useState("7");
   const [maxUses, setMaxUses] = useState("100");
@@ -1209,6 +1211,10 @@ function VouchersTab() {
       })
       .catch((e) => setError(errMsg(e, t("admin.errLoadVouchers"))))
       .finally(() => setLoading(false));
+    // Daftar paket juga dipakai untuk menampilkan nama paket minimal di tabel.
+    apiGet<{ packages: Pkg[] }>("/admin/packages")
+      .then((res) => setPlans(res.packages || []))
+      .catch(() => setPlans([]));
   };
 
   useEffect(load, []);
@@ -1242,6 +1248,7 @@ function VouchersTab() {
     setCode("");
     setType("trial");
     setPlanId("");
+    setMinPlanId("");
     setDuration("7");
     setMaxUses("100");
     setPrefix("");
@@ -1284,6 +1291,9 @@ function VouchersTab() {
       // (encoding/json tidak mengenali snake_case seperti starts_at).
       if (startsAt) body.startsAt = new Date(startsAt).toISOString();
       if (endsAt) body.endsAt = new Date(endsAt).toISOString();
+      // camelCase: binding JSON backend memakai tag json model (minPlanId);
+      // kunci snake_case (min_plan_id) diam-diam diabaikan decoder.
+      if (minPlanId.trim()) body.minPlanId = Number(minPlanId);
       await apiPost("/admin/vouchers", body);
       toast.success(t("admin.voucherCreated"));
       setShowForm(false);
@@ -1462,6 +1472,13 @@ function VouchersTab() {
         { icon: Wallet, label: t("admin.statTrialConversion"), value: `${fmtNum(analytics.trialConverted)} (${fmtPct(analytics.trialConversionRate)})`, tint: "bg-[#243370]/10 text-[#243370] dark:text-[#8fa0e8]" },
       ]
     : [];
+  const minPlanOptions = [
+    { value: "", label: t("admin.voucherMinPlanAll") },
+    ...plans.map((p) => ({ value: String(p.id), label: `${p.name} — ${fmtRp(p.price)}` })),
+  ];
+
+  const minPlanName = (id?: number | null) =>
+    plans.find((p) => p.id === id)?.name || null;
 
   return (
     <div className="space-y-4">
@@ -1516,6 +1533,7 @@ function VouchersTab() {
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="p-3 font-medium">{t("admin.colCode")}</th>
                   <th className="p-3 font-medium">{t("admin.colType")}</th>
+                  <th className="p-3 font-medium">{t("admin.colMinPlan")}</th>
                   <th className="p-3 font-medium">{t("admin.colDuration")}</th>
                   <th className="p-3 font-medium">{t("admin.colDiscount")}</th>
                   <th className="p-3 font-medium">{t("admin.colUsed")}</th>
@@ -1541,6 +1559,13 @@ function VouchersTab() {
                         <Badge variant="outline" className="ml-1 border-sky-500/30 text-sky-600">
                           {t("admin.voucherNewUsersBadge")}
                         </Badge>
+                      )}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {v.minPlanId ? (
+                        <Badge variant="outline">Min: {minPlanName(v.minPlanId) ?? `#${v.minPlanId}`}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">{t("admin.voucherMinPlanAll")}</span>
                       )}
                     </td>
                     <td className="p-3 text-muted-foreground whitespace-nowrap">{t("admin.daysCount").replace("{count}", String(v.duration))}</td>
@@ -1597,7 +1622,7 @@ function VouchersTab() {
                 ))}
                 {vouchers.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={11} className="p-8 text-center text-sm text-muted-foreground">
                       {t("admin.noVouchers")}
                     </td>
                   </tr>
@@ -1641,6 +1666,10 @@ function VouchersTab() {
                 <Select value={planId} onChange={setPlanId} options={planOptions} className="h-10 w-full text-sm" ariaLabel={t("admin.packageIdLabel")} />
               </Field>
             )}
+            <Field label={t("admin.voucherMinPlanLabel")}>
+              <Select value={minPlanId} onChange={setMinPlanId} options={minPlanOptions} className="h-10 w-full text-sm" ariaLabel={t("admin.voucherMinPlanLabel")} />
+              <p className="mt-1 text-xs text-muted-foreground">{t("admin.voucherMinPlanHint")}</p>
+            </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t("admin.durationLabel")}>
                 <Input type="number" min="0" value={duration} onChange={(e) => setDuration(e.target.value)} />
@@ -1708,6 +1737,12 @@ function VouchersTab() {
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted-foreground">{t("admin.voucherNewUsersOnly")}</dt>
                     <dd className="font-medium text-foreground text-right">Ya</dd>
+                  </div>
+                )}
+                {minPlanId && (
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">{t("admin.voucherMinPlanLabel")}</dt>
+                    <dd className="font-medium text-foreground text-right">{minPlanName(Number(minPlanId)) ?? `#${minPlanId}`}</dd>
                   </div>
                 )}
               </dl>

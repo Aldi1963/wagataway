@@ -102,6 +102,7 @@ type Voucher struct {
 	// diskon tetap ditolak seperti biasa, terlepas dari flag ini.
 	NewUsersOnly bool      `gorm:"default:false" json:"newUsersOnly"`
 	IsActive  bool       `gorm:"default:true" json:"isActive"`
+	ExpiresAt *time.Time `json:"expiresAt"`
 	// Source: asal voucher — "" (dibuat admin) atau "referral_reward"
 	// (diterbitkan otomatis sebagai hadiah referral).
 	Source    string     `gorm:"size:20;default:''" json:"source"`
@@ -111,6 +112,10 @@ type Voucher struct {
 	// bukan menggantikannya.
 	StartsAt *time.Time `json:"startsAt"`
 	EndsAt   *time.Time `json:"endsAt"`
+	// MinPlanID: paket minimal yang boleh memakai voucher ini. NULL =
+	// berlaku untuk semua paket. Tier diukur dari SortOrder paket
+	// (lihat planTierBelow di handler billing).
+	MinPlanID *uint      `json:"minPlanId"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 }
