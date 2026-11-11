@@ -14,6 +14,7 @@ import (
 	"github.com/Aldi1963/wagataway/internal/database/models"
 	"github.com/Aldi1963/wagataway/internal/middleware"
 	"github.com/Aldi1963/wagataway/internal/whatsapp"
+	"github.com/Aldi1963/wagataway/internal/worker"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
@@ -277,6 +278,12 @@ func adminDeletePackage(db *gorm.DB) gin.HandlerFunc {
 
 func adminListVouchers(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Lazy-expiry: nonaktifkan dulu voucher yang sudah lewat ExpiresAt
+		// agar daftar (badge + ringkasan) selalu segar walau job per jam
+		// sempat tertinggal. Gagal di sini tidak menggagalkan daftar.
+		if _, err := worker.DeactivateExpiredVouchers(db, time.Now()); err != nil {
+			log.Warn().Err(err).Msg("Lazy-expiry voucher gagal, daftar tetap dibaca")
+		}
 		var vouchers []models.Voucher
 		db.Order("created_at DESC").Find(&vouchers)
 		c.JSON(http.StatusOK, gin.H{"vouchers": vouchers})
