@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
+import { consumePostLoginRedirect } from "@/lib/post-login-redirect";
 
 // Menerima token JWT dari callback OAuth backend (?token=...),
 // menyimpannya, lalu mengarahkan ke dashboard.
@@ -20,7 +21,7 @@ export default function OAuthCallback() {
       return;
     }
     setTokenFromOAuth(token)
-      .then(() => setLocation("/"))
+      .then(() => setLocation(consumePostLoginRedirect() ?? "/"))
       .catch(() => setError(t("oAuthCallback.errorVerifyFailed")));
   }, []);
 

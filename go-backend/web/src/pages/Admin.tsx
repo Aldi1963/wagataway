@@ -29,6 +29,7 @@ import {
   EyeOff,
   KeyRound,
   Copy,
+  Link2,
   CreditCard,
   AlertTriangle,
   History,
@@ -1401,6 +1402,18 @@ function VouchersTab() {
     }
   };
 
+  // Link redeem yang bisa dibagikan: dibuka dari luar, kode sudah terisi
+  // di halaman /redeem (pengguna diminta login dulu bila belum login).
+  const copyRedeemLink = async (v: Voucher) => {
+    const url = `${window.location.origin}/redeem?code=${encodeURIComponent(v.code)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t("admin.linkCopied"));
+    } catch {
+      toast.error(t("admin.errCopyLink"));
+    }
+  };
+
   const typeLabel = (tv: string) => VOUCHER_TYPES.find((x) => x.value === tv)?.label || tv;
 
   // Peringatan stok & kedaluwarsa (Item 8): pemakaian >= 90% dari MaxUses
@@ -1613,11 +1626,13 @@ function VouchersTab() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setHistoryVoucher(v)} aria-label={t("admin.voucherHistory")}>
                           <History className="w-3.5 h-3.5" />
                         </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyRedeemLink(v)} aria-label={t("admin.copyRedeemLink")}>
+                          <Link2 className="w-3.5 h-3.5" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(v)} aria-label={t("admin.deleteVoucher")}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                    </td>
                   </tr>
                 ))}
                 {vouchers.length === 0 && (

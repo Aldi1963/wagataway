@@ -377,6 +377,7 @@ export default {
     voucherAlertLowStock: "{count} voucher(s) almost used up (usage ≥ 90%).",
     voucherAlertExpired: "{count} voucher(s) expired and automatically deactivated.",
     deleteVoucher: "Delete voucher",
+    copyRedeemLink: "Copy redeem link",
     addVoucherTitle: "Add Voucher",
     bulkModeSingle: "Single",
     bulkModeBulk: "Bulk",
@@ -2524,6 +2525,9 @@ export default {
     timeLabel: "Send time",
     title: "Recurring Schedules",
     updated: "Updated",
+  },
+  redeem: {
+    backToDashboard: "Back to Dashboard",
   },
   register: {
     title: "Create a free account",

@@ -391,6 +391,7 @@ const id = {
     voucherAlertLowStock: "{count} voucher hampir habis (pemakaian ≥ 90%).",
     voucherAlertExpired: "{count} voucher kedaluwarsa dan sudah dinonaktifkan otomatis.",
     deleteVoucher: "Hapus voucher",
+    copyRedeemLink: "Salin link redeem",
     addVoucherTitle: "Tambah Voucher",
     bulkModeSingle: "Satuan",
     bulkModeBulk: "Massal",
@@ -2538,6 +2539,9 @@ const id = {
     timeLabel: "Jam Kirim",
     title: "Jadwal Berulang",
     updated: "Diperbarui",
+  },
+  redeem: {
+    backToDashboard: "Kembali ke Dashboard",
   },
   register: {
     title: "Buat akun gratis",
