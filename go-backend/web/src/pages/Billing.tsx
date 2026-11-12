@@ -501,7 +501,7 @@ export default function Billing({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
           {txs.length > TX_PAGE_SIZE && (
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-border">
               <p className="text-xs text-muted-foreground">
                 {t("billing.txPageInfo").replace("{page}", String(txPageSafe)).replace("{total}", String(txPageCount))}
               </p>

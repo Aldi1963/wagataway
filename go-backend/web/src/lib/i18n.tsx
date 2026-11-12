@@ -22,6 +22,8 @@ const id = {
     viewAll: "Lihat semua",
     delete: "Hapus",
     save: "Simpan",
+    prevPage: "Sebelumnya",
+    nextPage: "Berikutnya",
   },
   header: {
     openMenu: "Buka menu",

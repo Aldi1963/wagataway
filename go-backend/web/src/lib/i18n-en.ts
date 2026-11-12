@@ -8,6 +8,8 @@ export default {
     viewAll: "View all",
     delete: "Delete",
     save: "Save",
+    prevPage: "Previous",
+    nextPage: "Next",
   },
   header: {
     openMenu: "Open menu",
