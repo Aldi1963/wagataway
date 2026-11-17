@@ -53,6 +53,7 @@ import { Input } from "@/components/ui/input";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
+import "./admin-nusa.css";
 
 /* ── Tipe data ──────────────────────────────────────── */
 
@@ -194,8 +195,8 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
-      <div className="relative bg-card text-card-foreground rounded-xl border border-border shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="nu-modal relative bg-card text-card-foreground rounded-md border border-border shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
+        <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
           <h3 className="text-base font-semibold">{title}</h3>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label={t("admin.closeModal")}>
             <X className="w-4 h-4" />
@@ -239,7 +240,7 @@ function Select({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <label className="text-xs font-medium text-foreground">{label}</label>
+      <label className="text-sm font-medium text-foreground">{label}</label>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -248,8 +249,11 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
   const { t } = useLang();
   return (
-    <Card>
+    <Card className="nu-card rounded-md">
       <CardContent className="p-6 text-center space-y-3">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
         <p className="text-sm text-destructive">{message}</p>
         <Button size="sm" variant="outline" onClick={onRetry} className="gap-1.5">
           <RefreshCw className="w-3.5 h-3.5" /> {t("admin.retry")}
@@ -264,7 +268,7 @@ function LoadingRows({ n = 3 }: { n?: number }) {
     <div className="space-y-3">
       {[0, 1, 2].map((i) =>
         i < n ? (
-          <Card key={i}>
+          <Card key={i} className="nu-card rounded-md">
             <CardContent className="p-4">
               <div className="animate-pulse space-y-2">
                 <div className="h-4 bg-secondary rounded w-1/3" />
@@ -376,25 +380,25 @@ function OverviewTab() {
       {!loading && error && <ErrorCard message={error} onRetry={load} />}
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {stats.map((s) => (
-              <Card key={s.label}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${s.tint}`}>
-                    <s.icon className="w-5 h-5" />
+              <Card key={s.label} className="nu-card rounded-md">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${s.tint}`}>
+                      <s.icon className="h-[18px] w-[18px]" />
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                    <p className="text-lg font-bold text-foreground truncate">{s.value}</p>
-                  </div>
+                  <p className="nu-stat-value mt-1 font-bold text-foreground truncate">{s.value}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardContent className="p-4">
+            <Card className="nu-card rounded-md">
+              <CardContent className="p-5">
                 <p className="text-sm font-semibold text-foreground mb-3">{t("admin.newUsersPerDay")}</p>
                 {trends.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-10 text-center">{t("admin.noTrendData")}</p>
@@ -421,7 +425,7 @@ function OverviewTab() {
                         <Tooltip
                           labelFormatter={(d) => fmtDayShort(String(d))}
                           formatter={(value) => [fmtNum(Number(value)), t("admin.chartUsers")]}
-                          contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                          contentStyle={{ borderRadius: 6, fontSize: 12 }}
                         />
                         <Bar dataKey="signups" name={t("admin.chartUsers")} fill="#243370" radius={[4, 4, 0, 0]} />
                       </BarChart>
@@ -430,8 +434,8 @@ function OverviewTab() {
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-4">
+            <Card className="nu-card rounded-md">
+              <CardContent className="p-5">
                 <p className="text-sm font-semibold text-foreground mb-3">{t("admin.revenuePerDay")}</p>
                 {trends.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-10 text-center">{t("admin.noTrendData")}</p>
@@ -458,7 +462,7 @@ function OverviewTab() {
                         <Tooltip
                           labelFormatter={(d) => fmtDayShort(String(d))}
                           formatter={(value) => [fmtRp(Number(value)), t("admin.chartRevenue")]}
-                          contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                          contentStyle={{ borderRadius: 6, fontSize: 12 }}
                         />
                         <Area
                           type="monotone"
@@ -477,10 +481,10 @@ function OverviewTab() {
             </Card>
           </div>
 
-          <Card className={maintenance ? "border-amber-500/50" : ""}>
-            <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Card className={cn("nu-card rounded-md", maintenance ? "border-amber-500/50" : "")}>
+            <CardContent className="p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${maintenance ? "bg-amber-500/10 text-amber-600" : "bg-secondary text-muted-foreground"}`}>
+                <div className={`w-10 h-10 rounded-md flex items-center justify-center ${maintenance ? "bg-amber-500/10 text-amber-600" : "bg-secondary text-muted-foreground"}`}>
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
@@ -689,13 +693,13 @@ function UsersTab() {
             onKeyDown={(e) => e.key === "Enter" && doSearch()}
           />
         </div>
-        <Button size="sm" variant="outline" onClick={doSearch} className="h-10">
+        <Button size="sm" variant="outline" onClick={doSearch} className="h-9">
           {t("admin.search")}
         </Button>
-        <Button size="sm" variant="outline" onClick={exportCsv} className="h-10 gap-1.5">
+        <Button size="sm" variant="outline" onClick={exportCsv} className="h-9 gap-1.5">
           <Download className="w-4 h-4" /> {t("admin.exportCsv")}
         </Button>
-        <Button size="sm" onClick={openForm} className="h-10 gap-1.5">
+        <Button size="sm" onClick={openForm} className="h-9 gap-1.5">
           <Plus className="w-4 h-4" /> {t("admin.addUser")}
         </Button>
       </div>
@@ -705,9 +709,9 @@ function UsersTab() {
 
       {!loading && !error && (
         <>
-          <Card>
+          <Card className="nu-card rounded-md">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[760px]">
+              <table className="nu-table w-full text-sm min-w-[760px]">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="p-3 font-medium">{t("admin.colUser")}</th>
@@ -872,7 +876,7 @@ function UsersTab() {
               <Copy className="w-4 h-4" /> {copied ? t("admin.linkCopied") : t("admin.copyLink")}
             </Button>
           </div>
-          <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mt-3">
+          <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md p-3 mt-3">
             {t("admin.resetLinkWarning")}
           </p>
           <div className="flex justify-end gap-2 mt-5">
@@ -1003,9 +1007,9 @@ function PackagesTab() {
       {!loading && error && <ErrorCard message={error} onRetry={load} />}
 
       {!loading && !error && (
-        <Card>
+        <Card className="nu-card rounded-md">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[820px]">
+            <table className="nu-table w-full text-sm min-w-[820px]">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="p-3 font-medium">{t("admin.colPlan")}</th>
@@ -1507,7 +1511,7 @@ function VouchersTab() {
       {!loading && error && <ErrorCard message={error} onRetry={load} />}
 
       {!loading && !error && (alertCounts.lowStock > 0 || alertCounts.expired > 0) && (
-        <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-300">
+        <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-300">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             {alertCounts.lowStock > 0 && (
@@ -1521,17 +1525,17 @@ function VouchersTab() {
       )}
       {!loading && !error && voucherStats.length > 0 && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {voucherStats.map((s) => (
-              <Card key={s.label}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${s.tint}`}>
-                    <s.icon className="w-5 h-5" />
+              <Card key={s.label} className="nu-card rounded-md">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${s.tint}`}>
+                      <s.icon className="h-[18px] w-[18px]" />
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                    <p className="text-lg font-bold text-foreground truncate">{s.value}</p>
-                  </div>
+                  <p className="nu-stat-value mt-1 font-bold text-foreground truncate">{s.value}</p>
                 </CardContent>
               </Card>
             ))}
@@ -1541,9 +1545,9 @@ function VouchersTab() {
       )}
 
       {!loading && !error && (
-        <Card>
+        <Card className="nu-card rounded-md">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[880px]">
+            <table className="nu-table w-full text-sm min-w-[880px]">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="p-3 font-medium">{t("admin.colCode")}</th>
@@ -1654,7 +1658,7 @@ function VouchersTab() {
       {showForm && (
         <Modal title={bulkMode ? t("admin.addBulkVoucherTitle") : t("admin.addVoucherTitle")} onClose={closeForm}>
           <div className="space-y-4">
-            <div className="flex gap-1 rounded-lg bg-muted p-1">
+            <div className="flex gap-1 rounded-md bg-muted p-1">
               <Button variant={!bulkMode ? "default" : "ghost"} size="sm" className="flex-1" onClick={() => { setBulkMode(false); setBulkResult(null); }}>
                 {t("admin.bulkModeSingle")}
               </Button>
@@ -1711,7 +1715,7 @@ function VouchersTab() {
                 <span className="block text-xs text-muted-foreground">{t("admin.voucherNewUsersOnlyHint")}</span>
               </span>
             </label>
-            <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-1.5">
+            <div className="rounded-md border border-border bg-muted/50 p-3 space-y-1.5">
               <p className="text-xs font-semibold text-foreground">{t("admin.voucherPreviewTitle")}</p>
               <p className="text-sm text-muted-foreground">{previewSummary}</p>
               <dl className="space-y-1 pt-1 text-sm">
@@ -1774,7 +1778,7 @@ function VouchersTab() {
               </Button>
             </div>
             {bulkResult && (
-              <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
+              <div className="rounded-md border border-border p-3 space-y-2 text-sm">
                 <p className="font-medium">
                   {t("admin.bulkResultCreated").replace("{count}", String(bulkResult.createdCount))}
                   {" · "}
@@ -1868,7 +1872,7 @@ function VouchersTab() {
           )}
           {!historyLoading && !historyError && history.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[420px]">
+              <table className="nu-table w-full text-sm min-w-[420px]">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="p-3 font-medium">{t("admin.colRedeemer")}</th>
@@ -2003,9 +2007,9 @@ function TransactionsTab() {
 
       {!loading && !error && (
         <>
-          <Card className="hidden md:block">
+          <Card className="nu-card hidden rounded-md md:block">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
+              <table className="nu-table w-full text-sm min-w-[720px]">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="p-3 font-medium">ID</th>
@@ -2042,7 +2046,7 @@ function TransactionsTab() {
             </div>
           </Card>
           {/* Daftar mobile — flat tanpa card per item, cuma divider */}
-          <div className="md:hidden rounded-xl border border-border bg-card divide-y divide-border">
+          <div className="md:hidden rounded-md border border-border bg-card divide-y divide-border">
             {txns.map((x) => (
               <div key={x.id} className="px-3 py-2.5 flex items-center gap-3">
                 <div className="min-w-0 flex-1">
@@ -2410,7 +2414,7 @@ function SettingsTab() {
 
       {!loading && !error && (
         <>
-          <Card>
+          <Card className="nu-card rounded-md">
             <CardContent className="p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-foreground mb-1">{t("admin.generalSettingsTitle")}</h3>
               <p className="text-xs text-muted-foreground mb-2">
@@ -2433,7 +2437,7 @@ function SettingsTab() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="nu-card rounded-md">
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -2477,7 +2481,7 @@ function SettingsTab() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 rounded-lg border border-border bg-muted/50 p-3">
+              <div className="mt-4 rounded-md border border-border bg-muted/50 p-3">
                 <p className="text-xs font-medium text-foreground mb-1.5">
                   {t("admin.webhookLinkTitle")}
                 </p>
@@ -2510,7 +2514,7 @@ function SettingsTab() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="nu-card rounded-md">
             <CardContent className="p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-foreground mb-1">
                 {t("admin.oauthTitle")}
@@ -2533,7 +2537,7 @@ function SettingsTab() {
                 ))}
               </div>
               {oauthStatus && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/50 p-3 space-y-2.5">
+                <div className="mt-4 rounded-md border border-border bg-muted/50 p-3 space-y-2.5">
                   <p className="text-xs font-medium text-foreground">
                     {t("admin.redirectUriTitle")}
                   </p>
@@ -2657,7 +2661,7 @@ function NotificationsTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="nu-card rounded-md">
         <CardContent className="p-5 space-y-4 max-w-2xl">
           <Field label={t("admin.notifUserIdLabel")}>
             <Input
@@ -2696,7 +2700,7 @@ function NotificationsTab() {
       </Card>
 
       {/* Broadcast WhatsApp */}
-      <Card>
+      <Card className="nu-card rounded-md">
         <CardContent className="p-5 space-y-4 max-w-2xl">
           <div>
             <h3 className="font-medium text-foreground">Broadcast WhatsApp</h3>
@@ -2823,9 +2827,9 @@ function ActivityLogTab() {
 
       {!loading && !error && (
         <>
-          <Card>
+          <Card className="nu-card rounded-md">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[680px]">
+              <table className="nu-table w-full text-sm min-w-[680px]">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="p-3 font-medium">{t("admin.colTime")}</th>
@@ -2913,7 +2917,7 @@ function HealthTab() {
   }, []);
 
   const statusCard = (label: string, status: "ok" | "error" | "disabled") => (
-    <Card>
+    <Card className="nu-card rounded-md">
       <CardContent className="p-5 flex items-center gap-4">
         <span
           className={cn(
@@ -3018,9 +3022,9 @@ export default function Admin() {
   const active = TABS.find((x) => x.id === tab) ?? TABS[0];
 
   return (
-    <div className="space-y-4">
+    <div className="admin-nusa space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">{t(TAB_LABEL_KEYS[active.id])}</h2>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">{t(TAB_LABEL_KEYS[active.id])}</h2>
         <p className="text-sm text-muted-foreground">{t(TAB_DESC_KEYS[tab])}</p>
       </div>
 

@@ -1,0 +1,54 @@
+/* Admin WaGataway — bahasa visual Nusa Admin, di-skin navy WaGataway.
+   Scope: HANYA halaman Admin (.admin-nusa). Jangan dipakai halaman lain.
+   Token Nusa yang dipakai: radius 6px, shadow tipis, header tabel kecil
+   uppercase, kartu statistik (label kecil, nilai besar, ikon chip).
+   Warna utama tetap navy #243370; mode gelap tetap palet navy aplikasi
+   (#0a1030 / #121a42) — palet gelap Nusa TIDAK dipakai. */
+
+.admin-nusa {
+  font-size: 14px;
+}
+
+/* Kartu seksi: border halus + bayangan tipis ala Nusa. Radius 6px
+   diatur lewat class rounded-md di JSX (Card bawaan rounded-xl). */
+.admin-nusa .nu-card {
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+.dark .admin-nusa .nu-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Nilai kartu statistik ala NuStatCard: besar, rapat. */
+.admin-nusa .nu-stat-value {
+  font-size: 22px;
+  line-height: 1.75rem;
+  letter-spacing: -0.01em;
+}
+
+/* Tabel bersih ala NuTable: header kecil uppercase, baris hover halus. */
+.admin-nusa table.nu-table thead th {
+  text-transform: uppercase;
+  font-size: 11px;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.admin-nusa table.nu-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+.admin-nusa table.nu-table tbody tr:hover {
+  background-color: rgba(36, 51, 112, 0.04);
+}
+.dark .admin-nusa table.nu-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Modal ala Nusa: bayangan besar, radius 6px. */
+.admin-nusa .nu-modal {
+  box-shadow: 0 12px 40px -8px rgba(16, 24, 40, 0.28);
+}
+.dark .admin-nusa .nu-modal {
+  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.7);
+}
