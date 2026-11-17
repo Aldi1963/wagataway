@@ -16,6 +16,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [transitioning, setTransitioning] = useState(false);
   const firstRender = useRef(true);
 
+  // Background konten abu Nusa (#f3f5f9) hanya saat di /admin
+  const isAdminArea = location === "/admin";
+
   // Animasi loading cantik tiap ganti halaman
   useEffect(() => {
     if (firstRender.current) {
@@ -32,7 +35,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       // h-dvh bukan h-screen: 100vh di Chrome Android melebihi viewport
       // terlihat saat address bar muncul -> window bisa ke-scroll dan
       // header ikut kegeser hilang. dvh mengikuti tinggi viewport aktual.
-      className="flex h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background"
+      className={cn(
+        "flex h-screen supports-[height:100dvh]:h-dvh overflow-hidden",
+        isAdminArea ? "bg-[#f3f5f9] dark:bg-[#0a1030]" : "bg-background"
+      )}
     >
       {/* Mobile backdrop */}
       <div
@@ -61,7 +67,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div
             aria-hidden={!transitioning}
             className={cn(
-              "absolute inset-0 z-30 flex items-center justify-center bg-background/80 backdrop-blur-sm transition-opacity duration-200",
+              "absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm transition-opacity duration-200",
+              isAdminArea
+                ? "bg-[#f3f5f9]/80 dark:bg-[#0a1030]/80"
+                : "bg-background/80",
               transitioning ? "opacity-100" : "pointer-events-none opacity-0"
             )}
           >

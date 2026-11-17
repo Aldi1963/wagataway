@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/api";
@@ -28,6 +28,7 @@ import {
   Ticket,
   ReceiptText,
   ScrollText,
+  Search,
   HeartPulse,
   BellRing,
   ArrowLeft,
@@ -289,6 +290,29 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+// ── Kartu user atas sidebar admin (ala demo Nusa: avatar + nama + role) ─────
+function AdminUserCard({ collapsed }: { collapsed: boolean }) {
+  const { user } = useAuth();
+  if (collapsed || !user) return null;
+  const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
+  return (
+    <div className="flex items-center gap-3 px-2 py-2">
+      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#243370] text-base font-bold text-white">
+        {initial}
+        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-[#0a1030]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-white">
+          {user.name || user.email}
+        </span>
+        <span className="block truncate text-xs text-slate-400 capitalize">
+          {user.plan || user.role || "Member"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const search = useSearch();
@@ -300,6 +324,20 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   const isAdminArea = location === "/admin";
   const activeTab = new URLSearchParams(search).get("tab") || "ringkasan";
   const [openAdminSections, setOpenAdminSections] = useState<string[]>(loadOpenAdminSections);
+
+  // Search menu ala Nusa (hanya mode admin): memfilter item navigasi admin
+  const [adminQuery, setAdminQuery] = useState("");
+  const filteredAdminItems = useMemo(() => {
+    const q = adminQuery.trim().toLowerCase();
+    if (!q) return [];
+    const all: AdminNavItem[] = [
+      ...adminTopItems,
+      ...adminSections.flatMap((s) => s.items),
+    ];
+    return all.filter((item) =>
+      t(`nav.${item.labelKey}`).toLowerCase().includes(q)
+    );
+  }, [adminQuery, t]);
 
   // Buka section admin yang memuat tab aktif
   useEffect(() => {
@@ -429,16 +467,17 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
         key={item.tab}
         href={item.href}
         className={cn(
-          "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
+          // Gaya Nusa (sidebar gelap): tinggi 34px, radius 6px, teks 13.5px
+          "relative flex h-[34px] items-center gap-2.5 px-3 text-[13.5px] font-medium transition-colors rounded-md",
           isActive
-            ? "rounded-full bg-[#243370] text-white font-semibold shadow-[0_4px_14px_rgba(36,51,112,0.4)]"
-            : "rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
+            ? "bg-[#243370] text-white font-semibold"
+            : "text-slate-400 hover:text-white hover:bg-white/[0.07]",
           collapsed && "lg:justify-center lg:px-0"
         )}
         title={collapsed ? label : undefined}
       >
         <item.icon className="w-[18px] h-[18px] shrink-0" />
-        <span className={cn(collapsed && "lg:hidden")}>{label}</span>
+        <span className={cn("truncate", collapsed && "lg:hidden")}>{label}</span>
       </Link>
     );
   };
@@ -446,8 +485,12 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
   return (
     <aside
       className={cn(
-        "flex h-screen h-dvh flex-col border-r border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-[#0a1030] dark:text-slate-200",
-        "fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200",
+        "flex h-screen h-dvh flex-col border-r transition-transform duration-200",
+        // Mode admin: sidebar GELAP navy #0a1030 di kedua tema (ala Nusa dark)
+        isAdminArea
+          ? "admin-shell border-white/10 bg-[#0a1030] text-slate-300"
+          : "border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-[#0a1030] dark:text-slate-200",
+        "fixed inset-y-0 left-0 z-50 w-72",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
         "pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:pb-0",
         "lg:static lg:z-auto lg:translate-x-0",
@@ -455,12 +498,31 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       )}
     >
       {/* Logo + badge + close */}
-      <div className="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-slate-200 dark:border-white/10">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#243370]">
-          <Send className="w-5 h-5 text-white" />
+      <div
+        className={cn(
+          "flex items-center gap-3 shrink-0 border-b",
+          isAdminArea
+            ? "h-[52px] px-[14px] border-white/10"
+            : "px-4 h-16 border-slate-200 dark:border-white/10"
+        )}
+      >
+        <span
+          className={cn(
+            "flex shrink-0 items-center justify-center bg-[#243370]",
+            isAdminArea ? "h-8 w-8 rounded-md" : "h-10 w-10 rounded-full"
+          )}
+        >
+          <Send className={cn("text-white", isAdminArea ? "w-4 h-4" : "w-5 h-5")} />
         </span>
         <span className={cn("min-w-0", collapsed && "lg:hidden")}>
-          <span className="block text-[17px] font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
+          <span
+            className={cn(
+              "block font-bold tracking-tight leading-tight",
+              isAdminArea
+                ? "text-[15.5px] text-white"
+                : "text-[17px] text-slate-900 dark:text-white"
+            )}
+          >
             WaGataway
           </span>
         </span>
@@ -468,7 +530,10 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
           onClick={onClose}
           aria-label={t("nav.closeMenu")}
           className={cn(
-            "ml-auto p-2 -mr-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-white dark:hover:bg-white/10 lg:hidden"
+            "ml-auto p-2 -mr-2 rounded-full transition-colors lg:hidden",
+            isAdminArea
+              ? "text-slate-400 hover:text-white hover:bg-white/10"
+              : "text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-white dark:hover:bg-white/10"
           )}
         >
           <X className="w-5 h-5" />
@@ -478,62 +543,95 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       {/* Navigation */}
       <nav
         className={cn(
-          "flex-1 min-h-0 overflow-y-auto py-2 space-y-1",
-          collapsed ? "lg:px-2" : "px-3"
+          "flex-1 min-h-0 overflow-y-auto py-2",
+          isAdminArea ? "space-y-[1px] px-2" : "space-y-1",
+          !isAdminArea && (collapsed ? "lg:px-2" : "px-3")
         )}
         onClick={onClose}
       >
         {isAdminArea ? (
           <>
-            {adminTopItems.map(renderAdminItem)}
+            {/* Kartu user ala demo Nusa (atas sidebar admin) */}
+            <AdminUserCard collapsed={collapsed} />
 
-            {adminSections.map((section) => {
-              if (collapsed) {
-                return (
-                  <div key={section.key} className="space-y-1 pt-1 hidden lg:block">
-                    {section.items.map(renderAdminItem)}
-                  </div>
-                );
-              }
-              const isOpen = openAdminSections.includes(section.key);
-              return (
-                <div key={section.key} className="pt-1">
-                  <button
-                    type="button"
-                    aria-expanded={isOpen}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleAdminSection(section.key);
-                    }}
-                    className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-                  >
-                    <span>{t(`nav.${section.key}`)}</span>
-                    <ChevronDown
-                      className={cn(
-                        "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
-                        isOpen && "rotate-180"
+            {/* Kotak search menu ala Nusa — memfilter item navigasi admin */}
+            <div
+              className={cn("pb-1", collapsed && "lg:hidden")}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <label className="flex h-8 items-center gap-2 rounded-md bg-white/[0.07] px-2.5 text-slate-400 focus-within:ring-2 focus-within:ring-white/25">
+                <Search className="w-[15px] h-[15px] shrink-0" />
+                <input
+                  value={adminQuery}
+                  onChange={(e) => setAdminQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setAdminQuery("");
+                  }}
+                  type="search"
+                  placeholder={`${t("header.search")}…`}
+                  aria-label={t("header.search")}
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-slate-500"
+                />
+              </label>
+            </div>
+
+            {adminQuery.trim() ? (
+              <div className="space-y-[1px]">
+                {filteredAdminItems.map(renderAdminItem)}
+              </div>
+            ) : (
+              <>
+                {adminTopItems.map(renderAdminItem)}
+
+                {adminSections.map((section) => {
+                  if (collapsed) {
+                    return (
+                      <div key={section.key} className="space-y-1 pt-1 hidden lg:block">
+                        {section.items.map(renderAdminItem)}
+                      </div>
+                    );
+                  }
+                  const isOpen = openAdminSections.includes(section.key);
+                  return (
+                    <div key={section.key} className="pt-1">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAdminSection(section.key);
+                        }}
+                        className="w-full flex h-[26px] items-center justify-between px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-white transition-colors"
+                      >
+                        <span>{t(`nav.${section.key}`)}</span>
+                        <ChevronDown
+                          className={cn(
+                            "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
+                            isOpen && "rotate-180"
+                          )}
+                        />
+                      </button>
+                      {isOpen && (
+                        <div className="space-y-[1px]">
+                          {section.items.map(renderAdminItem)}
+                        </div>
                       )}
-                    />
-                  </button>
-                  {isOpen && (
-                    <div className="space-y-1">
-                      {section.items.map(renderAdminItem)}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </>
+            )}
             <div className="pt-2">
               <Link
                 href="/"
                 className={cn(
-                  "relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5",
+                  "relative flex h-[34px] items-center gap-2.5 px-3 text-[13.5px] font-medium transition-colors rounded-md text-slate-400 hover:text-white hover:bg-white/[0.07]",
                   collapsed && "lg:justify-center lg:px-0"
                 )}
                 title={collapsed ? t("nav.backToDashboard") : undefined}
               >
                 <ArrowLeft className="w-[18px] h-[18px] shrink-0" />
-                <span className={cn(collapsed && "lg:hidden")}>
+                <span className={cn("truncate", collapsed && "lg:hidden")}>
                   {t("nav.backToDashboard")}
                 </span>
               </Link>
@@ -586,8 +684,9 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onClose }: SidebarPro
       {/* Active Device — global (disembunyikan di area admin) */}
       {!isAdminArea && <ActiveDeviceSelector collapsed={collapsed} />}
 
-      {/* Kartu user */}
-      <UserCard collapsed={collapsed} />
+      {/* Kartu user bawah — hanya mode user; di mode admin kartu user
+          sudah ada di atas (ala demo Nusa), logout tetap ada di TopBar */}
+      {!isAdminArea && <UserCard collapsed={collapsed} />}
 
       {/* Collapse Toggle — desktop only */}
       <div className="px-4 py-2 border-t border-white/10 hidden lg:block">

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useLang } from "@/lib/i18n";
@@ -108,6 +109,9 @@ export function TopBar({ onMenu }: TopBarProps) {
   const initials = (user?.name || "U").charAt(0).toUpperCase();
   const [avatarOk, setAvatarOk] = useState(true);
 
+  // Di halaman admin, TopBar tampil gaya navbar Nusa
+  const isAdmin = location === "/admin";
+
   // Avatar kartun default; bila gambar gagal dimuat, fallback ke inisial.
   const AvatarImg = ({ size }: { size: string }) => (
     <div className={`${size} rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0 overflow-hidden relative`}>
@@ -131,7 +135,15 @@ export function TopBar({ onMenu }: TopBarProps) {
 
   return (
     <>
-    <header className="h-14 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-background sticky top-0 z-30">
+    <header
+      className={cn(
+        "flex items-center justify-between border-b sticky top-0 z-30",
+        // Mode admin: navbar Nusa — tinggi 52px, putih di light, navy gelap di dark
+        isAdmin
+          ? "h-[52px] px-3 lg:px-4 bg-white dark:bg-[#0a1030] border-slate-200 dark:border-white/10"
+          : "h-14 px-4 lg:px-6 border-border bg-background"
+      )}
+    >
       {/* Page title + mobile menu */}
       <div className="flex items-center gap-1 min-w-0">
         <Button
@@ -143,23 +155,41 @@ export function TopBar({ onMenu }: TopBarProps) {
         >
           <Menu className="w-5 h-5" />
         </Button>
-        <h1 className="text-sm font-semibold text-foreground truncate">{pageLabel}</h1>
+        {isAdmin ? (
+          /* Kotak search ala Nusa (membuka command palette, sama seperti dulu) */
+          <button
+            type="button"
+            aria-label={t("header.search")}
+            onClick={() => setPaletteOpen(true)}
+            className="hidden sm:flex items-center gap-2 h-9 px-3 ml-1 w-56 lg:w-72 rounded-md bg-slate-100 dark:bg-white/10 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+          >
+            <Search className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t("header.search")}…</span>
+            <kbd className="ml-auto hidden md:inline-flex text-[10px] border border-slate-300 dark:border-white/20 rounded px-1 py-0.5 font-sans">
+              Ctrl K
+            </kbd>
+          </button>
+        ) : (
+          <h1 className="text-sm font-semibold text-foreground truncate">{pageLabel}</h1>
+        )}
       </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-1 shrink-0">
-        {/* Search */}
-        <Button
-          variant="ghost"
-          aria-label={t("header.search")}
-          onClick={() => setPaletteOpen(true)}
-          className="text-muted-foreground hidden sm:inline-flex items-center gap-2 h-9 px-2.5"
-        >
-          <Search className="w-4 h-4" />
-          <kbd className="hidden md:inline-flex text-[10px] border border-border rounded px-1 py-0.5 text-muted-foreground font-sans">
-            Ctrl K
-          </kbd>
-        </Button>
+        {/* Search (mode user saja — di mode admin search sudah ada di kiri) */}
+        {!isAdmin && (
+          <Button
+            variant="ghost"
+            aria-label={t("header.search")}
+            onClick={() => setPaletteOpen(true)}
+            className="text-muted-foreground hidden sm:inline-flex items-center gap-2 h-9 px-2.5"
+          >
+            <Search className="w-4 h-4" />
+            <kbd className="hidden md:inline-flex text-[10px] border border-border rounded px-1 py-0.5 text-muted-foreground font-sans">
+              Ctrl K
+            </kbd>
+          </Button>
+        )}
 
         {/* Theme toggle */}
         <Button

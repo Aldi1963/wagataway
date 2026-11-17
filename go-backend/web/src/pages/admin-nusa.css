@@ -52,3 +52,22 @@
 .dark .admin-nusa .nu-modal {
   box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.7);
 }
+
+/* ── Shell admin (sidebar + area konten) ala Nusa ──────────────────────────
+   Scope: .admin-shell hanya dipasang pada <aside> saat di /admin, jadi
+   aturan di sini TIDAK PERNAH menyentuh sidebar halaman user.
+   Sidebar admin GELAP navy #0a1030 di kedua tema; scrollbar tipis ala Nusa. */
+.admin-shell nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.admin-shell nav::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-shell nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.admin-shell nav::-webkit-scrollbar-track {
+  background: transparent;
+}
